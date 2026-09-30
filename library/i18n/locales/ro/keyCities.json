@@ -1,0 +1,54 @@
+{
+  "map": {
+    "title": "Unde trăiesc popoarele neatinse",
+    "bands": {
+      "named": "centru numit",
+      "multi": "mai multe popoare",
+      "single": "un singur popor"
+    },
+    "note": "Un punct este un grup de centroizi ai popoarelor pe o rază de ~25 km, nu o limită municipală. Punctele numite provin dintr-un gazetteer citat.",
+    "unnamed": "loc fără nume — {lat}, {lng}",
+    "close": "Închide",
+    "country": "Țară",
+    "admin": "Zonă administrativă",
+    "peopleGroups": "Popoare",
+    "upgPopulation": "Populație UPG",
+    "internet": "Internet în țară",
+    "unknown": "necunoscut",
+    "pgHere": "Popoare aici",
+    "languages": "Limbi",
+    "sheetNote": "Un grup de centroizi ai popoarelor pe o rază de ~25 km, nu o limită municipală. Punctele numite provin dintr-un gazetteer citat (Nominatim/OSM); cele fără nume arată coordonate în loc de un nume inventat.",
+    "national": "Cifrele de internet sunt NAȚIONALE.",
+    "engineMissing": "Motorul hărții nu a putut fi încărcat."
+  },
+  "list": {
+    "title": "Orașe-cheie",
+    "intro": "Unde trăiesc popoarele neatinse: centre de populație numite dintr-un gazetteer citat: {named}, în grupuri localizate: {clusters}.",
+    "filters": {
+      "named": "Centre de populație numite",
+      "multi": "Grupuri cu mai multe popoare",
+      "all": "Toate locurile"
+    },
+    "locations": "locuri: {n}",
+    "peopleGroups": "popoare: {n}"
+  },
+  "tables": {
+    "title": "Datele orașelor-cheie",
+    "intro": "Fiecare centru localizat, limbile vorbite acolo și canalele care ajung la el. Sortați, filtrați și exportați orice tabel; fiecare își poartă sursele și limitele.",
+    "tabs": {
+      "cities": "Orașe-cheie",
+      "langcity": "Limbi aici",
+      "languages": "După țară",
+      "operators": "Furnizori și operatori",
+      "messaging": "Aplicații de mesagerie"
+    },
+    "loading": "Se încarcă {name}…"
+  },
+  "posters": {
+    "heading": "Afișe ale orașelor-cheie",
+    "tag": "Mobilizare la rugăciune",
+    "itemNoun": "oraș",
+    "itemNounPlural": "orașe",
+    "soon": "În curând: o listă de rugăciune pentru fiecare oraș, cu fiecare popor neatins care trăiește acolo."
+  }
+}

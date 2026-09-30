@@ -1,0 +1,87 @@
+{
+  "title": {
+    "adoption": "Progresul adopției",
+    "affinityBlocs": "Blocuri de afinitate",
+    "doxaRegions": "Regiuni Doxa",
+    "engagement": "Progresul implicării",
+    "gospelResources": "Resurse ale Evangheliei",
+    "languageFamilies": "Familii de limbi",
+    "prayer": "Progresul rugăciunii",
+    "upg100List": "Lista mea UPG 100",
+    "batchSelect": "Selecție multiplă"
+  },
+  "header": {
+    "collapsed": "Legendă",
+    "peopleGroupFallback": "Grup de popoare",
+    "default": "Legendă"
+  },
+  "prayer": {
+    "needsPrayer": "Necesită rugăciune",
+    "hasPrayer": "Are rugăciune",
+    "fullPrayerCoverage": "Acoperire completă de rugăciune"
+  },
+  "progress": {
+    "title": "Progres",
+    "covered": "{covered} din {total} grupuri de popoare acoperite în rugăciune · {pct}%",
+    "short": "{covered} din {total} · {pct}%",
+    "segment": "{label} · {count} · {pct}%"
+  },
+  "engagement": {
+    "needsEngagement": "Necesită implicare",
+    "hasEngagement": "Are implicare"
+  },
+  "adoption": {
+    "needsAdoption": "Necesită adopție",
+    "hasAdoption": "Are adopție"
+  },
+  "columns": {
+    "upgs": "UUPGs",
+    "population": "Populație",
+    "name": "Nume"
+  },
+  "footer": {
+    "total": "Total"
+  },
+  "sortByUpgs": "Sortează după UUPG",
+  "sortByPop": "Sortează după populație",
+  "colLabel": {
+    "religion": "Religii UUPG",
+    "prayer": "Starea rugăciunii",
+    "engagement": "Starea implicării",
+    "adoption": "Starea adopției",
+    "status": "Stare"
+  },
+  "titleBar": {
+    "legend": "Legendă",
+    "peopleGroups": "Popoare",
+    "wagfRegions": "Regiuni WAGF",
+    "languages": "Limbi"
+  },
+  "tabInfo": {
+    "upg100Region": "Regiune — sortează listele UPG-100 după zona lumii (Africa, India, Orientul Mijlociu, Surzi, …). Totalurile sunt UUPG-urile și populația însumate din fiecare listă de dedesubt.",
+    "upg100Zone": "Liste UPG-100 — fiecare este o listă de rugăciune a grupurilor etnice neatinse dintr-o zonă și este ceea ce harta desenează și colorează. Fiecare listă se tipărește ca propriul pachet.",
+    "upg100Group": "Grup etnic — grupurile neatinse dintr-o listă, mai întâi cele cu cea mai mare nevoie de rugăciune. Fiecare punct de pe hartă este unul dintre ele."
+  },
+  "a11y": {
+    "expandRow": "Extinde {label}",
+    "collapseRow": "Restrânge {label}",
+    "clearSelection": "Șterge selecția",
+    "goUp": "Urcă la {label}"
+  },
+  "export": {
+    "poster": "Afiș",
+    "packet": "UPG 100",
+    "packetExplain": "O listă de rugăciune de aproximativ 50-100 de popoare neatinse — o persoană poate purta una.",
+    "packetAria": "Nivelul de detaliu al pachetului de rugăciune",
+    "packetFull": "Detaliu complet",
+    "packetLightweight": "Redus"
+  },
+  "noDataAtThisLevel": "Nu există date la acest nivel",
+  "exportButton": "Exportă",
+  "exportSelection": "Exportă selecția",
+  "loadingRows": "Se încarcă {label}…",
+  "loadingData": "Se încarcă datele…",
+  "showingTop": "Se afișează primele {n} din {m}",
+  "useGeocoderHint": "folosește căutarea de mai sus pentru a le găsi pe celelalte",
+  "noList": "Nicio listă încărcată."
+}

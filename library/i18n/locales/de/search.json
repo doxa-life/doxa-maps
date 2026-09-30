@@ -1,0 +1,27 @@
+{
+  "placeholder": "Volk, Ort, Sprache, Religion",
+  "placeholderNoPlaces": "Volk, Sprache, Religion (Ortssuche braucht ein Mapbox-Token)",
+  "labels": {
+    "people": "Volk:",
+    "place": "Ort:",
+    "language": "Sprache:",
+    "religion": "Religion:"
+  },
+  "sections": {
+    "within": "Innerhalb {selection}",
+    "allData": "Alle DOXA-Daten"
+  },
+  "kinds": {
+    "people": "Volk + Land",
+    "peopleGroup": "Volk",
+    "bloc": "Affinitätsblock",
+    "cluster": "Völkercluster",
+    "country": "Land",
+    "region": "Region",
+    "family": "Sprachfamilie",
+    "languageKind": "Sprache",
+    "dialect": "Dialekt",
+    "religionKind": "Religion"
+  },
+  "upg100Placeholder": "Volksgruppe, UPG-100-Liste oder Region suchen…"
+}

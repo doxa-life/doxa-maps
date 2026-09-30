@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- THIS PAGE IS OURS. The only thing that knows a document belongs to the plugin is the page
+       the generator writes, so it says so here. library/i18n reads it before reflecting an RTL
+       locale on <html dir>; nothing else sets it, so a PARTNER page defaults to "not ours" and
+       is never touched. Absence must mean restraint — an embedded plugin flipping a partner's
+       whole <html> because a reader followed a ?lang=ar link is the bug this prevents. -->
+  <script>window.MAP_OWNS_PAGE = true;</script>
+  <title>dx-maps plugin studio</title>
+  <link rel="icon" href="data:,">
+  <script>window.MAP_APP_API_URL = "https://pray.doxa.life";</script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #f3f3f1; }
+    plugin-studio { display: block; width: 100%; height: 100vh; }
+  </style>
+</head>
+<body>
+  <plugin-studio tree-base="."></plugin-studio>
+  <script src="./plugin-studio/plugin-studio.js" integrity="sha384-Fi5bgSgOxiSMlSj/dqY6VRWqS6orLyPRPut8bfiy3/zXHWzA3xDmC4Caz3FyCzdl" crossorigin="anonymous"></script>
+</body>
+</html>

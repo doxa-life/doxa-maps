@@ -1,0 +1,87 @@
+{
+  "title": {
+    "adoption": "Прогресс усыновления",
+    "affinityBlocs": "Блоки родства",
+    "doxaRegions": "Регионы Doxa",
+    "engagement": "Прогресс вовлечённости",
+    "gospelResources": "Евангельские ресурсы",
+    "languageFamilies": "Языковые семьи",
+    "prayer": "Прогресс молитвы",
+    "upg100List": "Мой список UPG 100",
+    "batchSelect": "Множественный выбор"
+  },
+  "header": {
+    "collapsed": "Условные обозначения",
+    "peopleGroupFallback": "Народная группа",
+    "default": "Легенда"
+  },
+  "prayer": {
+    "needsPrayer": "Нуждается в молитве",
+    "hasPrayer": "Есть молитва",
+    "fullPrayerCoverage": "Полное молитвенное покрытие"
+  },
+  "progress": {
+    "title": "Прогресс",
+    "covered": "{covered} из {total} народных групп охвачены молитвой · {pct}%",
+    "short": "{covered} из {total} · {pct}%",
+    "segment": "{label} · {count} · {pct}%"
+  },
+  "engagement": {
+    "needsEngagement": "Нуждается в вовлечённости",
+    "hasEngagement": "Есть вовлечённость"
+  },
+  "adoption": {
+    "needsAdoption": "Нуждается в усыновлении",
+    "hasAdoption": "Есть усыновление"
+  },
+  "columns": {
+    "upgs": "UUPGs",
+    "population": "Население",
+    "name": "Название"
+  },
+  "footer": {
+    "total": "Всего"
+  },
+  "sortByUpgs": "Сортировать по UUPG",
+  "sortByPop": "Сортировать по населению",
+  "colLabel": {
+    "religion": "Религии UUPG",
+    "prayer": "Статус молитвы",
+    "engagement": "Статус вовлечённости",
+    "adoption": "Статус усыновления",
+    "status": "Статус"
+  },
+  "titleBar": {
+    "legend": "Легенда",
+    "peopleGroups": "Народы",
+    "wagfRegions": "Регионы WAGF",
+    "languages": "Языки"
+  },
+  "tabInfo": {
+    "upg100Region": "Регион — сортирует списки UPG-100 по частям света (Африка, Индия, Ближний Восток, Глухие, …). Числа — это UUPG и население, просуммированные по всем спискам внутри.",
+    "upg100Zone": "Списки UPG-100 — каждый представляет собой молитвенный список непросвещённых народов области и именно он отображается и раскрашивается на карте. Каждый список печатается отдельным буклетом.",
+    "upg100Group": "Народ — отдельные непросвещённые народы внутри списка, сначала с наибольшей нуждой в молитве. Каждая точка на карте — один из них."
+  },
+  "a11y": {
+    "expandRow": "Развернуть {label}",
+    "collapseRow": "Свернуть {label}",
+    "clearSelection": "Снять выделение",
+    "goUp": "Вверх: {label}"
+  },
+  "export": {
+    "poster": "Плакат",
+    "packet": "UPG 100",
+    "packetExplain": "Молитвенный список примерно из 50–100 неохваченных народов — один человек может взять один.",
+    "packetAria": "Детализация молитвенного пакета",
+    "packetFull": "Полная версия",
+    "packetLightweight": "Краткая версия"
+  },
+  "noDataAtThisLevel": "На этом уровне нет данных",
+  "exportButton": "Экспорт",
+  "exportSelection": "Экспортировать выбранное",
+  "loadingRows": "Загрузка {label}…",
+  "loadingData": "Загрузка данных…",
+  "showingTop": "Показаны первые {n} из {m}",
+  "useGeocoderHint": "используйте поиск выше, чтобы найти остальные",
+  "noList": "Список не загружен."
+}

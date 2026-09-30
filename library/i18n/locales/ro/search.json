@@ -1,0 +1,27 @@
+{
+  "placeholder": "Popor, loc, limbă, religie",
+  "placeholderNoPlaces": "Popor, limbă, religie (căutarea locurilor necesită un token Mapbox)",
+  "labels": {
+    "people": "Popor:",
+    "place": "Loc:",
+    "language": "Limbă:",
+    "religion": "Religie:"
+  },
+  "sections": {
+    "within": "În {selection}",
+    "allData": "Toate datele DOXA"
+  },
+  "kinds": {
+    "people": "Popor + țară",
+    "peopleGroup": "Popor",
+    "bloc": "Bloc de afinitate",
+    "cluster": "Grup de popoare",
+    "country": "Țară",
+    "region": "Regiune",
+    "family": "Familie de limbi",
+    "languageKind": "Limbă",
+    "dialect": "Dialect",
+    "religionKind": "Religie"
+  },
+  "upg100Placeholder": "Caută popor, listă UPG-100 sau regiune…"
+}

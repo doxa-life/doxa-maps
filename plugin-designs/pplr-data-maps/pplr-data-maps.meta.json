@@ -1,0 +1,5 @@
+{
+  "type": "monolithic",
+  "label": "PPLR Data Maps",
+  "note": "Monolithic composite (capability 3): ONE root .vue nests ten internal views of the PPLR people-group data (religion, ROP tree, language families, semantic trees, PG name locales, ROP sunburst, all pins, cross-system ID rosetta, translation coverage, index) behind a view-switcher. index.js registers exactly ONE tag (pplr-data-maps); no view is independently embeddable."
+}

@@ -1,0 +1,27 @@
+{
+  "placeholder": "民族、地点、语言、宗教",
+  "placeholderNoPlaces": "民族、语言、宗教（地点搜索需要 Mapbox 令牌）",
+  "labels": {
+    "people": "民族：",
+    "place": "地点：",
+    "language": "语言：",
+    "religion": "宗教："
+  },
+  "sections": {
+    "within": "在 {selection} 之內",
+    "allData": "所有 DOXA 资料"
+  },
+  "kinds": {
+    "people": "民族 + 国家",
+    "peopleGroup": "民族",
+    "bloc": "亲缘板块",
+    "cluster": "民族群",
+    "country": "国家",
+    "region": "区域",
+    "family": "语系",
+    "languageKind": "语言",
+    "dialect": "方言",
+    "religionKind": "宗教"
+  },
+  "upg100Placeholder": "搜索民族、UPG-100 名单或区域…"
+}

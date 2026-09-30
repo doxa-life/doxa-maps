@@ -1,0 +1,54 @@
+{
+  "map": {
+    "title": "Where the unengaged people groups live",
+    "bands": {
+      "named": "named centre",
+      "multi": "multi-group",
+      "single": "single group"
+    },
+    "note": "A point is a cluster of people-group centroids within ~25 km, not a municipal boundary. Named points come from a cited gazetteer.",
+    "unnamed": "unnamed location — {lat}, {lng}",
+    "close": "Close",
+    "country": "Country",
+    "admin": "Admin area",
+    "peopleGroups": "People groups",
+    "upgPopulation": "UPG population",
+    "internet": "Country internet",
+    "unknown": "unknown",
+    "pgHere": "People groups here",
+    "languages": "Languages",
+    "sheetNote": "A cluster of people-group centroids within ~25 km, not a municipal boundary. Named points come from a cited gazetteer (Nominatim/OSM); unnamed ones show coordinates rather than an invented place name.",
+    "national": "Internet figures are NATIONAL.",
+    "engineMissing": "The map engine could not be loaded."
+  },
+  "list": {
+    "title": "Key Cities",
+    "intro": "Where the unengaged people groups live: {named} population centres named from a cited gazetteer, across {clusters} located clusters.",
+    "filters": {
+      "named": "Named population centres",
+      "multi": "Multi-group clusters",
+      "all": "All locations"
+    },
+    "locations": "locations: {n}",
+    "peopleGroups": "people groups: {n}"
+  },
+  "tables": {
+    "title": "Key Cities Data",
+    "intro": "Every located centre, the languages spoken there, and the channels that reach them. Sort, filter and export any table; each carries its own sources and limits.",
+    "tabs": {
+      "cities": "Key Cities",
+      "langcity": "Languages Here",
+      "languages": "By Country",
+      "operators": "ISPs & Carriers",
+      "messaging": "Messaging Apps"
+    },
+    "loading": "Loading {name}…"
+  },
+  "posters": {
+    "heading": "Key City Posters",
+    "tag": "Prayer Mobilization",
+    "itemNoun": "city",
+    "itemNounPlural": "cities",
+    "soon": "Coming soon: a prayer list for each city, naming every unengaged people group in it."
+  }
+}

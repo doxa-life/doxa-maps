@@ -1,0 +1,87 @@
+{
+  "title": {
+    "adoption": "Adoption Progress",
+    "affinityBlocs": "Affinity Blocks",
+    "doxaRegions": "Doxa Regions",
+    "engagement": "Engagement Progress",
+    "gospelResources": "Gospel Resources",
+    "languageFamilies": "Language Families",
+    "prayer": "Prayer Progress",
+    "upg100List": "My UPG 100 List",
+    "batchSelect": "Batch Select"
+  },
+  "header": {
+    "default": "Legend",
+    "collapsed": "Legend",
+    "peopleGroupFallback": "People Group"
+  },
+  "prayer": {
+    "needsPrayer": "Needs Prayer",
+    "hasPrayer": "Has Prayer",
+    "fullPrayerCoverage": "Full Prayer Coverage"
+  },
+  "progress": {
+    "title": "Progress",
+    "covered": "{covered} of {total} people groups covered in prayer · {pct}%",
+    "short": "{covered} of {total} · {pct}%",
+    "segment": "{label} · {count} · {pct}%"
+  },
+  "engagement": {
+    "needsEngagement": "Unengaged",
+    "hasEngagement": "Engaged"
+  },
+  "adoption": {
+    "needsAdoption": "Needs Adoption",
+    "hasAdoption": "Has Adoption"
+  },
+  "columns": {
+    "upgs": "UUPGs",
+    "population": "Population",
+    "name": "Name"
+  },
+  "footer": {
+    "total": "Total"
+  },
+  "sortByUpgs": "Sort by UUPGs",
+  "sortByPop": "Sort by Population",
+  "colLabel": {
+    "religion": "UUPG Religions",
+    "prayer": "Prayer Status",
+    "engagement": "Engagement Status",
+    "adoption": "Adoption Status",
+    "status": "Status"
+  },
+  "titleBar": {
+    "legend": "Legend",
+    "peopleGroups": "People Groups",
+    "wagfRegions": "WAGF Regions",
+    "languages": "Languages"
+  },
+  "tabInfo": {
+    "upg100Region": "Region — sort the UPG-100 lists by world area (Africa, India, Middle East, Deaf, …). Counts are the UUPGs and population summed across every list beneath it.",
+    "upg100Zone": "UPG-100 Lists — each one is a prayer list of the unreached people groups in an area, and is what the map paints and colours. Every list prints as its own packet.",
+    "upg100Group": "People Group — the individual unreached groups inside a list, largest prayer need first. Each map dot is one of these."
+  },
+  "a11y": {
+    "expandRow": "Expand {label}",
+    "collapseRow": "Collapse {label}",
+    "clearSelection": "Clear selection",
+    "goUp": "Go up to {label}"
+  },
+  "export": {
+    "poster": "Poster",
+    "packet": "UPG 100",
+    "packetExplain": "A prayer list of about 50 to 100 unreached people groups — one person can carry one.",
+    "packetAria": "Prayer packet detail",
+    "packetFull": "Full detail",
+    "packetLightweight": "Lightweight"
+  },
+  "noDataAtThisLevel": "No data at this level",
+  "exportButton": "Export",
+  "exportSelection": "Export selection",
+  "loadingRows": "Loading {label}…",
+  "loadingData": "Loading data…",
+  "showingTop": "Showing top {n} of {m}",
+  "useGeocoderHint": "use the geocoder above to find the rest",
+  "noList": "No list loaded."
+}

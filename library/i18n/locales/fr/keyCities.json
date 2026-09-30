@@ -1,0 +1,54 @@
+{
+  "map": {
+    "title": "Où vivent les peuples non atteints",
+    "bands": {
+      "named": "centre nommé",
+      "multi": "plusieurs peuples",
+      "single": "un seul peuple"
+    },
+    "note": "Un point est un regroupement de centroïdes de peuples dans un rayon d’environ 25 km, pas une limite municipale. Les points nommés proviennent d’un répertoire géographique cité.",
+    "unnamed": "lieu sans nom — {lat}, {lng}",
+    "close": "Fermer",
+    "country": "Pays",
+    "admin": "Zone administrative",
+    "peopleGroups": "Peuples",
+    "upgPopulation": "Population UPG",
+    "internet": "Internet du pays",
+    "unknown": "inconnu",
+    "pgHere": "Peuples ici",
+    "languages": "Langues",
+    "sheetNote": "Un regroupement de centroïdes de peuples dans un rayon d’environ 25 km, pas une limite municipale. Les points nommés proviennent d’un répertoire géographique cité (Nominatim/OSM) ; les points sans nom affichent des coordonnées plutôt qu’un nom inventé.",
+    "national": "Les chiffres Internet sont NATIONAUX.",
+    "engineMissing": "Le moteur de carte n’a pas pu être chargé."
+  },
+  "list": {
+    "title": "Villes clés",
+    "intro": "Où vivent les peuples non atteints : centres de population nommés d’après un répertoire cité : {named}, sur des regroupements localisés : {clusters}.",
+    "filters": {
+      "named": "Centres de population nommés",
+      "multi": "Regroupements de plusieurs peuples",
+      "all": "Tous les lieux"
+    },
+    "locations": "lieux : {n}",
+    "peopleGroups": "peuples : {n}"
+  },
+  "tables": {
+    "title": "Données des villes clés",
+    "intro": "Chaque centre localisé, les langues qu’on y parle et les canaux qui l’atteignent. Triez, filtrez et exportez chaque tableau ; chacun indique ses sources et ses limites.",
+    "tabs": {
+      "cities": "Villes clés",
+      "langcity": "Langues ici",
+      "languages": "Par pays",
+      "operators": "FAI et opérateurs",
+      "messaging": "Messageries"
+    },
+    "loading": "Chargement de {name}…"
+  },
+  "posters": {
+    "heading": "Affiches des villes clés",
+    "tag": "Mobilisation à la prière",
+    "itemNoun": "ville",
+    "itemNounPlural": "villes",
+    "soon": "Bientôt : une liste de prière pour chaque ville, nommant chaque peuple non atteint qui y vit."
+  }
+}

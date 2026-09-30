@@ -1,0 +1,87 @@
+{
+  "title": {
+    "adoption": "تقدم التبني",
+    "affinityBlocs": "كتل القرابة",
+    "doxaRegions": "مناطق Doxa",
+    "engagement": "تقدم الانخراط",
+    "gospelResources": "موارد الإنجيل",
+    "languageFamilies": "العائلات اللغوية",
+    "prayer": "تقدم الصلاة",
+    "upg100List": "قائمة UPG 100 الخاصة بي",
+    "batchSelect": "تحديد متعدد"
+  },
+  "header": {
+    "collapsed": "وسيلة الإيضاح",
+    "peopleGroupFallback": "مجموعة الشعب",
+    "default": "مفتاح الخريطة"
+  },
+  "prayer": {
+    "needsPrayer": "يحتاج إلى صلاة",
+    "hasPrayer": "لديه صلاة",
+    "fullPrayerCoverage": "تغطية صلاة كاملة"
+  },
+  "progress": {
+    "title": "التقدم",
+    "covered": "{covered} من {total} مجموعة شعبية مغطاة بالصلاة · {pct}%",
+    "short": "{covered} من {total} · {pct}%",
+    "segment": "{label} · {count} · {pct}%"
+  },
+  "engagement": {
+    "needsEngagement": "يحتاج إلى انخراط",
+    "hasEngagement": "لديه انخراط"
+  },
+  "adoption": {
+    "needsAdoption": "يحتاج إلى تبني",
+    "hasAdoption": "لديه تبني"
+  },
+  "columns": {
+    "upgs": "UUPGs",
+    "population": "السكان",
+    "name": "الاسم"
+  },
+  "footer": {
+    "total": "الإجمالي"
+  },
+  "sortByUpgs": "ترتيب حسب UUPG",
+  "sortByPop": "ترتيب حسب السكان",
+  "colLabel": {
+    "religion": "ديانات UUPG",
+    "prayer": "حالة الصلاة",
+    "engagement": "حالة المشاركة",
+    "adoption": "حالة التبني",
+    "status": "الحالة"
+  },
+  "titleBar": {
+    "legend": "مفتاح الخريطة",
+    "peopleGroups": "الشعوب",
+    "wagfRegions": "مناطق WAGF",
+    "languages": "اللغات"
+  },
+  "tabInfo": {
+    "upg100Region": "المنطقة — ترتّب قوائم UPG-100 حسب منطقة العالم (أفريقيا، الهند، الشرق الأوسط، الصمّ، …). الأعداد هي مجموع UUPG والسكان لكل قائمة تحتها.",
+    "upg100Zone": "قوائم UPG-100 — كل واحدة هي قائمة صلاة للشعوب غير الموصول إليها في منطقة ما، وهي ما ترسمه الخريطة وتلوّنه. تُطبع كل قائمة ككُتيّب خاص بها.",
+    "upg100Group": "مجموعة شعبية — المجموعات غير الموصول إليها داخل القائمة، الأكثر حاجة للصلاة أولاً. كل نقطة على الخريطة هي واحدة منها."
+  },
+  "a11y": {
+    "expandRow": "توسيع {label}",
+    "collapseRow": "طي {label}",
+    "clearSelection": "إلغاء التحديد",
+    "goUp": "الانتقال إلى المستوى الأعلى: {label}"
+  },
+  "export": {
+    "poster": "ملصق",
+    "packet": "UPG 100",
+    "packetExplain": "قائمة صلاة من نحو ٥٠ إلى ١٠٠ شعب غير مبلَّغ — يستطيع شخص واحد أن يحمل واحدة.",
+    "packetAria": "تفاصيل حزمة الصلاة",
+    "packetFull": "تفاصيل كاملة",
+    "packetLightweight": "مختصرة"
+  },
+  "noDataAtThisLevel": "لا توجد بيانات في هذا المستوى",
+  "exportButton": "تصدير",
+  "exportSelection": "تصدير التحديد",
+  "loadingRows": "جارٍ تحميل {label}…",
+  "loadingData": "جارٍ تحميل البيانات…",
+  "showingTop": "عرض أعلى {n} من {m}",
+  "useGeocoderHint": "استخدم أداة البحث أعلاه للعثور على البقية",
+  "noList": "لم يتم تحميل أي قائمة."
+}
