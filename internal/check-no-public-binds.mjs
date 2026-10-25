@@ -11,13 +11,12 @@
  * a listening socket produces no output and no failure — the gate it served passed, and the process
  * outlived it.
  *
- * ★ WHY THIS IS THE INTERESTING CLASS. The standing rule "keep the box closed" lived in prose, in
+ * ★ WHY THIS IS THE INTERESTING CLASS. The standing rule "keep the build machine closed" lived in prose, in
  * instructions to an agent. The actual behaviour lived in a FLAG in package.json. Prose cannot
  * constrain a flag. The rule was never violated by a decision — it was violated by a default that
- * nobody re-read, and it stayed violated because nothing ever asked the question out loud. The
- * Driver stated it plainly: "we don't need any open ports on this box because you push your changes
- * to Forgejo and I pull them from my laptop... use Playwright for yourself internally for testing,
- * not for public access."
+ * nobody re-read, and it stayed violated because nothing ever asked the question out loud. It was
+ * stated plainly: a build machine needs no open ports, because changes are pushed to the git remote
+ * and pulled onto a laptop; Playwright is for internal testing, not for public access.
  *
  * Loopback is sufficient for the entire test suite: verify-browser-all, check:a11y-button-names,
  * check:nav-reachable and smoke:share-all all already default to 127.0.0.1. The wide bind bought
@@ -82,7 +81,7 @@ if (errs.length) {
   console.error('NO-PUBLIC-BINDS: FAIL — a repo script would open a port to the network.\n')
   errs.forEach((e) => console.error(e))
   console.error('\n  The whole test suite reaches its server over 127.0.0.1. Nothing here needs a public')
-  console.error('  bind: code moves between machines through Forgejo, not through an open port. Use')
+  console.error('  bind: code moves between machines through the git remote, not through an open port. Use')
   console.error('  --bind 127.0.0.1, and pass BASE_URL/BASE if some caller genuinely needs another host.')
   process.exit(1)
 }

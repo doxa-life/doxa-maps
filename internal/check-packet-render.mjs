@@ -20,7 +20,7 @@
 //     black with no error of any kind. Asserted as a WHOLE-MAP property, because the first
 //     attempt at this check tested one hand-picked <rect> (the one just repaired) and went
 //     green while 647 others were still black.
-//  3. Content the Driver specified explicitly: Mark 5:1-20 in full, 12 wheel segments,
+//  3. Content specified explicitly: Mark 5:1-20 in full, 12 wheel segments,
 //     the prayer rhythms, and exactly two minimal metacamp.org attributions.
 //
 // Usage: node internal/check-packet-render.mjs [path/to/packet.html]
@@ -33,7 +33,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 import { requirePathInThisCheckout } from './_serves-this-tree.mjs'
 
 // ★ --expect-funnel TURNS AN OPTIONAL PAGE INTO A DECLARED REQUIREMENT, and it exists because of a
-// real near-miss (regions-plugin, 2026-09-26, reported unprompted). A merge resolved with
+// real near-miss (2026-09-26, reported unprompted). A merge resolved with
 // `git checkout --ours` silently deleted the printPacket call site that supplies the funnel data —
 // 60 lines — AND EVERY GATE STAYED GREEN. It had to: the funnel page is optional by design
 // (buildPacket omits it when the arg is null), so a packet with no page 2 is not malformed, just
@@ -117,8 +117,11 @@ const layout = await page.evaluate(() => {
     const tb = rng.getBoundingClientRect()
     if (tb.width < 20 || box.width < 50 || box.width - tb.width < 12) continue
     if (cs.direction === 'rtl') out.rtlComputed += 1
-    if (Math.round(box.right - tb.right) <= 1) out.pinnedRight += 1
-    else if (Math.round(tb.left - box.left) <= 1) out.pinnedLeft += 1
+    // Against the CONTENT box: a padded table cell (the pace table's) starts its run at its padding, which is
+    // still the left (or right) edge the direction pins it to.
+    const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0
+    if (Math.round(box.right - pr - tb.right) <= 1) out.pinnedRight += 1
+    else if (Math.round(tb.left - box.left - pl) <= 1) out.pinnedLeft += 1
     out.sampled += 1
     if (out.sampled >= 25) break
   }
@@ -167,8 +170,8 @@ const translated = lang !== 'en'
 
 // ── THE LARGEST BLOCK OF READER-FACING TEXT, REPORTED SEPARATELY ────────────
 // point4_passage is Mark 5:1-20 in full — 2,141 characters, by far the longest string
-// in the packet and the one the Driver singled out ("prayer point number four is
-// actually read the word"). It is ABSENT from all ten non-English blocks, so every
+// in the packet and the one singled out: prayer point four is reading the word
+// itself. It is ABSENT from all ten non-English blocks, so every
 // translated packet prints its longest passage in English. The per-locale "19 strings
 // translated" headline looked healthy while this was true, because 19 short keys and
 // one 2,141-character one count the same.
@@ -181,9 +184,27 @@ const scriptureIsEnglish = lang !== 'en'
   && !(catalog[lang] || {}).point4_passage
 await page.evaluate((words) => { window.__EXPECTED_RHYTHMS = words }, expected)
 
+// The life grid's decoder: every square subpath (M x y …) of an .lc-svg back to its box index, from the geometry
+// the SVG declares. Used by the life-calendar checks below.
+await page.evaluate(() => {
+  window.__lcBoxes = (svg) => {
+    // data-geom x0,y0,px,dec[,py]: the box pitch across and down (one pitch when py is absent).
+    const [x0, y0, px, dec, py = px] = String(svg.dataset.geom || '').split(',').map(Number)
+    const weeks = Number(svg.dataset.weeks)
+    const idx = (d) => [...String(d || '').matchAll(/M([\d.]+) ([\d.]+)/g)].map((m) => {
+      const x = Number(m[1]) - 0.5 - x0, y = Number(m[2]) - 0.5 - y0
+      const b = Math.floor(y / (10 * py + dec))
+      return (b * 10 + Math.round((y - b * (10 * py + dec)) / py)) * weeks + Math.round(x / px)
+    })
+    const off = idx((svg.querySelector('path.lc-off') || {}).getAttribute?.('d'))
+    const sh = svg.querySelector('path.lc-on, path.lc-reached')
+    const shaded = sh ? idx(sh.getAttribute('d')).sort((a, b) => a - b) : []
+    return { total: off.length + shaded.length, shaded, distinct: new Set([...off, ...shaded]).size }
+  }
+})
 const r = await page.evaluate(() => {
   const body = document.body.innerText
-  const imgs = [...document.querySelectorAll('.card img')]
+  const imgs = [...document.querySelectorAll('.card img, img.ws-ph')]   // profile cards, or lightweight rows (2026-09-30)
   // ⚠ The expected rhythm words come from the STRINGS CATALOG FOR THIS PACKET'S
   // LANGUAGE, never a hardcoded English list. A fixed list tests the opposite of
   // what i18n means: it passed a packet whose translation silently did nothing and
@@ -202,7 +223,7 @@ const r = await page.evaluate(() => {
     // gate reporting "map: palette resolves, not black — PASS, map painted", because the
     // query silently retargeted to the PRAYER WHEEL's svg two sheets later. The wheel has no
     // CSS variables to leave unresolved and no black fills, so both checks passed vacuously
-    // while page 1 — "the map one-pager", the first line of the Driver's packet spec — was
+    // while page 1 — the map one-pager, the first line of the packet spec — was
     // blank. The sheet count stayed 8 because the empty sheet still exists.
     // The packet's page order is the product spec and does not vary: sheet 0 IS the map page.
     const sheet0 = document.querySelector('.sheet')
@@ -237,44 +258,77 @@ const r = await page.evaluate(() => {
   return {
     sheets: document.querySelectorAll('.sheet').length,
     cards: document.querySelectorAll('.card').length,
+    // The LIGHTWEIGHT packet lists its people as worksheet rows (packet-render worksheetPages), not cards.
+    wsRows: document.querySelectorAll('.ws-row').length,
+    wsBoxes: document.querySelectorAll('.ws-box').length,
+    wsSheets: document.querySelectorAll('.sheet-worksheet').length,
     // The page-2 funnel is OPTIONAL (buildPacket omits it when no funnel data was supplied), so its
     // presence is DETECTED rather than assumed — see the sheet arithmetic below, which must stay
     // exact about list pages whether or not this page is there.
     funnel: document.querySelectorAll('.funnel-title').length,
     lifeSheets: document.querySelectorAll('.sheet-life').length,
+    // The bounded- and centered-set back pages (one sheet per chart). Counted so the arithmetic below
+    // stays exact whether or not the caller supplied set data.
+    setsSheets: document.querySelectorAll('.sheet-sets').length,
     christianSheets: document.querySelectorAll('.sheet-christian').length,
-    lifeCells: document.querySelectorAll('.lc-grid .lc-c').length,
+    // ★ THE LIFE GRIDS ARE ONE SVG EACH (2026-10-02): two paths of square subpaths (empty and shaded) placed by
+    // the geometry the SVG states (data-geom x0,y0,px,decadeGap,py). Each subpath is decoded back to its box index
+    // in reading order, so the checks below still see box by box what is drawn, not a count the renderer asserts.
+    lifeCells: [...document.querySelectorAll('.lc-frame .lc-svg')].reduce((a, g) => a + window.__lcBoxes(g).total, 0),
     prayBoxes: document.querySelectorAll('.pray-box').length,
+    fdTopOver: (() => { const b = document.querySelector('.fd-top'); if (!b) return 0; const top = b.getBoundingClientRect().top
+      return Math.round(Math.max(0, ...[...b.children].map((k) => k.getBoundingClientRect().bottom + parseFloat(getComputedStyle(k).marginBottom))) - top - b.clientHeight) })(),
+    // The points page is ONE sheet by design and fits only because its sizes were tuned to the longest locale;
+    // measure its content against its box (studio's ask), as fdTopOver does for the list's first page.
+    // Each points sheet's body is measured, the worst one reported (one sheet today).
+    pointsOver: (() => { const bs = [...document.querySelectorAll('.points-body')]; if (!bs.length) return null
+      return Math.max(...bs.map((b) => { const top = b.getBoundingClientRect().top
+        return Math.round(Math.max(b.scrollHeight - b.clientHeight, ...[...b.children].map((k) => k.getBoundingClientRect().bottom - top - b.clientHeight))) })) })(),
+    pointsSheets: document.querySelectorAll('.sheet-points').length,
+    // ★ THE POINTS PAGE SIZES ITSELF FROM AN ESTIMATE (2026-10-03, data-pt-est): the page must never be taller
+    // than the estimate it was sized by, or the estimate is drifting and only its 3% margin still saves the page.
+    pointsUnder: (() => { const b = document.querySelector('.points-body[data-pt-est]'); if (!b) return null
+      const top = b.getBoundingClientRect().top, kids = [...b.children]
+      const real = Math.max(...kids.map((k) => k.getBoundingClientRect().bottom - top)) + parseFloat(getComputedStyle(kids[kids.length - 1]).marginBottom)
+      return { real: Math.round(real), est: Number(b.dataset.ptEst), tier: Number(b.dataset.ptTier) } })(),
     funnelTip: document.querySelectorAll('.funnel-tip').length,
-    lifeShaded: document.querySelectorAll('.lc-grid .lc-reached').length,
-    // ★ THE SHADED CELLS' VERTICAL SPREAD, as a fraction of the grid's own height. A COUNT cannot tell a
-    // scatter from a bar — 32 shaded is 32 shaded whether they are spread through a life or stacked in
-    // row 1 — so this measures the SHAPE, which is the thing the page is actually claiming.
-    lifeSpread: (() => {
-      const grid = document.querySelector('.sheet-christian .lc-grid')
-      if (!grid) return null
-      const on = [...grid.querySelectorAll('.lc-reached')]
-      if (on.length < 2) return null
-      const gb = grid.getBoundingClientRect()
-      if (!(gb.height > 0)) return null
-      const tops = on.map((el) => el.getBoundingClientRect().top)
-      return (Math.max(...tops) - Math.min(...tops)) / gb.height
+    lifeShaded: (() => { const g = document.querySelector('.sheet-christian .lc-svg'); return g ? window.__lcBoxes(g).shaded.length : null })(),
+    // ★ FILLED FROM THE TOP, in reading order (the packet's design), measured on the DOM order of the cells:
+    // the shaded boxes must be EXACTLY the first N. This used to require a SCATTER, the opposite design;
+    // a count alone still cannot tell a top fill from a scatter or a fill from the bottom.
+    lifeTopFill: (() => {
+      const g = document.querySelector('.sheet-christian .lc-svg')
+      if (!g) return null
+      const s = window.__lcBoxes(g).shaded
+      return s.every((v, i) => v === i)
+    })(),
+    // The life page: Jesus' 33 years, the first 33 x 52 = 1,716 boxes and no others.
+    jesusTopFill: (() => {
+      const g = document.querySelector('.sheet-life .lc-svg')
+      if (!g) return null
+      const s = window.__lcBoxes(g).shaded
+      return { on: s.length, top: s.every((v, i) => v === i) }
     })(),
     funnelEq: document.querySelectorAll('.funnel-eq').length,
     funnelSteps: document.querySelectorAll('.funnel-mine').length,
-    // ★ MEASURED SO THE GATE CAN REPORT WHAT IT ASSERTED. rega: "the gate prints no funnel line, even
-    // with --expect-funnel ... a reader cannot see WHAT it asserted about page 2." A silent pass is
+    // ★ MEASURED SO THE GATE CAN REPORT WHAT IT ASSERTED. A review found the gate printed no funnel line, even
+    // with --expect-funnel, so a reader could not see WHAT it asserted about page 2. A silent pass is
     // the mirror of a printed-but-unasserted number: the check is real and the evidence is invisible.
     // ⚠ ZERO POPULATION IS COUNTED ON PURPOSE. The reader's row printed "0 people" in every packet
     // (Number(null) is 0, so the finite-number guard admitted a deliberate no-data marker). Fixed in
     // the renderer — and counted here so the fix cannot silently regress.
+    // ★ BY EXPLICIT HOOKS, NOT BY STYLE STRINGS. These used to count divs whose inline style contained
+    // "line-height:1" (rows) and "height:16px" (bars). The page is now one SVG triangle, which has
+    // neither, so both would have read ZERO and "rows === bars" would have passed while asserting
+    // nothing. Every tier is a .funnel-tier shape and every tier's count a .funnel-n, inside the
+    // shape or leading its caption.
     funnelRows: (() => {
       const sheet = document.querySelector('.funnel-title')?.closest('.sheet')
-      return sheet ? sheet.querySelectorAll('div[style*="line-height:1"]').length : 0
+      return sheet ? sheet.querySelectorAll('.funnel-n').length : 0
     })(),
     funnelBars: (() => {
       const sheet = document.querySelector('.funnel-title')?.closest('.sheet')
-      return sheet ? sheet.querySelectorAll('div[style*="height:16px"]').length : 0
+      return sheet ? sheet.querySelectorAll('.funnel-tier').length : 0
     })(),
     funnelZeroPop: (() => {
       const sheet = document.querySelector('.funnel-title')?.closest('.sheet')
@@ -285,10 +339,10 @@ const r = await page.evaluate(() => {
         .filter((d) => /^0(\.0+)?\s+\D/.test(d.textContent.trim())).length
     })(),
     funnelShare: (document.querySelector('.funnel-share')?.textContent || '').trim().slice(0, 80),
-    // ★ LATIN RUNS ON A NON-LATIN SHEET, which is the one gap rega named and I left open: "the gate
-    // passed: it counts rows, not the row's language." It asserted the funnel page's STRUCTURE and
-    // nothing about whether its prose reached the reader's language — my own standing rule turned on
-    // my own gate.
+    // ★ LATIN RUNS ON A NON-LATIN SHEET, the one gap a review named and that was left open: the gate
+    // passed because it counted rows, not the rows' language. It asserted the funnel page's STRUCTURE
+    // and nothing about whether its prose reached the reader's language, the standing rule turned on
+    // this gate itself.
     //
     // ⚠ IT ONLY WORKS IN A NON-LATIN-SCRIPT LOCALE, and that is why it is worth having rather than
     // aspiring to a general "is this translated?" test, which is not decidable. On a hi/ar/ru/zh sheet
@@ -351,7 +405,15 @@ const r = await page.evaluate(() => {
       .filter((e) => { const r = e.getBoundingClientRect(); return r.width < 4 || r.height < 4 }).length,
     rhythms: RHYTHMS.filter((w) => body.includes(w)).length,
     rhythmsTotal: RHYTHMS.length,
-    wheelSegs: document.querySelectorAll('svg path[fill^="hsl"]').length,
+    // The segments are the wheel sheet's filled ARC paths (M centre L rim A …), whatever their colour notation:
+    // counting fill^="hsl" read 0 once the wheel took the source's hex palette, and the gate went red on every
+    // packet while the wheel was fine. The "Start here" arrow is a path too, but unfilled and arc-less.
+    wheelSegs: (() => {
+      const title = document.querySelector('.wheel-title')
+      const svg = title ? title.closest('.sheet')?.querySelector('svg') : null
+      return svg ? [...svg.querySelectorAll('path')].filter((p) => / A /.test(p.getAttribute('d') || '')
+        && (p.getAttribute('fill') || 'none') !== 'none').length : 0
+    })(),
     // ⚠ COUNT THE WHEEL'S OWN LABELS, SCOPED TO THE WHEEL SHEET. `rhythms` below
     // searches document.body.innerText, and the SAME rhythm vocabulary is rendered
     // TWICE — once per wheel segment, and once per prayer point (each point prints
@@ -361,7 +423,7 @@ const r = await page.evaluate(() => {
     // "12 segments, 11/11 rhythms, content intact — PASS" on a prayer wheel that was a
     // twelve-colour pie chart with no words on it. Both numbers stayed true: the
     // segments are <path> elements and survive, and the words were still on the points
-    // page. The Driver's spec names the wheel as one of the packet's four sections.
+    // page. The spec names the wheel as one of the packet's four sections.
     //
     // COUNT ELEMENTS, NOT DISTINCT WORDS. `order` renders 12 segments from 12 keys, but
     // `praise` and `praise_end` collapse to the same word in English (which is why the
@@ -372,11 +434,11 @@ const r = await page.evaluate(() => {
       const sheet = title ? title.closest('.sheet') : null
       const svg = sheet ? sheet.querySelector('svg') : null
       if (!svg) return -1
-      // The segment labels are the non-numeric <text> runs: the pips are all "5" and
-      // the footer reads "5 <minutes> x 12".
-      return [...svg.querySelectorAll('text')]
-        .map((t) => (t.textContent || '').trim())
-        .filter((s) => s && !/^\d+$/.test(s) && !/^\d[\s\S]*×\s*12$/.test(s)).length
+      // The segment labels are the wheel's own label runs (class="wheel-label", packet-render wheelPage), counted
+      // when they carry words. Counting every non-numeric <text> read 25 once each rim badge gained its
+      // "minutes" tag and the wheel its "Start here": those are furniture, not segment labels.
+      return [...svg.querySelectorAll('text.wheel-label')]
+        .filter((t) => (t.textContent || '').trim()).length
     })(),
     // ⚠ NOT body.includes('Gadarenes'). That was an ENGLISH proper noun, so this
     // assertion would go RED on a correctly-translated packet and stays green today
@@ -384,6 +446,11 @@ const r = await page.evaluate(() => {
     // bug were locked together. Assert the STRUCTURE instead — the passage block exists
     // and carries a full passage's worth of text — which holds in any language.
     mark5Len: (document.querySelector('.p4-passage')?.textContent || '').trim().length,
+    // ★ POINT 4 NOW PRINTS A READING LIST, NOT THE PASSAGE (2026-09-30): THE HEAVENLY FATHER'S HEART, seven
+    // readings. Counted by STRUCTURE (the .p4-heart hook and its items), which holds in any language.
+    heartItems: document.querySelectorAll('.p4-heart li').length,
+    heartTitle: (document.querySelector('.p4-heart-h')?.textContent || '').trim().length,
+    v19Len: (document.querySelector('.p4-passage .p4-v19')?.textContent || '').trim().length,
     // ⚠ COUNT THE POINTS. The sheet-sum invariant below already required a points PAGE —
     // and a page with three points on it is still exactly one sheet, so a packet headed
     // "12 Prayer Points" printed THREE and every number this gate asserted stayed correct.
@@ -397,6 +464,10 @@ const r = await page.evaluate(() => {
       if (!title) return -1
       const host = title.parentElement?.parentElement
       if (!host) return -1
+      // Each point's heading carries class="pt-h": a numbered LINE is not a point. German cites "1. Petrus 5:6–11"
+      // (its own name for 1 Peter), and that reference line was counted as a thirteenth point.
+      const heads = document.querySelectorAll('.pt-h')
+      if (heads.length) return heads.length
       return (host.innerText || '').split('\n').filter((l) => /^\s*\d{1,2}\.\s/.test(l)).length
     })(),
     metacamp: (body.match(/metacamp\.org/g) || []).length,
@@ -447,7 +518,8 @@ const pdfBytes = pdf.length
 // one zone's group count — a per-zone packet has a different number of both.
 const fails = []
 if (!r.sheets) fails.push('no .sheet elements — the packet did not render')
-if (!r.cards) fails.push('no people-group cards')
+if (!r.cards && !r.wsRows) fails.push('no people-group cards or worksheet rows — a packet of nobody')
+if (r.wsRows && r.wsBoxes !== r.wsRows * 3) fails.push(`${r.wsRows} worksheet rows should carry ${r.wsRows * 3} tally cells but the packet has ${r.wsBoxes}`)
 if (r.cardsBlank) {
   fails.push(`${r.cardsBlank} of ${r.cards} people-group card(s) have no NAME — a card that `
     + 'names nobody is a slot on the page, not an entry in a prayer list. The counts above cannot '
@@ -496,6 +568,16 @@ if (r.cards && expectPhotos && r.imgs === 0) {
     + 'failed photo fetch, not a zone without pictures. Re-run without NOPHOTOS=1, or set '
     + 'PACKET_EXPECT_PHOTOS=0 to declare this a deliberately photo-less packet.')
 }
+// ★ THE LIGHTWEIGHT ROWS SHOW PEOPLE TOO (2026-09-30): every worksheet row carries exactly one photo cell, a
+// photo or the "no photo" box, and a photo-expecting packet carries at least one photo, as the cards above.
+if (r.wsRows && r.imgs + r.nophoto !== r.wsRows) {
+  fails.push(`${r.wsRows} worksheet rows but ${r.imgs} photo + ${r.nophoto} "no photo" = ${r.imgs + r.nophoto} — `
+    + 'every row must carry exactly one of the two')
+}
+if (r.wsRows && expectPhotos && r.imgs === 0) {
+  fails.push(`${r.wsRows} worksheet rows and NOT ONE photo — the lightweight packet shows every group's photo `
+    + 'too, so this is a skipped or failed photo fetch. Set PACKET_EXPECT_PHOTOS=0 to declare a photo-less packet.')
+}
 if (r.wheelSegs !== 12) fails.push(`prayer wheel has ${r.wheelSegs} segments, expected 12`)
 // A SEGMENT WITHOUT ITS WORD IS A COLOUR. 12 labels, one per segment, on the wheel
 // sheet itself — not merely somewhere in the document.
@@ -509,16 +591,36 @@ if (r.wheelLabels !== WHEEL_LABELS) {
       + 'and cannot see an unlabelled wheel')
 }
 if (r.rhythms !== r.rhythmsTotal) fails.push(`only ${r.rhythms}/${r.rhythmsTotal} prayer rhythms present`)
-// Mark 5:1-20 in full is a Driver requirement for point 4: "it actually lists out the
-// full scripture, because prayer point number four is actually read the word." The
+// Mark 5:1-20 in full is a requirement for point 4: it lists out the full scripture,
+// because prayer point four is reading the word itself. The
 // English passage is 2,141 chars; 1,200 is a floor that no truncation or placeholder
 // survives while leaving room for languages that render the same text more compactly
 // (zh is typically ~40% shorter in characters).
-const MARK5_MIN = 1200
+// Point 4 prints THE HEAVENLY FATHER'S HEART: a heading and seven readings, each addressed in the reader's
+// own Bible. It replaced Mark 5:1-20 in full (2026-09-30), so the passage is no longer asserted; the list is.
+// ★ POINT 4 PRINTS MARK 5:18-20 (2026-09-30, the second revision: only those verses, so all twelve points fit
+// one page), with verse 19 in bold. English is 385 chars + the credit; 250 is a floor no truncation or
+// placeholder survives, with room for the more compact languages (Russian is 277).
+// ★ AND A CEILING: the floor alone also passes the full 1-20 passage (2,141 chars in English). The browser
+// gate's one-sheet fit refuses 1-20 too, but it is NOT MEASURED in a headless run, so this ceiling is the
+// only headless guard for "18-20 only". 18-20 measures 277-428 chars across the 11 locales; 1-20 is well
+// over 700 in every one of them.
+const MARK5_MIN = 250
+const MARK5_MAX = 700
 if (r.mark5Len < MARK5_MIN) {
   fails.push(r.mark5Len === 0
-    ? 'Mark 5:1-20 is NOT printed in full (Driver requirement for point 4) — no .p4-passage block'
-    : `Mark 5:1-20 looks truncated: ${r.mark5Len} chars, expected at least ${MARK5_MIN}`)
+    ? 'Mark 5:18-20 is NOT printed (a requirement for point 4): no .p4-passage block'
+    : `Mark 5:18-20 looks truncated: ${r.mark5Len} chars, expected at least ${MARK5_MIN}`)
+} else if (r.mark5Len > MARK5_MAX) {
+  fails.push(`point 4's passage is ${r.mark5Len} chars, over ${MARK5_MAX}: more than Mark 5:18-20 is printed `
+    + '(the full 1-20 passage is back?), and the twelve points no longer fit one page')
+}
+if (!r.v19Len) fails.push('Mark 5:19 is not in bold (no .p4-v19 inside the passage)')
+const HEART_ITEMS = 7
+if (r.heartItems !== HEART_ITEMS || !r.heartTitle) {
+  fails.push(r.heartItems === 0
+    ? "point 4's reading list is NOT printed (no .p4-heart block)"
+    : `point 4's reading list prints ${r.heartItems} of ${HEART_ITEMS} readings${r.heartTitle ? '' : ', and no heading'}`)
 }
 // THE PRODUCT IS NAMED FOR THIS NUMBER. The page header says "12 Prayer Points" in every
 // locale, so 12 is a contract, not a preference — and the failure mode it guards is SILENT:
@@ -665,18 +767,40 @@ if (!boxes.length) {
 // this assertion exists to catch SILENTLY DROPPED PEOPLE GROUPS, and a ±1 tolerance is exactly the
 // slack a lost list page would hide in. So the funnel is DETECTED (.funnel-title) and added as a
 // known term, leaving the list-page arithmetic as strict as it was.
-// ⚠ AND THE SAME FOR THE LIFE-CALENDAR PAGES (2026-09-27, Driver's page order). Two more structural
+// ⚠ AND THE SAME FOR THE LIFE-CALENDAR PAGES (2026-09-27, the specified page order). Two more structural
 // sheets — a 100-year life in weeks, then the SAME grid shaded by the evangelical share of these
 // groups' population — so they are DETECTED and added as known terms for exactly the reason the
 // funnel was, and for the reason stated above: a tolerance here would hide a dropped list page.
-const PER_PAGE = 20
+// THE PAGE SIZES ARE THE RENDERER'S, read from it rather than retyped: the first list page of each packet
+// gives rows to the explanation band (2026-10-02), so a typed number drifted the moment the band changed.
+const { createPacketRenderer: makeR } = await import(resolve(dirname(fileURLToPath(import.meta.url)), '../library/packet/packet-render.js'))
+const RR = makeR({ strings: catalog, lang: 'en' })
+const PER_PAGE = RR.PER_PAGE
 const funnelSheets = r.funnel ? 1 : 0
 const lifeSheets = (r.lifeSheets || 0) + (r.christianSheets || 0)
-const expectedSheets = 1 + lifeSheets + funnelSheets + Math.ceil(r.cards / PER_PAGE) + 2
+// ⚠ AND THE SETS PAGES (bounded, centered): back matter, DETECTED for the same reason as the rest.
+// Before they were counted the arithmetic only held when a fixture omitted set data.
+const setsSheets = r.setsSheets || 0
+// Both lists give their first page to the explanation band: the worksheet holds WS_FIRST rows there and
+// WS_REST after; the profile pages FD_FIRST, then PER_PAGE.
+const wsPages = (n) => (n <= 0 ? 0 : 1 + Math.ceil(Math.max(0, n - RR.WS_FIRST) / RR.WS_REST))
+const fdPages = (n) => (n <= 0 ? 0 : 1 + Math.ceil(Math.max(0, n - RR.FD_FIRST) / PER_PAGE))
+const listSheets = r.cards ? fdPages(r.cards) : wsPages(r.wsRows)
+// The Full detail's first page reserves a block for the explanation and CLIPS what outgrows it (rather than
+// let it overlap the rows): only a measurement sees a clipped line, so measure it.
+if (r.pointsOver !== null && r.pointsOver > 0) fails.push(`the prayer-points page outgrows its sheet by ${r.pointsOver}px — the twelve points and the themes must fit ONE page in every language`)
+if (r.pointsUnder && r.pointsUnder.real > r.pointsUnder.est) fails.push(`the prayer-points page is ${r.pointsUnder.real}px tall, over the ${r.pointsUnder.est}px its size tier ${r.pointsUnder.tier} was chosen by — the estimate (packet-render pointsHeight) under-measures this language`)
+if (r.fdTopOver > 0) fails.push(`the Full detail's explanation block outgrows its reserved height by ${r.fdTopOver}px — text is clipped (raise FD_TOP_H)`)
+if (r.wsRows && r.wsSheets !== wsPages(r.wsRows)) fails.push(`${r.wsRows} worksheet rows should take ${wsPages(r.wsRows)} page(s) but the packet has ${r.wsSheets}`)
+// + 2 again (2026-09-30, the second revision): point 4's Mark 5:18-20 and the Father's-heart list are back ON the
+// points page, so the back matter is the wheel and the points.
+// + 2: the wheel and the points, the twelve points and the themes on ONE sheet (2026-10-02, at the demo).
+if (r.pointsSheets !== 1) fails.push(`the twelve prayer points and the themes should fit ONE sheet, found ${r.pointsSheets}`)
+const expectedSheets = 1 + lifeSheets + funnelSheets + listSheets + setsSheets + 2
 // ── THE LIFE-CALENDAR PAGES, asserted rather than merely counted ──────────────────────────────────
 // A page that EXISTS is not a page that is RIGHT: an empty grid, a grid of the wrong size, or a
 // christian page whose shading silently fell to zero would all still be one sheet. 5,200 is the
-// Driver's own arithmetic (100 years x 52 weeks) and is the only number here that may not drift.
+// spec's own arithmetic (100 years x 52 weeks) and is the only number here that may not drift.
 if (r.lifeSheets) {
   const EXPECT = 5200
   const perGrid = r.lifeCells / (r.lifeSheets + (r.christianSheets || 0))
@@ -686,16 +810,17 @@ if (r.lifeSheets) {
   }
 }
 // ⚠ AND THE SHADE MUST BE SCATTERED, NOT STACKED — the assertion that would have caught what three gates
-// and a passing suite did not. rega's contact sheet (2026-09-28) showed page 3 reading as ONE SOLID BAR:
-// 32 contiguous cells fill most of row 1 of 52, so the page said "a big green block" where the Driver's
-// intent is "32 boxes lost in 5,200". Every assertion passed, because they all measured the COUNT.
+// and a passing suite did not. A contact sheet (2026-09-28) showed page 3 reading as ONE SOLID BAR:
+// 32 contiguous cells fill most of row 1 of 52, so the page said "a big green block" where the
+// intent is 32 boxes lost in 5,200. Every assertion passed, because they all measured the COUNT.
 // Half the grid height is a deliberately loose floor: a genuine scatter of even a few cells spans most of
 // the page (measured: 32 cells over 26 rows, 95% of the height), and a bar spans ~1%. Anything in between
 // is worth a human look.
-if (r.christianSheets && r.lifeSpread !== null && r.lifeSpread !== undefined && r.lifeSpread < 0.5) {
-  fails.push(`the christian-share page's shaded cells span only ${(r.lifeSpread * 100).toFixed(0)}% of the `
-    + 'grid height — they are stacked, not scattered, so the page reads as a bar rather than as rare marks '
-    + 'in a whole life. Shade by a deterministic scatter, not a contiguous run.')
+if (r.christianSheets && r.lifeTopFill === false) {
+  fails.push('the christian-share page\'s shaded boxes are not the first N in reading order — the grid must fill FROM THE TOP')
+}
+if (r.lifeSheets && r.jesusTopFill && (r.jesusTopFill.on !== 33 * 52 || !r.jesusTopFill.top)) {
+  fails.push(`the life page shades ${r.jesusTopFill.on} boxes${r.jesusTopFill.top ? '' : ', not from the top'} — Jesus' 33 years are the first 1,716`)
 }
 // ★ THE SHADED SHARE MUST BE NON-ZERO AND NOT EVERYTHING. 0 shaded means the percentage never
 // reached the page (a null christian-share file renders the page with an empty grid, which reads as
@@ -707,14 +832,14 @@ if (r.christianSheets) {
       + `reached and 5200 would claim everybody is; both mean the percentage did not arrive`)
   }
 }
-// The three prayer columns: one tick box per group per question, so the count is exactly 3 x cards.
+// The three prayer columns: one tally cell per group per question, so the count is exactly 3 x cards.
 if (r.cards && r.prayBoxes !== r.cards * 3) {
-  fails.push(`${r.cards} people cards should carry ${r.cards * 3} prayer tick boxes `
-    + `(blessed / what to know / what to do) but the packet has ${r.prayBoxes}`)
+  fails.push(`${r.cards} people cards should carry ${r.cards * 3} prayer tally cells `
+    + `(did I bless them / what do you want me to know / what do you want me to do) but the packet has ${r.prayBoxes}`)
 }
 if (r.cards && r.sheets !== expectedSheets) {
   fails.push(`${r.cards} people cards should lay out as ${expectedSheets} sheets `
-    + `(1 map${lifeSheets ? ` + ${lifeSheets} life-calendar` : ''}${funnelSheets ? ' + 1 funnel' : ''} + ${Math.ceil(r.cards / PER_PAGE)} list + points + wheel), `
+    + `(1 map${lifeSheets ? ` + ${lifeSheets} life-calendar` : ''}${funnelSheets ? ' + 1 funnel' : ''} + ${listSheets} list${setsSheets ? ` + ${setsSheets} sets` : ''} + points + wheel), `
     + `but the packet has ${r.sheets} — either groups were dropped from a page or the `
     + `${PER_PAGE}-per-page grid changed`)
 }
@@ -729,7 +854,7 @@ if (r.funnel && !r.funnelSteps) {
 // ★ AND IF THE CALLER DECLARED IT, ITS ABSENCE IS A FAILURE. See the --expect-funnel note at the top:
 // a lost call site produces a packet that is CORRECT but missing page 2, which is why nothing caught
 // a merge deleting one.
-// ★ EVERY FUNNEL ROW MUST HAVE A BAR. rega measured the first version: the reader's step had no bar,
+// ★ EVERY FUNNEL ROW MUST HAVE A BAR. A browser check measured the first version: the reader's step had no bar,
 // so the funnel never visibly narrowed to "yours" — a funnel whose final term is not drawn as part of
 // the funnel fails at the one thing it is for. Rows and bars are counted separately so the next
 // regression is a mismatch rather than an invisible omission.
@@ -741,8 +866,8 @@ if (r.funnel && r.funnelRows !== r.funnelBars) {
 // because Number(null) is 0 and the renderer's guard tested finiteness rather than PRESENCE. A people
 // group with no people is not a fact; it is missing data wearing a number's clothes.
 // ★ AND ON A NON-LATIN SHEET, THE FUNNEL'S PROSE MUST BE IN THE READER'S SCRIPT. See funnelLatinRuns
-// above for why this is only meaningful in hi/ar/ru/zh. This is the gap rega named after the ?list=
-// render: "the gate passed: it counts rows, not the row's language", and it was right — the English
+// above for why this is only meaningful in hi/ar/ru/zh. This is the gap a review named after the ?list=
+// render (the gate passed because it counted rows, not the rows' language), and it was right — the English
 // list label sat among Devanagari and every assertion here was green.
 //
 // ⚠ THE ALLOWLIST IS TWO ENTRIES AND BOTH ARE DECISIONS, NOT BOOKMARKS:
@@ -758,7 +883,11 @@ if (r.funnel && r.funnelRows !== r.funnelBars) {
 // the same reason 'Project' is here (Project 4700 / 700 are list names, not prose). Verified it is the
 // only Latin left in the ar funnel page after the tip and sidebar strings were genuinely translated:
 // an allowlist entry added BEFORE translating would have hidden fifteen untranslated strings.
-const LATIN_OK = new Set(['IMB', 'peoplegroups.org', 'Project', 'UPG-'])
+// 'UPG' is the same product name as renamed, "UPG 100" with a space: the digits break the run, so it
+// surfaces as 'UPG' (page 2's kicker and packets tier). Settled, like 'UPG-' — a name, not prose.
+// The series is now written as ONE term, "UPG100" (2026-10-02): the digits still break the run, so it too
+// surfaces as 'UPG'.
+const LATIN_OK = new Set(['IMB', 'peoplegroups.org', 'Project', 'UPG-', 'UPG'])
 const NON_LATIN_LOCALES = new Set(['hi', 'ar', 'ru', 'zh', 'he', 'fa', 'ur', 'bn', 'ta', 'th', 'ko', 'ja'])
 if (r.funnel && NON_LATIN_LOCALES.has(String(lang).split('-')[0])) {
   const stray = (r.funnelLatinRuns || []).filter((x) => !LATIN_OK.has(x))
@@ -841,9 +970,9 @@ console.log(`  funnel (page 2)  : ${r.funnel
   ? `${r.funnelRows} row(s), ${r.funnelBars} bar(s)${r.funnelShare ? ` — "${r.funnelShare}"` : ' — no share line'}`
   : 'absent' + (EXPECT_FUNNEL ? ' (REQUIRED — see FAIL above)' : ' (not required)')}`)
 console.log(`  prayer points    : ${r.points} / ${POINTS_EXPECT}`)
+if (r.pointsUnder) console.log(`  points size tier : ${r.pointsUnder.tier} (estimated ${r.pointsUnder.est}px, measured ${r.pointsUnder.real}px)`)
 console.log(`  wheel segments   : ${r.wheelSegs}  (${r.wheelLabels}/${WHEEL_LABELS} labelled)`)
-console.log(`  Mark 5 in full   : ${r.mark5Len} chars`
-  + `${scriptureIsEnglish ? '  ⚠ UNTRANSLATED (English fallback)' : ''}`)
+console.log(`  point 4         : Mark 5:18-20 ${r.mark5Len} chars, verse 19 bold ${r.v19Len} chars, ${r.heartItems} readings`)
 console.log(`  metacamp.org     : ${r.metacamp}`)
 console.log(`  map (page 1)     : ${r.mapFaults.length
   ? `${r.mapFaults.join('; ')}${expectMap ? '' : `   [declared deliberate: ${/\bnomap\b/.test(build) ? 'data-packet-build="' + build + '"' : 'PACKET_EXPECT_MAP=0'}]`}`

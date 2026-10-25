@@ -1,3 +1,4 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * doxa-research-map / index.js — Bundle entry
  *
@@ -16,7 +17,6 @@
  * folder. The bundle evaluates import.meta.glob('./*.vue') HERE and
  * hands the result to the loader via app.provide('profileModules').
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 // ─── Bundle-private profile registry ─────────────────────────────────────────
 // import.meta.glob is evaluated by Vite at build time relative to THIS file —

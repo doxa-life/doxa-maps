@@ -7,7 +7,7 @@
     "gospelResources": "Recursos del Evangelio",
     "languageFamilies": "Familias lingüísticas",
     "prayer": "Progreso de oración",
-    "upg100List": "Mi lista UPG 100",
+    "upg100List": "Mi lista UPG100",
     "batchSelect": "Selección múltiple"
   },
   "header": {
@@ -58,9 +58,19 @@
     "languages": "Idiomas"
   },
   "tabInfo": {
-    "upg100Region": "Región — ordena las listas UPG-100 por área mundial (África, India, Oriente Medio, Sordos, …). Los totales son los UUPG y la población sumados de todas las listas que contiene.",
-    "upg100Zone": "Listas UPG-100 — cada una es una lista de oración de los grupos étnicos no alcanzados de un área, y es lo que el mapa pinta y colorea. Cada lista se imprime como su propio paquete.",
-    "upg100Group": "Grupo étnico — los grupos no alcanzados dentro de una lista, primero los de mayor necesidad de oración. Cada punto del mapa es uno de ellos."
+    "upg100Region": "Región — ordena las listas UPG100 por área mundial (África, India, Oriente Medio, Sordos, …). Los totales son los UUPG y la población sumados de todas las listas que contiene.",
+    "upg100Zone": "Listas UPG100 — cada una es una lista de oración de los grupos étnicos no alcanzados de un área, y es lo que el mapa pinta y colorea. Cada lista se imprime como su propio paquete.",
+    "upg100Group": "Grupo étnico — los grupos no alcanzados dentro de una lista, primero los de mayor necesidad de oración. Cada punto del mapa es uno de ellos.",
+    "family": "Familia lingüística — un conjunto de lenguas procedentes de un antepasado común (p. ej. indoeuropea, afroasiática).",
+    "language": "Idioma — un sistema de comunicación que usa un pueblo (p. ej. árabe, bengalí, hindi).",
+    "dialect": "Dialecto/Variedad — una forma regional o social de una lengua (p. ej. árabe sudanés; lengua de señas pakistaní).",
+    "bloc": "Bloque de afinidad — la agrupación más amplia, por parentesco cultural, lingüístico y geográfico (p. ej. pueblos malayos, pueblos del sur de Asia, sordos, mundo árabe).",
+    "cluster": "Clúster — una agrupación más fina dentro de un bloque (p. ej. Borneo-Kalimantan entre los pueblos malayos). Las filas llevan «(clúster)» para distinguirlas de los pueblos.",
+    "group": "Pueblo — una identidad etnolingüística en sí misma, independiente del país. Las filas llevan «(pueblo)». Un mismo pueblo puede vivir en muchos países (los sordos, por ejemplo, en más de cien).",
+    "pgic": "Pueblo en país — una fila por cada pueblo en cada país donde vive (p. ej. «Abai Sungai, Malasia»). Las filas llevan «(pueblo en país)».",
+    "region": "Región WAGF — la macrorregión a la que pertenece un país (p. ej. Asia, África). Cada una tiene su color en el mapa.",
+    "block": "Bloque WAGF — la subdivisión dentro de una región (p. ej. Sudeste Asiático, África Occidental).",
+    "country": "País — los países uno a uno, ordenados por población no alcanzada dentro de su bloque."
   },
   "a11y": {
     "expandRow": "Expandir {label}",
@@ -70,7 +80,7 @@
   },
   "export": {
     "poster": "Cartel",
-    "packet": "UPG 100",
+    "packet": "UPG100",
     "packetExplain": "Una lista de oración de unos 50 a 100 pueblos no alcanzados: una persona puede llevar una.",
     "packetAria": "Detalle del paquete de oración",
     "packetFull": "Detalle completo",

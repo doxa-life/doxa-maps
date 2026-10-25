@@ -4,7 +4,7 @@
   "//webDir": [
     "webDir = public/<tree> \u2014 THE OUTPUT FOLDER, written by the build (internal/sync-app-shells.mjs keeps it",
     "in step with the tree's name in vite.doxa-maps-build-config.json; do not edit it by hand).",
-    "public/ holds ONLY the output folder + README.md (Driver decision, BUILD-OUTPUT-IS-ONE-FOLDER). The folder is",
+    "public/ holds ONLY the output folder + README.md (decision BUILD-OUTPUT-IS-ONE-FOLDER). The folder is",
     "self-contained: its index.html is the front page (the Plugin Studio), <bundle>/ holds each plugin, and",
     "assets/ carries the data, fonts and images the plugins fetch.",
     "ONE build, THREE consumers, all reading THIS folder:",

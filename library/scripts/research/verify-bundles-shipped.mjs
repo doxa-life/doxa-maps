@@ -66,9 +66,13 @@ for (const b of bundles) {
   // has already happened here: a single import took two bundles to 2.0MB / 2.9MB.
   // With a 7.7MB people-groups file now in public/assets, an accidental import
   // would produce an ~8MB bundle. A ceiling catches it the moment it happens.
-  const MAX = 1_500_000;   // ~2x the largest legitimate bundle (683KB)
+  // The ceiling was set at ~2x the largest bundle of its day (683 KB); country-posters now sits at about
+  // 1.47 MB of it, so there is little headroom left and a per-bundle pin may fit better (open question).
+  // Reported in BYTES: the old MiB figures printed "1.4MB" for a 1,500,000-byte ceiling and "1.6MB" for
+  // 1,662,962 bytes, which is two different units in one sentence.
+  const MAX = 1_500_000;
   if (bytes > MAX) {
-    fail(`${b.bundle}: ${b.output} is ${(bytes / 1048576).toFixed(1)}MB (ceiling ${(MAX / 1048576).toFixed(1)}MB) `
+    fail(`${b.bundle}: ${b.output} is ${bytes.toLocaleString('en-US')} bytes (ceiling ${MAX.toLocaleString('en-US')}) `
       + '— a data file was almost certainly IMPORTED instead of fetched. public/ assets must be fetch()ed at runtime, never imported.');
   }
   if (!(b.elements || []).length) fail(`${b.bundle}: declares NO custom elements — nothing to mount`);

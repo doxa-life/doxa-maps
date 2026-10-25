@@ -1,4 +1,4 @@
-# Architecture — UPG-100 poster generation
+# Architecture — UPG100 List poster generation
 
 > The simple overview is in `library/scripts/posters/README.md`. This is the full reference for the
 > generator: files, environment, pipeline, and the gotchas that have bitten before.
@@ -42,7 +42,6 @@ the app is rebuilt.**
 | `build-gallery.mjs` | `out/index.html` — browsable preview grid, sectioned by region. |
 | `build-hd-gallery.mjs` | `out/hd.html` — full-resolution review + copy-to-clipboard. |
 | `export-public.mjs` | Copies PNGs into region folders OUTSIDE the repo (see below). |
-| `snapshots/` | Frozen template versions. v5 is the approved current; v1–v4 are the lineage. |
 
 ## Environment
 
@@ -54,7 +53,7 @@ the app is rebuilt.**
 | `VITE_API_BASE_URL` | — | Satisfies the fail-closed config gate. No request is made under `OFFLINE=1`. |
 | `ONLY` | — | Build a single zone by `zoneKey`. |
 | `UPG100_DATA_PATH` | the profile in this repo | Only override to test against other data. |
-| `SERIES_INDEX` / `SERIES_NAME` | derived / `List of 100 UPG's` | Series line on the sheet. |
+| `SERIES_INDEX` / `SERIES_NAME` | derived / `UPG100 List` | Series line on the sheet. |
 
 ## Two things that will bite you
 

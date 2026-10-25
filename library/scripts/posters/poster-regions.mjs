@@ -5,7 +5,7 @@
 // Keeping three copies of this mapping guarantees they drift; this is the single
 // source for the generator-side pages.
 //
-// Section names mirror poster-wall.vue exactly, so what the design note reviews here
+// Section names mirror poster-wall.vue exactly, so what a reviewer sees here
 // matches what a reader sees in the product.
 export const REGION_OF = {
   // Africa

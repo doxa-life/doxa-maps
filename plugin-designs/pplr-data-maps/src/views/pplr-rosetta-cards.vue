@@ -15,7 +15,7 @@
 import { inject, onMounted, onBeforeUnmount, ref, computed } from 'vue'
 import { glFor, exposeMap, releaseMap, whenGeojsonDrawn } from '../utils/pplrData.js'
 import { usePplrT } from '../composables/usePplrT.js'
-import { tStatic } from '@map/i18n/index.js'
+import { tStatic, formatList } from '@map/i18n/index.js'
 import { useMapInstance } from '@map/composables/useMapInstance.js'
 import { addCountryPolygons, loadOnce, popupForPG, POPUP_CSS, escHtml } from '../utils/pplrMap.js'
 import LoadingGlobe from '../components/LoadingGlobe.vue'
@@ -99,9 +99,8 @@ onMounted(async () => {
 
       // Rosetta sample (5 stars — slightly larger than base pins so they
       // stand out, but zoom-interpolated so they don't dominate the whole
-      // map at low zoom levels (per user 2026-05-02: "yellow pens are way
-      // bigger than all the other pins... when you zoom out it makes the
-      // whole map just yellow").
+      // map at low zoom levels: at full size they were far bigger than every
+      // other pin and turned the zoomed-out map yellow.
       map.value.addLayer({
         id: 'rosetta-pin',
         type: 'circle',
@@ -134,7 +133,7 @@ onMounted(async () => {
           : ''
         const missingNote = missingIds.length
           ? `<tr><td colspan="2" style="padding-top:6px;font-size:10px;color:#6b7280;font-style:italic">
-               ${escHtml(t('pplr.rosetta.missingIds', { ids: missingIds.join(', ') }))}
+               ${escHtml(t('pplr.rosetta.missingIds', { ids: formatList(missingIds) }))}
              </td></tr>`
           : ''
         new (glFor(map.value)).Popup({ maxWidth: '360px' })

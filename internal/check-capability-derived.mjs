@@ -10,8 +10,8 @@
  *
  * WHAT THIS ASSERTS, and why each half is here:
  *   1. Every profile resolves to a capability 1-5. A 0 or a null means some surface will render a
- *      tier that does not exist; the Driver saw exactly that as "the Research Gallery shows as
- *      capability 0".
+ *      tier that does not exist; that is exactly how the Research Gallery came to show as
+ *      capability 0.
  *   2. A profile that composes anything derives cap-4, or cap-5 if it composes a cap-4 — and an
  *      EXPLICIT type must AGREE with that. The declaration stays authoritative; it is not
  *      overridden, it is checked. A meta that contradicts the structure means the meta or the

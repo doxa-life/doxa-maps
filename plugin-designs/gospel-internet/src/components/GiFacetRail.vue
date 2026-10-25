@@ -2,8 +2,8 @@
 /**
  * GiFacetRail.vue — the left rail: every facet with its counts UNDER THE OTHER FACETS.
  *
- * ★ GLUE, NOT THE KIT'S RAIL. SPEC-GOSPEL-INTERNET-DASHBOARD says "comes from the kit's facet rail; do
- * not re-implement it". The kit's rail is landing 4 (simpleresearch moved it forward for this board);
+ * ★ GLUE, NOT THE KIT'S RAIL. This board's facet rail is meant to come from the kit; it is not to be
+ * re-implemented here. The kit's rail is landing 4 (simpleresearch moved it forward for this board);
  * until it reaches main this is the thinnest rail that honours its contract, and it is deleted the day
  * the kit's lands:
  *   - every write is bus.toggleFilterValue / setFilter (multi-value OR-within-key, D1; clearing cascades);
@@ -61,7 +61,7 @@ const sections = computed(() => {
   const prov = counts('province')
   if (prov.length) {
     out.push({ id: 'province', title: T('gospelInternet.facet.province', 'India and China: state or province'),
-      note: T('gospelInternet.facet.provinceNote', 'Approximate: placed from where a people is found, not a town.'), long: true, groups: [
+      note: T('gospelInternet.facet.provinceNote', 'Approximate: taken from the group\'s dot on the map, not from a town.'), long: true, groups: [
         { key: 'province', rows: prov, label: (v) => v },
       ] })
   }

@@ -96,3 +96,65 @@ export function listPosterSizes() {
 export function listByCategory(category) {
   return listPosterSizes().filter((s) => s.category === category);
 }
+
+// ─── THE POSTER-SIZE LADDER (every print surface, 2026-09-30) ────────────────────────────────────
+// ONE table of the sizes a READER can pick for a poster, shared by every print surface (the poster
+// walls, the map's export, Bless, the map-print template) through ONE print picker. It is separate from
+// POSTER_SIZES above (the map exporter's US/ISO list), and written as plain literals, so a bundle that
+// never imports it carries none of it.
+//
+// KEYS are WxH in INCHES (this file's existing convention: '24x36', '27x40'); they are dot-free, so
+// they are safe in i18n key paths, URLs and stored choices. PORTRAIT ONLY: h ≥ w for every size (66x66
+// is square). `sheets` is what a printer actually feeds, named exactly as panelSheets.js's planPanels()
+// parameters, so a consumer passes it straight in: `count` sheets of sheetW × sheetH, stacked in
+// `direction`, each overlapping the next by `joinIn` (glued), which gives the finished w × h.
+// `photos` means a photo slot beside each name is ALLOWED at this size (there is room); which photos
+// print is the renderer's call. `path` is how the size reaches paper: 'print' = the browser's own print
+// (any home printer; a phone prints Letter/A4 only), 'pdf' = a print-shop PDF, one page per sheet at
+// exact inches, since no phone and few home printers take 3-8 ft paper.
+export const POSTER_LADDER = {
+  paper:   { id: 'paper', inches: { w: 8.5, h: 11 }, paper: true,
+             sheets: { sheetW: 8.5, sheetH: 11, count: 1, direction: 'vertical', joinIn: 0 }, photos: false, path: 'print' },
+  '18x24': { id: '18x24', inches: { w: 18, h: 24 },
+             sheets: { sheetW: 18, sheetH: 24, count: 1, direction: 'vertical', joinIn: 0 }, photos: false, path: 'pdf' },
+  '36x36': { id: '36x36', inches: { w: 36, h: 36 },
+             sheets: { sheetW: 36, sheetH: 36, count: 1, direction: 'vertical', joinIn: 0 }, photos: false, path: 'pdf' },
+  '36x48': { id: '36x48', inches: { w: 36, h: 48 },
+             sheets: { sheetW: 36, sheetH: 48, count: 1, direction: 'vertical', joinIn: 0 }, photos: false, path: 'pdf' },
+  '36x60': { id: '36x60', inches: { w: 36, h: 60 },
+             sheets: { sheetW: 36, sheetH: 60, count: 1, direction: 'vertical', joinIn: 0 }, photos: false, path: 'pdf' },
+  '36x66': { id: '36x66', inches: { w: 36, h: 66 },
+             sheets: { sheetW: 36, sheetH: 66, count: 1, direction: 'vertical', joinIn: 0 }, photos: false, path: 'pdf' },
+  '66x66': { id: '66x66', inches: { w: 66, h: 66 },
+             sheets: { sheetW: 36, sheetH: 66, count: 2, direction: 'horizontal', joinIn: 6 }, photos: true, path: 'pdf' },
+  '60x96': { id: '60x96', inches: { w: 60, h: 96 },
+             sheets: { sheetW: 60, sheetH: 36, count: 3, direction: 'vertical', joinIn: 6 }, photos: true, path: 'pdf' },
+}
+/** The picker's order, smallest first. Every size up to 36x66 is one sheet; 66x66 and 60x96 are glued. */
+export const POSTER_LADDER_ORDER = ['paper', '18x24', '36x36', '36x48', '36x60', '36x66', '66x66', '60x96']
+/** A size that still resolves (stored choices, today's defaults) but is NOT offered in the picker. */
+export const POSTER_LADDER_LEGACY = {
+  '24x36': { id: '24x36', inches: { w: 24, h: 36 },
+             sheets: { sheetW: 24, sheetH: 36, count: 1, direction: 'vertical', joinIn: 0 }, photos: false, path: 'pdf' },
+}
+/** Older names for the same sizes (poster-render's FORMATS, Bless's PRESETS, the map exporter). */
+export const POSTER_LADDER_ALIASES = {
+  '3x3': '36x36', '3x3ft': '36x36', '3x5': '36x60', '3x5ft': '36x60',
+  '3x4': '36x48', '3x4ft': '36x48', '5x8': '60x96', '5x8ft': '60x96',
+  '2x3': '24x36', '2x3ft': '24x36', letter: 'paper', a4: 'paper',
+}
+/** A key, an alias or a legacy key → its ladder entry; null when unknown. */
+export function resolvePosterSize(key) {
+  const k = POSTER_LADDER_ALIASES[key] || key
+  return POSTER_LADDER[k] || POSTER_LADDER_LEGACY[k] || null
+}
+// Countries that print on US Letter; everywhere else "Standard printer paper" means A4. Keyed by the
+// REGION of a locale tag (en-US, es-MX); a tag without a region falls back to its language's usual paper.
+const LETTER_REGIONS = new Set(['US', 'CA', 'MX', 'PH', 'CL', 'CO', 'VE', 'CR', 'GT', 'PA', 'DO', 'PR', 'SV', 'NI', 'HN', 'BO'])
+/** 'letter' or 'a4' for a locale tag (e.g. navigator.language). */
+export function paperFor(localeTag) {
+  const m = String(localeTag || '').match(/^([a-z]{2,3})(?:[-_]([A-Za-z]{2}))?/i)
+  if (!m) return 'letter'
+  if (m[2]) return LETTER_REGIONS.has(m[2].toUpperCase()) ? 'letter' : 'a4'
+  return m[1].toLowerCase() === 'en' ? 'letter' : 'a4'
+}

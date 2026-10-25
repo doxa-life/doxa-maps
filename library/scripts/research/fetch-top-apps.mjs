@@ -3,7 +3,7 @@
 //   node fetch-top-apps.mjs  ->  out/top-apps-by-country.json
 //
 // ═══ WHY THIS EXISTS: STATCOUNTER HAS A WESTERN BLIND SPOT ══════════════════
-// design note 2026-08-01: "look for other social media platforms than the typical ones."
+// The research looks beyond the typical Western social platforms.
 //
 // MEASURED — the COMPLETE list StatCounter tracks across all 175 countries:
 //   Facebook, Instagram, Twitter, YouTube, Pinterest, reddit, LinkedIn, Tumblr,

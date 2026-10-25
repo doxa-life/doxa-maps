@@ -84,7 +84,9 @@
     "asia": "Asie",
     "europe": "Europe",
     "latin_america_&_caribbean": "Amérique latine",
-    "oceania": "Océanie"
+    "oceania": "Océanie",
+    "middle_east": "Moyen-Orient",
+    "north_america_&_non-spanish_caribbean": "Amérique du Nord et Caraïbes non hispanophones"
   },
   "sort_by_column_hint": "Trier ce tableau par {column} — Maj+clic ajoute une deuxième colonne. Le tri ne s’applique qu’au tableau ; les cartes gardent leur propre ordre.",
   "fs_exit_hint": "Quitter le plein écran (Échap) — retour à sept lignes",
@@ -92,5 +94,19 @@
   "fs_exit": "Quitter le plein écran",
   "fs_open": "Ouvrir le tableau en plein écran",
   "export_selected_hint": "Exporter tous les champs — peuples sélectionnés : {n}",
-  "export_all_hint": "Exporter tous les champs — peuples : {n}"
+  "export_all_hint": "Exporter tous les champs — peuples : {n}",
+  "map_init_failed": "La carte n’a pas pu démarrer. Vérifiez le jeton d’accès et le conteneur de la carte.",
+  "show_filters": "Afficher les filtres",
+  "hide_filters": "Masquer les filtres — agrandir la carte",
+  "show_charts": "Afficher les graphiques",
+  "hide_charts": "Masquer les graphiques — agrandir la carte",
+  "export_copied": "copié dans le presse-papiers",
+  "export_done": "exporté",
+  "export_ready": "prêt",
+  "export_toast": "✓ {rows} lignes × {fields} champs {how}",
+  "export_failed": "✕ Échec de l’export",
+  "pray_for_group": "Prier pour ce peuple",
+  "more_information": "Plus d’informations",
+  "title": "Tableau de bord de recherche",
+  "gospel_pending": "Pas encore prêt : le chiffre des non atteints, la clé de la source de données et la forme de l’interface restent à décider."
 }

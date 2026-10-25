@@ -42,7 +42,12 @@ if (!existsSync(POSTERS)) {
   console.log(`ZONE-CENSUS: SKIP — no posters at ${POSTERS} (run generate.mjs first).`)
   process.exit(0)
 }
-const built = new Set(readdirSync(POSTERS).filter((f) => f.endsWith('.html')).map((f) => f.slice(0, -5)))
+// ⚠ POSTERS ONLY. generate.mjs also writes PAPER sheets beside them (<zone>.packet.html, packet page 1;
+// <zone>.letter.html), and counting those as posters would print "posters built: 56" for 28 zones.
+const PAPER = /\.(packet|letter)\.html$/
+const htmls = readdirSync(POSTERS).filter((f) => f.endsWith('.html'))
+const built = new Set(htmls.filter((f) => !PAPER.test(f)).map((f) => f.slice(0, -5)))
+const paperSheets = htmls.filter((f) => PAPER.test(f)).length
 const missing = leaves.map((z) => z.id).filter((id) => !built.has(id))
 
 // Definitions that exist in the data but are NOT reachable — reported as context,
@@ -55,7 +60,7 @@ for (const k of ['lists', 'deaf_lists', 'asia_lists', 'uncovered_lists']) {
 const unreachable = [...declared].filter((id) => !leaves.some((z) => z.id === id))
 
 console.log(`  selectable zones : ${leaves.length}`)
-console.log(`  posters built    : ${built.size}`)
+console.log(`  posters built    : ${built.size}${paperSheets ? `  (+ ${paperSheets} paper sheet(s), not counted)` : ''}`)
 console.log(`  unreachable defs : ${unreachable.length}${unreachable.length ? ` (${unreachable.join(', ')}) — superseded, not a gap` : ''}`)
 
 if (missing.length) {

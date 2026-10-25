@@ -14,9 +14,8 @@
 // LABEL beside it went through the catalog. Measured 2026-09-24 on the served leaf:
 // ?lang=es changed 2 of 76 rendered strings ("POPULATION" -> "POBLACIÓN") and left all
 // three tabs AND all three info popovers in English. The mechanism worked; the strings
-// were never catalogued. The Driver named this affordance specifically — "the tab itself
-// gives you a little information button that will explain what a UPG-100 list is" —
-// which is exactly the sentence a reader who does not read English cannot use.
+// were never catalogued. This affordance was named specifically — the tab carries a small
+// information button that explains what a UPG-100 list is — which is exactly the sentence a reader who does not read English cannot use.
 //
 // ⚠ IT RENDERS THE REAL PAGE. A catalog-only check cannot tell a shipped translation
 // from a dead one, and a reimplemented lookup cannot tell you the component actually
@@ -40,7 +39,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 const LOCALES = join(REPO, 'library/i18n/locales')
 
 const URL_ = process.argv[2] || process.env.LEGEND_URL
-const ROOT = _resolvePath(_dirnamePath(_fileURLToPath(import.meta.url)), '..')
+const ROOT = _resolvePath(_dirnamePath(fileURLToPath(import.meta.url)), '..')
 
 // ★ MEASURE THIS BUILD, OR MEASURE NOTHING. Several worktrees run on one machine and a default port
 // belongs to whichever server started first — measured 2026-09-24 on :4173, where browser gates
@@ -49,11 +48,12 @@ const ROOT = _resolvePath(_dirnamePath(_fileURLToPath(import.meta.url)), '..')
 // A file:// target passes straight through — there is no server there to be wrong about.
 await requireThisTree(URL_, ROOT, 'LEGEND-INFO-LOCALIZED')
 if (!URL_) {
-  console.log('LEGEND-INFO-LOCALIZED: SKIP — no leaf url given.')
+  // 75, not 0: nothing was measured, and a 0 here reads as ✓ to the wave runner (the rule stated above).
+  console.log('LEGEND-INFO-LOCALIZED: NOT MEASURED (exit 75) — no leaf url given.')
   console.log(`  Pass one, or set LEGEND_URL. Serve the TREE ROOT (public/${TREE_NAME}) and point`)
   console.log('  at a profile whose legend carries per-tab info buttons, e.g.')
   console.log('  my-upg-100-list/upg-100-list/index.html')
-  process.exit(0)
+  process.exit(75)
 }
 const UNDER_TEST = (process.argv[3] || 'es,ar,zh').split(',').map((s) => s.trim()).filter(Boolean)
 

@@ -108,6 +108,7 @@
 </template>
 
 <script setup>
+import { retryFetch } from '@map/composables/retryFetch.js'
 import { computed, ref, watch, inject } from 'vue';
 import { markPrayedLocally } from '../composables/usePrayedLocally.js';
 import { useI18n } from 'vue-i18n';
@@ -118,7 +119,7 @@ import { getApiBaseUrl } from '../utils/apiBaseUrl.js';
 const { t, locale } = useI18n();
 
 useShadowStyles(`
-.people-group-detail{display:flex;flex-direction:column;height:100%;overflow-y:auto;}
+.people-group-detail{display:flex;flex-direction:column;height:100%;overflow-y:auto;overscroll-behavior:contain;}
 .people-group-detail.dark-mode{background:#1a1a2e;color:#eee;}
 .detail-header{display:flex;justify-content:space-between;align-items:flex-start;padding:16px;border-bottom:1px solid #e0e0e0;background:white;position:sticky;top:0;z-index:10;}
 .dark-mode .detail-header{background:#16213e;border-bottom-color:#2d2d4e;}
@@ -132,7 +133,7 @@ useShadowStyles(`
 .dark-mode .close-button{color:#aaa;}
 .close-button:hover{color:#333;}
 .dark-mode .close-button:hover{color:#fff;}
-.detail-content{padding:6px 12px 12px;flex:1;overflow-y:auto;}
+.detail-content{padding:6px 12px 12px;flex:1;overflow-y:auto;overscroll-behavior:contain;}
 .dark-mode .detail-content{background:#1a1a2e;}
 .quick-stats{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
 .stat-item{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;}
@@ -171,6 +172,14 @@ useShadowStyles(`
 .dark-mode .description-text{color:#d1d5db;}
 .description-text.empty{color:#999;font-style:italic;}
 .dark-mode .description-text.empty{color:#6b7280;}
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .pgd-root, .pgd-card, .pgd-close, .pgd-img { transition: none !important; animation: none !important; }
+}
 `, 'legend-people-group-detail')
 
 const props = defineProps({
@@ -239,7 +248,7 @@ async function fetchDetail(slugVal) {
     // click and routed to the slow WP origin, making images load 10+ seconds.
     // Live counts (prayer / committed / adopted) come from /list which IS
     // cache-busted in DataSourceManager — so freshness stays intact.
-    const res = await fetch(`${baseUrl}/api/people-groups/detail/${encodeURIComponent(slugVal)}?lang=${encodeURIComponent(locale.value)}`);
+    const res = await retryFetch(`${baseUrl}/api/people-groups/detail/${encodeURIComponent(slugVal)}?lang=${encodeURIComponent(locale.value)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     detailData.value = await res.json();
   } catch (err) {
@@ -458,6 +467,8 @@ function handleImageError(event) {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
+  /* a scroll that reaches this panel's end never chains to the page (the mobile sheet's detail view) */
+  overscroll-behavior: contain;
 }
 
 /* Header Section */
@@ -531,6 +542,7 @@ function handleImageError(event) {
   padding: 6px 12px 12px;
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Quick Stats */

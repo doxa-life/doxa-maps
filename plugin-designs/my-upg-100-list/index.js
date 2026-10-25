@@ -1,3 +1,4 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * plugin-designs/my-upg-100-list/index.js
  *
@@ -26,7 +27,6 @@
  * Mapbox RTL text plugin: registered ONCE at module init (before any map
  * constructs), lazy-loads when Arabic/Hebrew text appears on the basemap.
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 // ─── Bundle-private profile registry ─────────────────────────────────────────
 // import.meta.glob is evaluated by Vite at build time relative to THIS file —

@@ -1,7 +1,7 @@
 /**
  * check-instance-config-keys.mjs — a preset's profile-config keys must be keys the profile READS.
  *
- * ★ THE DEFECT (rega RQ20): people-groups-grid's "driven" preset declares "show-search":"false" and
+ * ★ THE DEFECT (RQ20): people-groups-grid's "driven" preset declares "show-search":"false" and
  * "show-filters":"false", and the page renders the search box and the filters bar anyway. Nothing
  * errored — 0 console errors — because nothing was wrong at runtime. The key simply never reached
  * the component:

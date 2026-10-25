@@ -110,7 +110,7 @@ useShadowStyles(dualEngine(
   '.mapboxgl-ctrl-geocoder{height:35px!important;min-height:35px!important;box-sizing:border-box!important;}'
   + '.mapboxgl-ctrl-geocoder--input{height:35px!important;min-height:35px!important;box-sizing:border-box!important;'
   + 'padding-top:0!important;padding-bottom:0!important;line-height:35px!important;}'
-  + '.mapboxgl-ctrl-geocoder--icon-search{top:50%!important;transform:translateY(-50%)!important;margin-top:0!important;left:7px!important;}'),
+  + '.mapboxgl-ctrl-geocoder--icon-search{top:50%!important;transform:translateY(-50%)!important;margin-top:0!important;inset-inline-start:7px!important;}'),
   'geocoder-height-35'
 )
 
@@ -175,7 +175,8 @@ useShadowStyles(dualEngine(
   + 'color:rgba(243,243,241,0.65)!important;}'
   + '.geocoder-dark .mapboxgl-ctrl-geocoder--icon,.dsm-dark .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon{'
   + 'fill:rgba(243,243,241,0.75)!important;}'
-  + '.geocoder-dark .mapboxgl-ctrl-geocoder--button,.dsm-dark .mapboxgl-ctrl-geocoder--button{background:transparent!important;}'),
+  + '.geocoder-dark .mapboxgl-ctrl-geocoder--button,.dsm-dark .mapboxgl-ctrl-geocoder--button{background:transparent!important;}')
+  + '/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,\n   and no generated leaf ships one anyway (measured: 0 across the whole tree). Additive only. */\n@media (prefers-reduced-motion: reduce) {\n  .geo-root, .mapboxgl-ctrl-geocoder, .maplibregl-ctrl-geocoder { transition: none !important; animation: none !important; }\n}\n',
   'geocoder-skin'
 )
 
@@ -406,7 +407,7 @@ function injectGeocoderCSS(shadowRoot, prov) {
 /**
  * Load a geocoder UMD bundle that the HOST PAGE did not preload.
  *
- * ★ WHY MAPBOX NEEDS THIS TOO (Driver, 2026-09-23 — the search bar missing from a nested map).
+ * ★ WHY MAPBOX NEEDS THIS TOO (2026-09-23 — the search bar missing from a nested map).
  * MapboxGeocoder was documented as "preloaded via index.html", and for a LEAF page that is true.
  * It is NOT true for a COMPOSITE leaf: generate-tree classifies that page as token-free and emits
  * no geocoder script, while the composite goes on to nest a REAL map inside itself. MEASURED on the

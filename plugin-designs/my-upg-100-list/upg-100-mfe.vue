@@ -36,11 +36,15 @@
 import { ref, computed, inject, onMounted, onBeforeUnmount } from 'vue'
 import { useOptionalT } from '@map/composables/useOptionalT.js'
 import { buildPaneColumn, PANE_GRID_STYLES } from '@map/layouts/pane-wrapper/pane-wrapper.js'
+import { urlOwnerOf, ownAddress } from '@map/composables/useViewAddress.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import ViewSelect from '@map/components/ViewSelect.vue'
 import ShareButton from '@map/components/map-controls/ShareButton.vue'
+// The header ⓘ, in Big Picture's header-button form (DashboardTopBar): MapInfoButton answers the tab's MapInfo
+// through the control bridge (tabInfo 'upg-100' trigger:'control'), which then keeps its floating ⓘ off.
+import MapInfoButton from '@map/components/map-controls/MapInfoButton.vue'
 
-// ★ THE SHELL'S OWN CHROME WAS ENGLISH IN EVERY LOCALE. rega measured ?lang=ar and found
+// ★ THE SHELL'S OWN CHROME WAS ENGLISH IN EVERY LOCALE. Measured at ?lang=ar:
 // 'Select View', 'Prayer Resources' and 'Map' rendering in English while the poster wall's own
 // buttons inside the panes translated correctly — because the panes each install i18n and this
 // wrapper never did. The chrome a reader sees FIRST was the untranslated part.
@@ -50,7 +54,7 @@ import ShareButton from '@map/components/map-controls/ShareButton.vue'
 // that guard once — host i18n first, then tStatic, then the key — instead of a hand-rolled copy here.
 // No namespace: callers pass FULL keys here, exactly as the raw useI18n().t they used to get.
 //
-// ★ ONE BEHAVIOUR GAIN FROM WAVE 3c, stated rather than smuggled (regions-plugin, 4c05e589): the old
+// ★ ONE BEHAVIOUR GAIN FROM WAVE 3c, stated rather than smuggled (4c05e589): the old
 // i18n path was the bare useI18n().t, so on a host WITH i18n a missing key rendered the raw dotted key.
 // It now falls through to the catalogue instead.
 //
@@ -62,12 +66,14 @@ import ShareButton from '@map/components/map-controls/ShareButton.vue'
 // reader's locale and still ends at English.
 // The four keys this file uses (tabs.map / prayerResources / selectView / views) are present in all
 // ELEVEN locales, 0 gaps, enumerated 2026-09-27 — nothing here was relying on the fallback.
-// Product call taken by dx-shepherd (UPGHK, 2026-09-27) under the Driver's standing goal that the
+// A product decision (2026-09-27), under the standing goal that the
 // production maps be localized; it changes what seven vue-i18n-less bundles render, which is not a
 // decision a migration gets to make for itself.
 const t = useOptionalT('')
 
 const cfg     = inject('profileConfig', ref(null))
+// P2: the pane in view is part of the address (?pane=), written by whoever owns this page (urlOwnerOf).
+const owner   = () => urlOwnerOf(cfg.value)
 const tk      = inject('mapboxToken', ref(''))
 const uiStore = inject('uiStore', null)
 const isDark  = computed(() => !!uiStore?.isDark)
@@ -86,7 +92,7 @@ const spec = computed(() => ({
   // pane's own lookup: ProfileLoader.vue:142 resolves
   //     config.dataSource || sourcesConfig.activeSource || 'doxa-csv'
   // and sources.json's activeSource is 'pray-tools' today, so the two AGREE and this is a no-op refactor
-  // (verified from source, per dx-shepherd END-SHEP-UPG-CONTRACT, not assumed).
+  // (verified from source, not assumed).
   // It matters anyway, for two reasons. (a) The day activeSource changes, these panes would silently keep
   // using 'pray-tools' while every other consumer moved — a divergence nothing would report. (b) The
   // comment at ProfileLoader.vue:135-141 records this EXACT bug already happening once: a host embedding
@@ -103,12 +109,12 @@ const spec = computed(() => ({
     instanceId: instanceId.value,
     ...(cfg.value?.dataSource ? { dataSource: cfg.value.dataSource } : {}),
   },
-  // RESOURCES FIRST, MAP SECOND (Driver 2026-09-23). "By default the first tab
-  // shouldn't be the map. The first tab should be the prayer resources" — that pane
+  // RESOURCES FIRST, MAP SECOND (2026-09-23). By default the first tab is not the
+  // map; it is the prayer resources — that pane
   // already explains what a UPG-100 list IS at the top and shows the posters, so it
-  // needs no explanation; a choropleth of zones does. Generalised by him as a design
-  // principle: "maps don't have to be primary. You can use lists and grids for the
-  // primary view and maps as a secondary view… then they transition into the map."
+  // needs no explanation; a choropleth of zones does. Generalised as a design
+  // principle: a map need not be primary. A list or a grid can be the
+  // primary view, with the map secondary and reached as a transition from it.
   //
   // ORDER LIVES IN `at[0]`, NOT IN THIS ARRAY'S ORDER. buildPaneColumn SORTS by
   // at[0] (pane-wrapper.js), while ViewSelect renders this array VERBATIM. Swapping
@@ -122,7 +128,7 @@ const spec = computed(() => ({
     { id: 'map',  label: t('tabs.map'),             at: [1, 0], config: { profile: 'upg-100-list' } },
   ],
   // The View switcher lives in this element's own header, so the layout's
-  // "… below ↓" pill would be a second, redundant control (shell design note 2026-08-01).
+  // "… below ↓" pill would be a second, redundant control (the shell's rule since 2026-08-01).
   paneHint: false,
 }))
 
@@ -147,6 +153,7 @@ const view = computed({
 })
 let column   = null
 let offScroll = null
+let offOwn    = null   // P2: ownAddress's undo, called on unmount
 // The mounted custom element per pane id. Kept because a cross-pane action has to reach the
 // TARGET PANE'S ELEMENT: upg-100-list listens for 'doxa:select-zone' on itself rather than on
 // window, precisely so two embeds on one page do not cross-talk — which means the shell has to
@@ -177,8 +184,8 @@ const paneEls = {}
 // before it: the inner map cannot honour a key the shell never passed down.
 // ⚠ tokenUrl IS FORWARDED EXPLICITLY. The panes already RECEIVE a token in practice — the outer
 // ProfileLoader fetches profile-config.tokenUrl and publishes a page-wide shared token — so this was
-// working by a side effect of something else rather than by this contract. exp-shepherd's
-// universal-props row (2026-09-26) flagged it for exactly that reason: a prop that arrives because a
+// working by a side effect of something else rather than by this contract. The
+// universal-props change (2026-09-26) flagged it for exactly that reason: a prop that arrives because a
 // neighbour happens to publish it is not forwarded, it is lucky, and it breaks silently the day the
 // neighbour stops. Naming it here makes the panes' token a consequence of this list.
 const INHERITED_PAGE_KEYS = ['assetsBase', 'apiBaseUrl', 'tokenUrl', 'locale', 'lang', 'isDark', 'qa', 'provider', 'list']
@@ -193,17 +200,17 @@ function paneElement(pane) {
   // `lang` is the alias the page may carry; children read `locale`.
   if (inherited.locale === undefined && inherited.lang !== undefined) inherited.locale = inherited.lang
   const pcfg = { ...inherited, ...spec.value.config, ...pane.config }
-  // ★ NO "TAP A COLOURED DOT" COACH-MARK ON THIS PROFILE, AT ALL (Driver, 2026-09-27).
+  // ★ NO "TAP A COLOURED DOT" COACH-MARK ON THIS PROFILE, AT ALL (2026-09-27).
   // ProfileLoader mounts PinHint by default and self-gates it on a map <canvas> existing, which is a
   // sound gate for the question it asks ("is there a map here?") and the WRONG question for this
   // profile. UPG-100's map is a POSTER PREVIEW: the reader is looking at what will be printed, and there
   // is no per-dot detail to open. So the pill invites a gesture that does nothing, and on the phone the
-  // Driver's screenshots show it over a page with no coloured dots on it at all.
+  // reported screenshots show it over a page with no coloured dots on it at all.
   // ⚠ THIS SUPERSEDES THE inert WORK FOR THIS PROFILE, and that is worth saying plainly rather than
   // quietly leaving both in: PILLRISK was "the pill shows over the posters", and I fixed WHERE it shows.
-  // The Driver's answer is that it should not show HERE, full stop — a narrower and more correct claim
-  // than mine. The inert signal stays because it is still right for its own reasons (a stacked pane
-  // should not be in tab order or the a11y tree, and studio's PinHint change serves profiles that DO
+  // It should not show HERE, full stop — a narrower and more correct claim
+  // than the earlier one. The inert signal stays because it is still right for its own reasons (a stacked pane
+  // should not be in tab order or the a11y tree, and the PinHint change serves profiles that DO
   // want the pill), but it is no longer what keeps this pill off this app.
   // Opt-out via the contract that already existed — ProfileLoader.vue:150 reads
   // `config.pinHint !== false` — so this is a config value from my side, not a library change.
@@ -215,7 +222,7 @@ function paneElement(pane) {
 
 // ★ TELL THE INVISIBLE PANE THAT IT IS INVISIBLE. `inert` on every pane except the active one.
 //
-// THE DEFECT, reported by the Driver and traced by repo (PILLRISK, 2026-09-27): PinHint's "Tap a
+// THE DEFECT, reported from use and traced by repo (PILLRISK, 2026-09-27): PinHint's "Tap a
 // coloured dot" pill appeared OVER the Prayer Resources posters on a phone. Its IntersectionObserver
 // was working correctly — that is the point. The panes are `position:absolute; inset:0` in one
 // scroll-snap column, so the map pane is STACKED BEHIND the active view at full size: 100% of its
@@ -225,10 +232,10 @@ function paneElement(pane) {
 //
 // ⚠ inert, NOT display:none OR v-show, and this is the constraint that decides the whole approach:
 // hiding the pane would tear down the live map. A MapLibre/Mapbox canvas in a zero-size container
-// loses its size and re-initialises on the way back, which is exactly the cold-start path rega had to
-// verify in row 52. inert leaves the pane mounted, painted and warm; it only declares it non-interactive
+// loses its size and re-initialises on the way back, which is exactly the cold-start path that had to
+// be verified in row 52. inert leaves the pane mounted, painted and warm; it only declares it non-interactive
 // — and, unlike aria-hidden, also removes it from tab order and the accessibility tree, so a keyboard
-// user cannot tab into a map they cannot see. (studio's contract, END-STU-PILL: PinHint walks up through
+// user cannot tab into a map they cannot see. (The library contract: PinHint walks up through
 // shadow roots for inert/hidden/aria-hidden and watches that chain with a MutationObserver, so no event
 // is needed and switching views brings the pill straight back.)
 //
@@ -261,9 +268,9 @@ function go(id) {
 //
 // ★ SCROLLING WAS ONLY HALF THE HANDOFF, and the missing half was invisible because the
 // visible part worked: go('map') moved the reader to the map, so the action looked like it
-// had happened, while the map still showed all 27 zones. The Driver's brief for this is
-// "when I click Show on map it should be basically the same as if I searched that result in
-// the search bar" — i.e. ISOLATED, not merely scrolled to.
+// had happened, while the map still showed all 27 zones. The requirement is that
+// Show on map behaves as if that result had been searched in
+// the search bar — i.e. ISOLATED, not merely scrolled to.
 //
 // The map half was already built and waiting: upg-100-list.vue listens for 'doxa:select-zone'
 // ON ITS OWN ELEMENT (not on window, so several embeds never cross-talk) and routes it through
@@ -277,7 +284,7 @@ function onShowOnMap(e) {
   go('map')
   // ★ RECORD THE REQUEST, THEN ANNOUNCE IT — in that order, and the order is the fix.
   // The comment that used to sit here called the miss "the degradation we want": a pane that had
-  // not mounted got nothing, and the scroll still happened. rega measured what that actually costs
+  // not mounted got nothing, and the scroll still happened. What that actually cost, measured
   // — the FIRST "Show on map" did nothing at all, and only a SECOND click, after the map had
   // loaded, selected the zone. A control the user must press twice reads as broken.
   //
@@ -297,15 +304,16 @@ function onShowOnMap(e) {
 
 onMounted(() => {
   if (!stage.value) return
-  column = buildPaneColumn(spec.value, { host: stage.value })
+  column = buildPaneColumn(spec.value, { host: stage.value, address: { owner } })
   if (!column) return
+  offOwn = ownAddress(stage.value, owner)
   for (const pane of column.panes) {
     if (!pane.config) continue
     const el = paneElement(pane)
     paneEls[pane.id] = el
     column.mountEl(pane.id)?.appendChild(el)
   }
-  // ★ THE FRESH-LOAD CASE, which is the one the Driver actually hit. Without this the panes carry no
+  // ★ THE FRESH-LOAD CASE, which is the one actually reported. Without this the panes carry no
   // inert attribute at all until the reader touches the switcher, so the pill is over the posters on
   // ARRIVAL — before any view change has happened. A signal that only fires on transitions never
   // describes the initial state.
@@ -327,6 +335,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('doxa-upg-100-list:show-on-map', onShowOnMap)
   offScroll?.()
+  offOwn?.()
+  offOwn = null
   column?.destroy()
   column = null
   // Drop the element references with the column that owned them — holding a detached custom
@@ -357,7 +367,7 @@ useShadowStyles(PANE_GRID_STYLES + `
   background:var(--ui-bg); color:var(--ui-text);
   font:14px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
 }
-/* NO AUTO-DARK. The DX design pattern is material LIGHT (Driver 2026-09-20): a system set to dark
+/* NO AUTO-DARK. The DX design pattern is material LIGHT (decided 2026-09-20): a system set to dark
    mode must NOT flip this element. The prefers-color-scheme:dark override that used to live here is
    removed deliberately — the light palette above is the only theme. */
 /* ── header: same height/border as the shell; switcher centred; share at right ── */
@@ -375,6 +385,11 @@ useShadowStyles(PANE_GRID_STYLES + `
 .viewsel{
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
 }
+/* The header buttons, Big Picture's .rd-header-btns metrics. On a phone the centred switcher and two buttons
+   do not share the row (the ⓘ would sit on "Map"), so there the switcher moves to the start and the buttons
+   keep the end. */
+.upgmfe .hdr-btns{ display:inline-flex; align-items:center; gap:8px; flex:0 0 auto; }
+@media (max-width:480px){ .viewsel{ position:static; transform:none; margin-inline-end:auto; } }
 /* ── stage: the pane-wrapper column mounts here (its .pane-col is absolute) ── */
 .upgmfe .stage{ position:relative; flex:1 1 auto; min-height:0; }
 /* the live custom element fills its pane */
@@ -392,7 +407,12 @@ useShadowStyles(PANE_GRID_STYLES + `
         :label="t('tabs.views')"
         @select="go"
       />
-      <ShareButton :is-dark="isDark" :embed-path="SHARE_EMBED_PATH" />
+      <!-- HEADER BUTTONS (design rule, 2026-09-30), Big Picture's form: a rounded-square ⓘ to the LEFT of a
+           rounded-square Share, the vertical tabs' radius. The ⓘ renders only once the tab's MapInfo answers it. -->
+      <div class="hdr-btns">
+        <MapInfoButton :is-dark="isDark" shape="rounded-square" />
+        <ShareButton :is-dark="isDark" :embed-path="SHARE_EMBED_PATH" shape="rounded-square" />
+      </div>
     </header>
     <div class="stage" ref="stage"></div>
   </div>

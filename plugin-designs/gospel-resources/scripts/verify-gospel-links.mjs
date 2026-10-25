@@ -2,7 +2,7 @@
 /**
  * verify-gospel-links.mjs — fetch EVERY link this map ships and record whether it resolves.
  *
- * The brief's rule is "verify a URL resolves before shipping it". This is the script that
+ * The rule is that a URL is verified to resolve before it ships. This is the script that
  * discharges it, and it now checks the corpus the map actually holds rather than the one it
  * held in August.
  *

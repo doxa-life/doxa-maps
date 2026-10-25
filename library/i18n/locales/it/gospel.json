@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file; prose.english is the one translated line that says so.",
   "prose": {
     "english": "Le note esplicative qui sotto sono in inglese."
   },
@@ -12,7 +11,8 @@
     "clear": "Cancella ricerca",
     "none": "Nessuna corrispondenza per quel nome, lingua o codice.",
     "placeholderShort": "Popolo, lingua o codice ISO",
-    "showingOf": "Mostrati {shown} di {total} risultati: continua a digitare per restringere."
+    "showingOf": "Mostrati {shown} di {total} risultati: continua a digitare per restringere.",
+    "aria": "Cerca un popolo, una lingua o un codice ISO"
   },
   "legend": {
     "title": "Popoli non raggiunti senza alcuna risorsa del vangelo",
@@ -78,7 +78,17 @@
     "everyResource": "Tutte le risorse in",
     "alsoSpeak": "Parlano anche",
     "share": "Condividi",
-    "linkCopied": "Link copiato"
+    "linkCopied": "Link copiato",
+    "seeLargest": "Vedi i {n} maggiori →",
+    "alreadyPraying": "{n} già in preghiera",
+    "everyIn": "Ogni risorsa usata in {country}",
+    "found": "Risorse del vangelo trovate ({n})",
+    "none": "Nessuna risorsa trovata ({n})",
+    "showingOf": "Mostrati {shown} di {total}.",
+    "popSuffix": "· {pop} persone",
+    "hasResources": "correlata: {lang} ha risorse",
+    "loadingTable": "Caricamento di {table}…",
+    "popCountries": "{pop} persone · {countries}"
   },
   "res": {
     "scripture": "Scritture",
@@ -166,7 +176,9 @@
     "allLanguages": "Tutte le lingue",
     "peopleGroup": "popolo",
     "peopleGroups": "popoli",
-    "scriptureHere": "Scritture in questa lingua"
+    "scriptureHere": "Scritture in questa lingua",
+    "noTextMeans": "Che cosa significa «senza testo».",
+    "pageLists": "Questa pagina elenca"
   },
   "columns": {
     "People group": "Popolo",
@@ -334,7 +346,9 @@
     "c2Unit": "persone nei gruppi la cui lingua PRINCIPALE è questa — non i parlanti della lingua",
     "c3Title": "Paesi con più lingue non servite",
     "c3Sub": "I {n} paesi con più lingue per cui non è stato trovato nulla. La lunghezza della barra è ogni lingua presente in quel paese.",
-    "c3Unit": "lingue presenti nel paese (una lingua transfrontaliera conta in ciascuno)"
+    "c3Unit": "lingue presenti nel paese (una lingua transfrontaliera conta in ciascuno)",
+    "noneHero": "{nNone} lingue su {nLang} hanno {noScripture} — le lingue di {popNone} persone.",
+    "noneHeroFound": "nessuna Scrittura e nessun film nei repertori consultati"
   },
   "filter": {
     "showingOnly": "Sono mostrati solo {what}.",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "SUN è già insegnato da {organisation} in: {countries}."
+  },
+  "gap": {
+    "popLine": "{pop} persone · {iso3}",
+    "wayIn": "via d’accesso: {via}",
+    "hasNoText": "ha {what} — nessun testo trovato",
+    "showingOnly": "Mostrati solo {what}.",
+    "seeLargest": "Vedi i {n} maggiori →",
+    "kind": {
+      "none": "popoli senza nulla di trovato",
+      "some": "popoli con qualche risorsa",
+      "hnr": "popoli che possono udire il vangelo ma non hanno Scrittura scritta nei repertori consultati",
+      "all": "popoli con Scrittura e film"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "Scrittura, {medium} · {source}",
+    "bibleVideoOf": "Video biblico · {source}",
+    "loading": "Caricamento risorse…",
+    "peopleWord": "persone",
+    "alreadyPraying": "già in preghiera",
+    "exhausted": "esaurito",
+    "together": "insieme a"
+  },
+  "gapHero": {
+    "hero": "{groups} popoli sono in {growing} {noFound} {pop} persone, circa {deaths} morti al giorno.",
+    "growing": "crescita",
+    "found": "senza Scrittura né film nei repertori consultati —"
+  },
+  "ui": {
+    "noCode": "senza codice",
+    "unnamed": "lingua senza nome",
+    "hideKey": "Comprimi la legenda",
+    "showKey": "Espandi la legenda",
+    "largest": "Popoli più grandi senza nulla di trovato",
+    "nobodyPraying": "Nulla trovato, e nessuno in preghiera",
+    "concentrates": "Dove si concentra il divario",
+    "linkUnchecked": "Questo collegamento non è stato verificato."
+  },
+  "rows": {
+    "scriptureHere": "Scrittura in questa lingua",
+    "audio": "Scrittura",
+    "bibleVideo": "Video biblico",
+    "gospelPresentation": "Presentazione del vangelo",
+    "studyNotes": "note di studio",
+    "readOnline": "leggi online",
+    "audioScripture": "Scrittura audio",
+    "listenBrowser": "Ascolta nel browser",
+    "inBrowser": "Nel browser — {media}",
+    "readHere": "Leggi in questa lingua",
+    "listenHere": "Ascolta in questa lingua",
+    "wordsOfLife": "Parole di Vita — {name}",
+    "gospelAudio": "Audio del vangelo",
+    "discipleship": "formazione al discepolato {brand}"
   }
 }

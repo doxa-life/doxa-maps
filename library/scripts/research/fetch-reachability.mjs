@@ -4,9 +4,8 @@
 //   node fetch-reachability.mjs --iso IRN,CHN,PAK
 //
 // ═══ WHY THIS EXISTS ════════════════════════════════════════════════════════
-// design note 2026-08-01: "we don't only need to track social media platforms but top
-// websites and apps like WeChat or WhatsApp for messaging platforms that are used,
-// so we can know whether they are closed off or globally accessible."
+// Beyond social platforms, the top websites and messaging apps in use (WeChat,
+// WhatsApp, …) are tracked for whether each is closed off or globally accessible.
 //
 // The existing tables answer "what is POPULAR", never "what is REACHABLE", and both
 // have a structural blind spot that makes them unable to:

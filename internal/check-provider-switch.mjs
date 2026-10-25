@@ -115,10 +115,10 @@ async function run(provider, token = '') {
   return { mapboxReq: count('mapbox.com'), globals, errs, unparsed, total: [...hosts.values()].reduce((a, n) => a + n, 0) }
 }
 
-// ★ THE AUTO CONTRACT (2026-09-26). The default engine is 'auto': Mapbox only when a token is available.
-// So the Mapbox baseline is ?provider=mapbox WITH a (fake) host token, the switch run adds the same token
-// and ?provider=maplibre (an explicit engine must beat an available token), and a third run checks the
-// no-token default is already keyless.
+// ★ THE ENGINE CONTRACT. The default engine ('auto') is MapLibre, and since 2026-09-28 a token no longer
+// chooses Mapbox; only an explicit provider does. So the Mapbox baseline is ?provider=mapbox WITH a (fake)
+// host token, the switch run adds the same token and ?provider=maplibre, and a third run checks the
+// no-token default is keyless. The default WITH a host token is check:auto-engine's case 2.
 const def = await run('mapbox', FAKE_TK)
 const ml = await run('maplibre', FAKE_TK)
 const auto = await run(null)

@@ -40,7 +40,7 @@ const LEAF = arg('--leaf', 'doxa-simple-map/doxa-simple-map')
 const PAIRS = { Germany: 'Германия', Ukraine: 'Украина', Turkey: 'Турция', Egypt: 'Египет', Kazakhstan: 'Казахстан', Poland: 'Польша' }
 
 const port = await new Promise((ok) => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)) }) })
-const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR], { stdio: 'ignore' })
+const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR, '--exit-with-parent'], { stdio: 'ignore' })
 await new Promise((r) => setTimeout(r, 900))
 const up = await fetch(`http://127.0.0.1:${port}/${TREE_NAME}/${LEAF}/index.html`).then((r) => r.ok).catch(() => false)
 if (!up) { srv.kill(); console.log(`BASEMAP-LABELS: NOT MEASURED — could not serve ${DIR}`); process.exit(2) }

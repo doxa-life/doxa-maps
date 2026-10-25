@@ -3,9 +3,9 @@
 //   node verify-network-policy.mjs
 //
 // ═══ WHY THIS EXISTS ════════════════════════════════════════════════════════
-// design note 2026-08-01: "we don't want to make our box a target by pinging countries'
-// internets … the last thing we want is for someone to get our server IP address
-// and use gobuster and other tools and get into our server."
+// The research build only READS published research; it never probes country networks
+// directly. A build host that sends probes to foreign networks exposes its own address
+// in their logs and invites scanning back.
 //
 // This ASSERTS the no-network-probe rule — because a policy
 // nobody checks is the declared-but-unasserted trap, which has already produced
@@ -13,7 +13,7 @@
 //
 // The dangerous change is a single innocent line: `await fetch('http://' + host)`
 // to "just check if X is reachable." That one line turns a reader of published
-// research into a measurement probe, puts our IP in a foreign network's logs, and
+// research into a measurement probe, puts the build host's address in a foreign network's logs, and
 // looks identical to reconnaissance from the outside.
 //
 // PROVEN RED: add a ping/nmap call or a fetch to a non-allowlisted host, re-run.

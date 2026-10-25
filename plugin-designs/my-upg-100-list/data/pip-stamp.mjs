@@ -89,7 +89,10 @@ function loadAdm1(file) {
   }));
 }
 
-const IND_POLYS = loadAdm1("gb-IND-ADM1.geojson");
+// India is stamped against ALL 36 states and union territories (data/boundaries/gb-IND-ADM1-full.geojson). The
+// 34-shape map copy beside this file has no Nāgāland or Mizoram, so a group located there would have been
+// stamped into a neighbour by the fallback (none is today: re-stamped 2026-09-30, 853/855 agree, 0 differ).
+const IND_POLYS = loadAdm1("../../../data/boundaries/gb-IND-ADM1-full.geojson");
 const CHN_POLYS = loadAdm1("gb-CHN-ADM1.geojson");
 
 // Stamp one point against a polygon set. Returns { shapeName, fallback }
@@ -186,3 +189,4 @@ console.log(`  records:        ${records.length}`);
 console.log(`  IND located:    ${indCountedTotal}  CHN located: ${chnCountedTotal}`);
 console.log(`  real-stamp:     ${stampedReal}  fallback: ${fallbackCount}`);
 console.log(`  wrote admin-membership.json + admin-counts.json`);
+console.log("  NEXT: node plugin-designs/my-upg-100-list/data/emit-india-states.mjs (re-derives data/people-groups/india-states.json + its pin; check:india-states fails until you do)");

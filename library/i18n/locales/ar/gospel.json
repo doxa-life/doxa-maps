@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file; prose.english is the one translated line that says so.",
   "prose": {
     "english": "الملاحظات التوضيحية أدناه باللغة الإنجليزية."
   },
@@ -12,7 +11,8 @@
     "clear": "مسح البحث",
     "none": "لا شيء يطابق هذا الاسم أو اللغة أو الرمز.",
     "placeholderShort": "شعب أو لغة أو رمز ISO",
-    "showingOf": "يُعرض {shown} من أصل {total} نتيجة — واصل الكتابة لتضييق البحث."
+    "showingOf": "يُعرض {shown} من أصل {total} نتيجة — واصل الكتابة لتضييق البحث.",
+    "aria": "ابحث عن مجموعة بشرية أو لغة أو رمز ISO"
   },
   "legend": {
     "title": "شعوب غير مبلَّغة ولا يوجد لها أي مورد إنجيلي",
@@ -78,7 +78,17 @@
     "everyResource": "كل الموارد بـ",
     "alsoSpeak": "يتحدثون أيضًا",
     "share": "مشاركة",
-    "linkCopied": "تم نسخ الرابط"
+    "linkCopied": "تم نسخ الرابط",
+    "seeLargest": "عرض أكبر {n} ←",
+    "alreadyPraying": "{n} يصلّون بالفعل",
+    "everyIn": "كل مورد مُستخدم في {country}",
+    "found": "موارد إنجيلية موجودة ({n})",
+    "none": "لا توجد موارد ({n})",
+    "showingOf": "عرض {shown} من {total}.",
+    "popSuffix": "· {pop} نسمة",
+    "hasResources": "ذات صلة: {lang} لديها موارد",
+    "loadingTable": "جارٍ تحميل {table}…",
+    "popCountries": "{pop} نسمة · {countries}"
   },
   "res": {
     "scripture": "الكتاب المقدس",
@@ -166,7 +176,9 @@
     "allLanguages": "كل اللغات",
     "peopleGroup": "شعب",
     "peopleGroups": "شعوب",
-    "scriptureHere": "الكتاب المقدس بهذه اللغة"
+    "scriptureHere": "الكتاب المقدس بهذه اللغة",
+    "noTextMeans": "ما معنى «لا يوجد نص».",
+    "pageLists": "تعرض هذه الصفحة"
   },
   "columns": {
     "People group": "الشعب",
@@ -334,7 +346,9 @@
     "c2Unit": "أشخاص في الشعوب التي هذه لغتها الأساسية — لا المتحدثين بها عمومًا",
     "c3Title": "البلدان الأكثر لغاتٍ غير مخدومة",
     "c3Sub": "البلدان الـ{n} الأكثر لغاتٍ لم يُعثر لها على شيء. طول العمود هو كل لغة موجودة في ذلك البلد.",
-    "c3Unit": "لغات موجودة في البلد (اللغة العابرة للحدود تُحتسب في كل بلد)"
+    "c3Unit": "لغات موجودة في البلد (اللغة العابرة للحدود تُحتسب في كل بلد)",
+    "noneHero": "{noScripture} في {nNone} لغة من أصل {nLang} — وهي لغات {popNone} نسمة.",
+    "noneHeroFound": "لا يوجد كتاب مقدس ولا فيلم في المجموعات التي جرى فحصها"
   },
   "filter": {
     "showingOnly": "يُعرض فقط: {what}.",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "تُدرِّس {organisation} منهج SUN بالفعل في {countries}."
+  },
+  "gap": {
+    "popLine": "{pop} نسمة · {iso3}",
+    "wayIn": "السبيل: {via}",
+    "hasNoText": "لديها {what} — لا يوجد نص",
+    "showingOnly": "عرض {what} فقط.",
+    "seeLargest": "عرض أكبر {n} ←",
+    "kind": {
+      "none": "مجموعات لم يُعثر لها على شيء",
+      "some": "مجموعات لديها بعض الموارد",
+      "hnr": "مجموعات تستطيع سماع الإنجيل لكن بلا نص مكتوب في المجموعات التي جرى فحصها",
+      "all": "مجموعات لديها كتاب مقدس وفيلم"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "الكتاب المقدس، {medium} · {source}",
+    "bibleVideoOf": "فيديو كتابي · {source}",
+    "loading": "جارٍ تحميل الموارد…",
+    "peopleWord": "نسمة",
+    "alreadyPraying": "يصلّون بالفعل",
+    "exhausted": "استُنفد",
+    "together": "مع"
+  },
+  "gapHero": {
+    "hero": "{groups} مجموعة بشرية {growing} {noFound} {pop} نسمة، بتقدير {deaths} وفاة يوميًا.",
+    "growing": "في تزايد",
+    "found": "دون كتاب مقدس ودون فيلم في المجموعات التي جرى فحصها —"
+  },
+  "ui": {
+    "noCode": "بلا رمز",
+    "unnamed": "لغة بلا اسم",
+    "hideKey": "طيّ وسيلة الإيضاح",
+    "showKey": "توسيع وسيلة الإيضاح",
+    "largest": "أكبر المجموعات التي لم يُعثر لها على شيء",
+    "nobodyPraying": "لا شيء موجود، ولا أحد يصلّي",
+    "concentrates": "أين تتركّز الفجوة",
+    "linkUnchecked": "لم يتم فحص هذا الرابط."
+  },
+  "rows": {
+    "scriptureHere": "الكتاب المقدس بهذه اللغة",
+    "audio": "الكتاب المقدس",
+    "bibleVideo": "فيديو كتابي",
+    "gospelPresentation": "عرض الإنجيل",
+    "studyNotes": "ملاحظات دراسية",
+    "readOnline": "القراءة عبر الإنترنت",
+    "audioScripture": "كتاب مقدس مسموع",
+    "listenBrowser": "استمع في المتصفح",
+    "inBrowser": "في المتصفح — {media}",
+    "readHere": "اقرأ بهذه اللغة",
+    "listenHere": "استمع بهذه اللغة",
+    "wordsOfLife": "كلمات الحياة — {name}",
+    "gospelAudio": "تسجيلات الإنجيل",
+    "discipleship": "تدريب {brand} على صناعة التلاميذ"
   }
 }

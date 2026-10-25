@@ -42,7 +42,7 @@ Two things to know before you publish a link:
 
 - **No zoom or centre parameter.** The frame is derived from the pins the link selects, so a link
   stays correct when the data moves under it.
-- **Placement is approximate.** A dot marks where a *people* is found, not a town or a boundary,
+- **Placement is approximate.** A dot marks a *people group*, not a town or a boundary,
   and 108 of the placed groups share a coordinate with another group. The sheet says so in the
   reader's language.
 - **An unknown parameter is ignored, never fatal.** `?country=ZZZ` renders the map, not an error —

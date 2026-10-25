@@ -253,10 +253,15 @@ async function main() {
   const serial = results.reduce((a, r) => a + r.ms, 0)
   const failed = results.filter((r) => r.bucket === 'FAIL')
 
-  if (VERBOSE) for (const r of results) if (r.out.trim()) console.log(`\n───── ${r.name} ─────\n${r.out}`)
   // A failure must be readable in full: these gates explain themselves in their output, and
   // a truncated explanation is how a real defect gets re-diagnosed as a flake.
-  else for (const r of failed) console.log(`\n───── FAILED: ${r.name} (exit ${r.code}) ─────\n${r.out}`)
+  // ★ BRACED ON PURPOSE. Unbraced, this `else` bound to the INNER `if (r.out.trim())`, so without
+  // --verbose a failed gate printed only its name and exit code, never why.
+  if (VERBOSE) {
+    for (const r of results) if (r.out.trim()) console.log(`\n───── ${r.name} ─────\n${r.out}`)
+  } else {
+    for (const r of failed) console.log(`\n───── FAILED: ${r.name} (exit ${r.code}) ─────\n${r.out}`)
+  }
 
   // COUNT THE SKIPS IN THE SUMMARY, because the summary is the line a reader quotes and
   // the one that lands in a report. "35/35 passed" was true of a wave where a third of the

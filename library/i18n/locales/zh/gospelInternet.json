@@ -17,7 +17,8 @@
     "failed": "无法载入邻族数据表，因此本图未绘制。",
     "reached": "已经得着，因此位于中心：",
     "unmatched": "根本不在邻族数据表中，因此未绘制：",
-    "unplaced": "未找到关联，因此未予定位："
+    "unplaced": "未找到关联，因此未予定位：",
+    "shown": "环上的族群："
   },
   "centre": {
     "aria": "显示",
@@ -150,7 +151,7 @@
     "messaging": "最主要的通讯应用（国家）",
     "messagingNote": "该国苹果 App Store 中下载最多的应用：仅限 iOS，是下载排名，不是使用情况。",
     "province": "印度和中国：邦或省",
-    "provinceNote": "大约：按族群所在地放置，不是城镇。",
+    "provinceNote": "大约：按族群在地图上的圆点确定，不是按城镇。",
     "region": "地区",
     "religion": "宗教",
     "wayIn": "母语一无所有时的进入途径"
@@ -199,11 +200,11 @@
     "aria": "族群地图，按各国互联网使用程度着色"
   },
   "notice": {
-    "pin": "圆点标示该民族在{country}的所在地区，而不是某个城镇。",
-    "pins": "圆点标示一个民族在其国家的所在地区，而不是某个城镇。有 {n} 个族群与其他族群共用一个点。",
+    "pin": "圆点代表该民族，而不是某个城镇。",
+    "pins": "圆点代表一个民族，而不是某个城镇。有 {n} 个族群与其他族群共用一个点。",
     "shares": "它与另外 {n} 个族群共用这个点。",
     "sources": "来源：",
-    "standing": "圆点是大约位置（民族在其国家的所在地区，不是城镇）。互联网数字是国家或印度某邦的，不是族群的。“找到”是指在已查阅的来源中找到。"
+    "standing": "圆点是大约位置：一个圆点代表一个民族，而不是城镇。互联网数字是国家或印度某邦的，不是族群的。“找到”是指在已查阅的来源中找到。"
   },
   "panel": {
     "charts": "图表",
@@ -284,7 +285,6 @@
     "posterOmitted": "有 {n} 个名称因会与其他名称重叠而省略；每个圆圈都已绘出。",
     "posterPrint": "打印",
     "posterSizeAria": "海报尺寸",
-    "posterSvg": "下载 SVG",
     "posterTitle": "福音资源，按语系逐一呈现",
     "sources": "语言树：Glottolog（CC BY 4.0）。资源：eBible、Faith Comes By Hearing、Scripture Earth、PNG.Bible、耶稣传影片、Global Recordings 等，按 ISO 639-3 编目。",
     "st": {

@@ -2,12 +2,12 @@
 /**
  * LegendProgressBar — the prayer legend's header progress bar.
  *
- * WHY (Driver, 2026-09-16, README story): a global prayer movement needs to SEE
+ * WHY (the README story): a global prayer movement needs to SEE
  * progress — how many people groups are covered in prayer out of the total, changing
  * live as people sign up. ONE shared component so every prayer map (simple map
  * prayer tab, research map Prayer tab, and embeds) shows the same bar.
  *
- * SPEC (Driver refinement, 2026-09-16 — keep this in sync with the behaviour):
+ * SPEC (refined 2026-09-16 — keep this in sync with the behaviour):
  *   1. The bar lives in the HEADER of the prayer legend, and the prayer legend's
  *      title becomes "Progress" (desktop title bar and the mobile sheet title both —
  *      via the shared components SemanticTreeLegend / LegendRows, never "Legend").
@@ -67,7 +67,7 @@ useShadowStyles(`
    part of the legend chrome. Dark is the STL default; .lpb-light mirrors the
    .stl-panel[data-theme="light"] palette. ── */
 .lpb{position:relative;display:flex;align-items:center;gap:8px;min-width:0;width:100%;box-sizing:border-box;}
-/* Hit area vs paint (WCAG 2.5.8, rega at 390: every segment was a 10px-tall button). The track is 24px
+/* Hit area vs paint (WCAG 2.5.8, measured at 390: every segment was a 10px-tall button). The track is 24px
    tall so each segment button is a 24px target, but it paints only a 10px band: the track's background is
    a centred 10px strip and each segment clips its colour to its content box inside 7px of padding. The
    -7px margins keep the legend's layout exactly 10px tall, as before. */
@@ -101,6 +101,14 @@ useShadowStyles(`
    bar must not take a second header line there. Same-shadow-root rule, owned here
    so the sheet needs no knowledge of the bar. */
 .legend-mobile-sheet.collapsed .lpb{display:none!important;}
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .lpb-seg { transition: none !important; animation: none !important; }
+}
 `, 'legend-progress-bar')
 
 const props = defineProps({
@@ -191,7 +199,7 @@ function hide() { activeKey.value = null }
            fills the span from the left and the has-prayer colour completes it. -->
       <span class="lpb-span" :style="{ width: coveredPct + '%' }" :data-span-pct="coveredPct.toFixed(2)">
         <!-- An empty segment is not drawn: a zero-width button is an invisible tab stop, and it took the
-             bar's rounded left end (rega). -->
+             bar's rounded left end. -->
         <button
           v-for="seg in spanSegs.filter(s => segPctOfSpan(s) > 0)" :key="seg.key"
           type="button"

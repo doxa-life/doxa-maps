@@ -30,7 +30,7 @@
  * Then `npm run check:zoning-declared -- --list <id>` grades the zoning, and the legend, poster wall and
  * packet all follow, because all three already enumerate through leafZones(buildLegendNodes(zones)).
  *
- * ZONING RULE, from the Driver (2026-09-27), recorded here because it is the judgement the format cannot
+ * ZONING RULE (2026-09-27), recorded here because it is the judgement the format cannot
  * capture: cluster by GEOGRAPHY FIRST so the poster maps make sense, balanced with LANGUAGE — languages
  * usually cluster geographically, so the two mostly agree, and where they disagree geography wins for a
  * map's sake. UPG-100's own 28 already mix the two: the country_codes zones are geographic, and the 12
@@ -38,8 +38,8 @@
  *
  * ⚠ THE DEAF ZONE IS THE KNOWN EXCEPTION AND MUST NOT BE FORCED. `deaf` is affinity bloc A017: 123 groups
  * spanning every region, global by construction, and the one poster whose zone cannot be a map extent. It
- * breaks the geography-first rule the rest of the pattern rests on, and the Driver has said he has not
- * solved it. A list whose clusters include an affinity or language bloc inherits the same open question —
+ * breaks the geography-first rule the rest of the pattern rests on, and it is recorded as not yet
+ * solved. A list whose clusters include an affinity or language bloc inherits the same open question —
  * declare it in bloc_zones so the gate treats it as a second partition, and do NOT invent a geography for
  * it to make a validator happy.
  *

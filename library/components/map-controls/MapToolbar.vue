@@ -29,7 +29,7 @@ const props = defineProps({
   /**
    * 'round' (default) keeps the separate floating circles every map ships today.
    * 'square' is the ENGINE'S OWN grouped card -- one white panel, 4px corners, a 2px ring and 1px
-   * dividers -- which is the look the Driver asked for by name. Measured from
+   * dividers -- which is the look asked for by name. Measured from
    * node_modules/maplibre-gl/dist/maplibre-gl.css, not invented:
    *     .maplibregl-ctrl-group             { background:#fff; border-radius:4px }
    *     .maplibregl-ctrl-group:not(:empty) { box-shadow:0 0 0 2px rgba(0,0,0,.1) }
@@ -57,7 +57,7 @@ const toolbarEl = ref(null)
 provide('mapToolbar', { el: toolbarEl, shape: computed(() => (props.controls === 'square' ? 'square' : 'round')) })
 
 useShadowStyles(`
-/* ★ NOT ON PAPER (rega, RQ-RGPRINT on fc93c97e4). Printing a full-bleed map leaf put the whole
+/* ★ NOT ON PAPER (measured on a print of fc93c97e4). Printing a full-bleed map leaf put the whole
    control column — zoom in, zoom out, locate, fullscreen, share — on the sheet, over the map it
    is meant to operate. Every one of them is a pointer affordance with nothing to do on paper.
    The engine's own control groups go too, for the maps that place them outside this toolbar; the
@@ -113,7 +113,7 @@ useShadowStyles(`
 /* ★ ShareButton IS NOT A .mcb, so the rules above missed it. It wraps its button in a .share-wrap div
    carrying border-radius:50% plus a conic-gradient ring on ::before at inset:-2px -- which inside the
    panel reads as a circular rainbow halo poking out of one corner, breaking the single-card illusion
-   at exactly the place the eye lands. rega measured it at 390 and asked whether square should flatten
+   at exactly the place the eye lands. Measured at 390, the question was whether square should flatten
    it; it should: in this variant the PANEL owns the outline, so a child may not bring its own.
    The round default keeps its ring untouched. */
 .map-toolbar--square .share-wrap { border-radius: 0; }
@@ -153,7 +153,7 @@ useShadowStyles(`
      specificity, so the .map-toolbar gap:6px rule above is (0,1,0) exactly like the
      .map-toolbar--square gap:0 rule -- and it comes LATER in the sheet, so it won. On any phone a
      square toolbar would have fallen back into six separate buttons inside one ringed panel: the
-     shape breaking precisely where the Driver is most likely to look at it.
+     shape breaking precisely where a reader is most likely to look at it.
      The --no-geocoder pair is (0,2,0) and outranked the variant regardless of order, so it needs the
      two-class form to answer it. Same lesson as the goal cards' gap-vs-margin: a ported mechanism is
      only ported if it still WINS. */

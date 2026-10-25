@@ -1,3 +1,4 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * plugin-designs/all-people-groups/index.js
  *
@@ -8,7 +9,6 @@
  *   <script src="/doxa-maps/all-people-groups/all-people-groups.js"></script>
  *   <all-people-groups profile-config='{"profile":"all-people-groups"}'></all-people-groups>
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 const profileModules = import.meta.glob('./*.vue')
 

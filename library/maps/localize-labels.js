@@ -59,7 +59,7 @@ export function localizeBasemapLabels(map, lang) {
         saved.set(layer.id, current)
       } else if (!saved.has(layer.id)) continue
       // English too, not the style's own bilingual labels ("Россия" under "Russia"): those drew every
-      // native script at world view, so an English page fetched 13 extra glyph ranges (~600 KB, rega:
+      // native script at world view, so an English page fetched 13 extra glyph ranges (~600 KB, measured:
       // Prayer Progress 18 requests / 777 KB in en against 5 / 185 KB in ar). One language per label.
       // ★ AND THE UNDERSCORE SPELLING, because one of our basemaps writes it that way. The galaxy
       // style (research-dashboard, my-upg-100-list) is VersaTiles Colorful on the Shortbread schema,
@@ -72,7 +72,7 @@ export function localizeBasemapLabels(map, lang) {
       // MEASURED against the live tiles (six z3/z4 tiles across Europe, Asia and Africa, identical key
       // sets): name_ar, name_de, name_el, name_en, name_es, name_fr, name_it, name_nl, name_pl,
       // name_pt, name_uk. Of the eleven locales we ship that covers SEVEN — ar, de, en, es, fr, it, pt
-      // — in their own language, with no change to the basemap the Driver chose.
+      // — in their own language, with no change to the chosen basemap.
       //
       // hi, ro, ru and zh are genuinely absent from those tiles, so they take name_en: Latin script,
       // one script, readable rather than mixed CJK and Devanagari endonyms. That is the same role

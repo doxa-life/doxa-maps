@@ -107,19 +107,21 @@ const html = await pg.evaluate(async ({RENDER, STRINGS, LANG, ORIGIN, API, ISO3,
   // ⚠ FETCH THE MAP THE WAY THE PRODUCT DOES. This passed '' for mapSvg, so the
   // browser packet had NO page-1 map and any geography assertion would have been
   // measuring the HARNESS's shortcut rather than the product. The real export path
-  // (upg-100-list.vue:packetMapSvg) fetches posters/<zone>.html and lifts its <svg>,
+  // (usePosterPrints fetchMapSheet, which the list and the wall both print through) fetches posters/<zone>.html and lifts its <svg>,
   // returning '' on failure — a legitimate degraded state, the browser twin of the
   // build-time `nomap`. Exercise that code shape here instead of skipping it.
+  // ★ THE PRODUCT'S OWN LIFT, not a copy of it. This harness used to rebuild the page-1 wrapper by
+  // hand (250px down, scale 0.62); once the product moved to packet-render.js liftMap, that copy kept
+  // "verifying" a page 1 that no longer shipped. It now walks the same preference order
+  // (R.mapSheetFiles: the map-only sheet, then the poster) and places it with R.liftMap.
   let mapSvg = ''
-  try {
-    const html = await (await fetch(`${ORIGIN}/library/scripts/posters/out/posters/${ZONE}.html`)).text()
-    const m = html.match(/<svg[\s\S]*?<\/svg>/)
-    if (m) {
-      mapSvg = `<style>${R.mapCss(html)}</style>`
-        + `<div style="position:absolute;left:0;top:250px;width:${R.W}px;`
-        + `transform:scale(0.62);transform-origin:top center">${m[0]}</div>`
-    }
-  } catch { /* no poster generated — page 1 renders without its map, as in the product */ }
+  for (const file of R.mapSheetFiles(ZONE)) {
+    try {
+      const res = await fetch(`${ORIGIN}/library/scripts/posters/out/posters/${file}`)
+      const lifted = res.ok ? R.liftMap(await res.text()) : ''
+      if (lifted) { mapSvg = lifted; break }
+    } catch { /* try the next file; none generated means page 1 says the map is missing */ }
+  }
   return R.buildPacket({id:ISO3.toLowerCase(),label:ISO3}, groups, photos, mapSvg)
 }, {RENDER, STRINGS, LANG, ORIGIN, API, ISO3, ZONE})
 
@@ -141,6 +143,7 @@ const r = await pg.evaluate(()=>({
   // on a CORRECTLY translated packet (the same trap already fixed in
   // check-packet-render).
   mark5Len: (document.querySelector('.p4-passage')||{textContent:''}).textContent.trim().length,
+  heartItems: document.querySelectorAll('.p4-heart li').length,
   // ★ THE SAME PACKET, EXPORTED THROUGH A DIFFERENT PATH, WAS HELD TO A WEAKER STANDARD.
   // check-packet-render gained these over several ticks — the 12 points, the wheel's 12
   // LABELS (not just its 12 segments), page 1's geography — each found by mutation, each
@@ -162,7 +165,8 @@ const r = await pg.evaluate(()=>({
     const sheet = t && t.closest('.sheet')
     const svg = sheet && sheet.querySelector('svg')
     if (!svg) return -1
-    return [...svg.querySelectorAll('text')]
+    // The "Start here" marker's words are not a segment label (.wheel-start, 2026-09-30).
+    return [...svg.querySelectorAll('text')].filter((e) => !e.closest('.wheel-start'))
       .map((e) => (e.textContent || '').trim())
       .filter((s) => s && !/^\d+$/.test(s) && !/^\d[\s\S]*×\s*12$/.test(s)).length
   })(),
@@ -198,7 +202,7 @@ console.log(`  prayer points    : ${r.points} / 12`)
 console.log(`  wheel segments   : ${r.wheel}  (${r.wheelLabels}/12 labelled)`)
 console.log(`  map (page 1)     : ${r.mapGeoPaths} geography paths`)
 console.log(`  printed artefact : ${(pdfBytes/1024/1024).toFixed(1)}MB, ${pdfFonts} embedded font(s)`)
-console.log(`  Mark 5 in full   : ${r.mark5Len} chars`)   // ⚠ mark5Len, not mark5 — the latter is not a key on r and printed "undefined"
+console.log(`  point 4         : Mark 5:18-20 ${r.mark5Len} chars, ${r.heartItems} readings`)
                                                   // beside a PASS for as long as this gate has existed. The ASSERTION below always read
                                                   // the right key, so the requirement was protected; only the display was blind.
 console.log(`  metacamp.org     : ${r.metacamp}`)
@@ -250,11 +254,18 @@ if (pdfFonts === 0) {
 }
 if (r.metacamp !== 2) fails.push(`${r.metacamp} metacamp.org attributions, expected exactly 2`)
 // Mark 5:1-20 in full, by LENGTH rather than an English proper noun.
-if (r.mark5Len < 1200) {
+// Point 4 prints Mark 5:18-20 AND THE HEAVENLY FATHER'S HEART (seven readings) on the points page (2026-09-30).
+if (r.mark5Len < 250) {
   fails.push(r.mark5Len === 0
-    ? 'Mark 5:1-20 is NOT printed (no .p4-passage block)'
-    : `Mark 5:1-20 looks truncated: ${r.mark5Len} chars`)
+    ? 'Mark 5:18-20 is NOT printed (no .p4-passage block)'
+    : `Mark 5:18-20 looks truncated: ${r.mark5Len} chars`)
 }
+if (r.heartItems !== 7) {
+  fails.push(r.heartItems === 0
+    ? "point 4's reading list is NOT printed (no .p4-heart block)"
+    : `point 4's reading list prints ${r.heartItems} of 7 readings`)
+}
+
 // PAGE SIZE was printed and never compared. `@page{size:letter portrait}` is
 // 612x792pt; a wrong PORTRAIT size (A4 is 595x842) is taller-than-wide too, so
 // nothing else here would notice it.

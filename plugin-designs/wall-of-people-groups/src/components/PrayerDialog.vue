@@ -33,7 +33,10 @@
                         </button>
                     </div>
                     
-                    <div v-else class="prayer-confirmed">
+                    <!-- The group's own sign-up on pray.doxa.life (its #signup-section): commit to pray for it there. -->
+                    <a v-if="signUpUrl" :href="signUpUrl" target="_blank" rel="noopener noreferrer" class="signup-link">{{ $t('wallSocial.signUpToPray', { name: group?.name || '' }) }}</a>
+
+                    <div v-if="hasPrayed" class="prayer-confirmed">
                         <div class="confirmed-message">
                             <svg class="heart-icon" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.2-4.4-9.2-8.8C1.3 8.3 3.2 4.6 6.7 4.6c2 0 3.5 1.1 4.3 2.4.8-1.3 2.3-2.4 4.3-2.4 3.5 0 5.4 3.7 3.9 7.1-2 4.4-9.2 8.8-9.2 8.8z" fill="#ed4956" stroke="#ed4956" stroke-width="1.8" stroke-linejoin="round"/></svg>
                             <span>{{ $t('wall.thankYou') }}</span>
@@ -64,6 +67,8 @@
 <script>
 import { trapDialog } from '../trapDialog.js'
 // No third-party placeholder service: a missing photo is drawn inline.
+// The locales pray.doxa.life serves under a path prefix (English is unprefixed).
+const PRAY_LOCALES = new Set(['ar', 'de', 'es', 'fr', 'hi', 'it', 'pt', 'ro', 'ru', 'zh'])
 const NO_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='400'%3E%3Crect width='100%25' height='100%25' fill='%23f3f3f1'/%3E%3Ctext x='50%25' y='50%25' fill='%236d766e' font-family='sans-serif' font-size='22' text-anchor='middle' dominant-baseline='middle'%3ENo image available%3C/text%3E%3C/svg%3E"
 export default {
     name: 'PrayerDialog',
@@ -83,6 +88,18 @@ export default {
             prayerText: '',
             imageError: false
         };
+    },
+    computed: {
+        // The group's prayer sign-up on pray.doxa.life (the #signup-section of its page), in the reader's language:
+        // the site serves its group pages under /<lc>/ for these ten locales and English unprefixed (read from its
+        // routes; /ar/<slug> carries the same section). None without a slug.
+        signUpUrl() {
+            const slug = this.group && this.group.slug
+            if (!slug) return ''
+            const lc = String(this.$i18n?.locale || 'en').split('-')[0].toLowerCase()
+            const prefix = PRAY_LOCALES.has(lc) ? '/' + lc : ''
+            return `https://pray.doxa.life${prefix}/${encodeURIComponent(slug)}#signup-section`
+        },
     },
     watch: {
         isOpen(newVal) {

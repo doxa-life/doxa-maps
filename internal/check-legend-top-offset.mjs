@@ -2,22 +2,22 @@
 /**
  * check-legend-top-offset — the legend only reserves room for a toolbar that is actually drawn.
  *
- * THE DEFECT (Driver, 2026-09-28): on Simple Research's Regions and Languages tabs under MapLibre, the
+ * THE DEFECT (2026-09-28): on Simple Research's Regions and Languages tabs under MapLibre, the
  * search bar is gone but the legend does not rise into the vacated space. The other tabs are fine.
  *
  * ★ THE TWO-TAB SPLIT WAS A PREDICATE, NOT A COINCIDENCE. With no geocoder the legend rises to 14px
  * unless showsFlyTools() is true, and that returns true for exactly 'doxa-regions', 'language-family'
- * and 'language-families' — the Driver's two tabs. It stops at 56px to avoid a MEASURED collision on
+ * and 'language-families' — the two reported tabs. It stops at 56px to avoid a MEASURED collision on
  * country-posters, where LegendTools renders at top:14px, the legend's own slot.
  *
  * ★ BUT showsFlyTools() DESCRIBES THE LEGEND TYPE, NOT WHETHER THE TOOLBAR EXISTS. Fly + Clusters are
  * leaf-only: the composite — which is what a reader calls "Simple Research" — passes legendTools:false,
- * so the toolbar is never drawn there and the 56px reserved a slot for nothing. rega measured it at
+ * so the toolbar is never drawn there and the 56px reserved a slot for nothing. A browser check measured it at
  * 1440x900 on main e1d0bc20: the band from the map's top edge (y 44) to the legend card (y 100) is 56px
  * of empty map on both tabs, no toolbar anywhere in the strip.
  *
  * So the offset must be keyed on the toolbar's PRESENCE. Keying it on the tab name would have fixed the
- * Driver's two tabs and reintroduced the country-posters collision the moment the tools were shown.
+ * two reported tabs and reintroduced the country-posters collision the moment the tools were shown.
  *
  * Exit 0 pass · 1 fail.
  */
@@ -42,7 +42,7 @@ if (!m) {
   }
   if (!/showLegendTools/.test(body)) {
     fails.push('legendTopVar does not consult showLegendTools, so it reserves space for a toolbar that\n'
-      + '      may never be drawn. That is the Driver-reported dead band on the Regions and Languages\n'
+      + '      may never be drawn. That is the reported dead band on the Regions and Languages\n'
       + '      tabs: the composite passes legendTools:false and the 56px held a slot for nothing.\n'
       + '      Key the offset on the toolbar\'s PRESENCE, not on the legend type alone.')
   }

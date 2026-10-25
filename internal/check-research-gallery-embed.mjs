@@ -85,14 +85,14 @@ const LINKED_KNOWN = {
   //   - both fixes are ancestors of main: 12a64702 (release the retained request on success — the FIRST
   //     press was losing the zone) and 67e9ede5 (the wall clears its memory when its pane goes inert).
   //   - the receiving side still registers its listener.
-  //   - rega proved it end to end on BOTH engines at 810ffa26.
+  //   - a browser check proved it end to end on BOTH engines at 810ffa26.
 }
 const MAPBOX_KNOWN = {
-  // pplr-data-maps (new Experimental bundle, exp-shepherd) loads the Mapbox GEOCODER script even when
+  // pplr-data-maps (new Experimental bundle) loads the Mapbox GEOCODER script even when
   // the host asked for maplibre: the only api.mapbox.com request in the whole keyless gallery, both
-  // modes, measured 2026-09-25 while that tab was open. Routed via dx-shepherd; delete this entry in
+  // modes, measured 2026-09-25 while that tab was open. Routed to its owner; delete this entry in
   // the owner's fix commit so the gate enforces zero again.
-  'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js': 'exp-shepherd (pplr-data-maps loads the Mapbox geocoder under maplibre)',
+  'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js': 'pplr-data-maps loads the Mapbox geocoder under maplibre',
   // EMPTY ON PURPOSE. The one entry here — my-upg-100-list/upg-100-list.vue:1464 pinning
   // mapbox-gl.css v3.3.0 regardless of engine — was fixed and the exemption deleted in the SAME
   // COMMIT as the fix, so main never had a window where the gate red-flagged its own known bug and
@@ -139,7 +139,7 @@ const hostPage = () => {
 <style>body{margin:0} header,footer{height:60px;background:#eee}</style></head>
 <body><header id=hdr>HOST HEADER</header><main style="max-width:1200px;margin:0 auto">${embed}</main><footer>HOST FOOTER</footer></body></html>`
 }
-const tree = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(TREE_PORT)], { cwd: ROOT, stdio: 'ignore', env: { ...process.env, LIVE_CORS: LIVE_CORS ? '1' : '' } })
+const tree = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(TREE_PORT), '--exit-with-parent'], { cwd: ROOT, stdio: 'ignore', env: { ...process.env, LIVE_CORS: LIVE_CORS ? '1' : '' } })
 const host = createServer((_, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(hostPage()) }).listen(HOST_PORT, 'localhost')
 const cleanup = () => { try { tree.kill() } catch {} try { host.close() } catch {} }
 await new Promise(r => setTimeout(r, 800))

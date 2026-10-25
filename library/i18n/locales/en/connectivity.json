@@ -64,5 +64,10 @@
     "rural": "Rural",
     "source": "NFHS-5 (2019–21), people aged 15–49: the share who have ever used the internet. A survey of people, not a count of subscriptions.",
     "missing": "No state boundary yet for {names}: their figures are in the data, not on the map."
+  },
+  "loading": "Drawing the map…",
+  "ui": {
+    "showKey": "Expand legend",
+    "hideKey": "Collapse legend"
   }
 }

@@ -31,7 +31,8 @@
     "readyRosetta": "Ready · {pins} pins · {samples} Rosetta samples (gold ★)",
     "readyPins": "Ready · {pins} PG-in-country pins · click any pin",
     "readyLanguage": "Ready · {pins} pins · {coverage}% family coverage · top-25 = {top}%",
-    "readyReligion": "{pins} pins · {religion} most common ({count})"
+    "readyReligion": "{pins} pins · {religion} most common ({count})",
+    "d3Failed": "The chart library could not be loaded."
   },
   "ui": {
     "chooseView": "Choose a view",
@@ -56,7 +57,8 @@
     "sunburst": "ROP hierarchy · Affinity Bloc → People Cluster · scroll to zoom",
     "pins": "All people-group-in-country pins · click for cross-system IDs",
     "coverage": "Translation coverage · shading = average locales filled per country · click a pin or a country",
-    "rosetta": "Cross-system ID Rosetta · colour = which IDs exist · ★ = sample row"
+    "rosetta": "Cross-system ID Rosetta · colour = which IDs exist · ★ = sample row",
+    "translations": "PG name · {n} locales · click any pin"
   },
   "legendTitle": {
     "avgLocales": "Average locales / {n}",
@@ -88,5 +90,10 @@
   },
   "card": {
     "nameInLocales": "Name in {n} locales"
+  },
+  "title": "PPLR data maps",
+  "index": {
+    "title": "PPLR data validation",
+    "help": "Click a tile, or choose a view above."
   }
 }

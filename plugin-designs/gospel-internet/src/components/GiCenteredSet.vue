@@ -28,6 +28,7 @@ import { layoutCenteredSet, ringTally, inwardArrow, ringRadii } from '@map/compo
 import GiRingLegend from './GiRingLegend.vue'
 import GiCenteredSetMap from './GiCenteredSetMap.vue'
 import FullscreenButton from '@map/components/map-controls/FullscreenButton.vue'
+import { NARROW_MAX } from '../breakpoints.js'
 
 const T = useGiT()
 const board = useBoardState()
@@ -40,7 +41,13 @@ const activeRing = ref(null)
 // see the target and got a glossary. So below the breakpoint the legend starts CLOSED behind a
 // toggle. It is not hidden: the control names it, and opening is one tap.
 const narrow = ref(false)
-const legendOpen = ref(true)
+// ★ STARTS CLOSED, LIKE THE MAP'S AND THE TREE'S. This was `ref(true)`, so the centered set was the
+// one view whose decoder covered the drawing before the reader had asked for it — and on the chart
+// where seeing the target matters most. GiMap and GiTree already read the same profile-config knob
+// (`legend: 'open'`) and default closed, so this was the odd one out rather than a considered
+// difference. A host that wants it open says so; the reader opens it with one tap; and `chosen`
+// below still protects whichever they pick from being undone by a resize.
+const legendOpen = ref(board.profileConfig.value?.legend === 'open')
 let mq = null
 // ★ A DELIBERATE CHOICE SURVIVES A RESIZE. The first version of this set legendOpen from the
 // breakpoint on EVERY width change, so a reader who opened the decoder on a phone lost it on
@@ -52,12 +59,22 @@ let mq = null
 let chosen = null                                     // null = the reader has not decided yet
 function applyWidth(m) {
   narrow.value = m.matches
-  legendOpen.value = chosen == null ? !m.matches : chosen
+  // ★ WIDTH NO LONGER OPENS THE LEGEND, IT ONLY CLOSES IT. This read `!m.matches`, so on mount at a
+  // desktop width it set legendOpen back to TRUE and the closed default above was dead on arrival —
+  // changing the ref alone would have looked right in review and shipped nothing. A wide window is
+  // not a request to cover the chart; it is only the absence of the reason to force the legend shut.
+  // So: narrow still closes it, wide leaves whatever the default or the host asked for, and `chosen`
+  // still wins outright once the reader has decided.
+  if (chosen != null) { legendOpen.value = chosen; return }
+  if (m.matches) legendOpen.value = false
 }
 function setLegendOpen(v) { chosen = v; legendOpen.value = v }
 onMounted(() => {
   try {
-    mq = window.matchMedia('(max-width: 900px)')
+    // The same width the BOARD collapses at (NARROW_MAX). If these two ever disagree again,
+    // the board keeps its side panels while the chart has already given up on room — which is
+    // exactly the 768px failure.
+    mq = window.matchMedia(`(max-width: ${NARROW_MAX - 1}px)`)
     applyWidth(mq)
     mq.addEventListener?.('change', applyWidth)
   } catch (_) { /* no matchMedia: stay wide, which is the layout that always fits */ }
@@ -92,6 +109,11 @@ const prepared = computed(() => {
 
 const layout = computed(() => layoutCenteredSet(prepared.value.groups, { innerR: 30, ringGap: 22 }))
 const tally = computed(() => ringTally(layout.value))
+// ★ COUNTED FROM THE LAYOUT, NOT FROM WHAT IS DRAWN. layout.placed is every group that HAS a ring,
+// which is a fact about the data; the number of pins actually rendered depends on the fill mode and,
+// in the dense mode, reads differently at different zooms. Captioning the drawn count would give a
+// total that changes as the reader zooms — true at every instant and misleading overall.
+const placedTotal = computed(() => layout.value.placed.length)
 const radii = computed(() => ringRadii({ innerR: 30, ringGap: 22 }))
 // The arrow carries its group's ring so the dimming can tell them apart. inwardArrow returns
 // geometry and the neighbour it names, not the ring — reading a.ring off it would have been
@@ -103,7 +125,7 @@ const arrows = computed(() => layout.value.placed
   .filter(Boolean).slice(0, 400))
 // formatCount, not toLocaleString(): a bare toLocaleString follows the READER'S BROWSER,
 // so one page could print 2,074 here and 2.074 in the panel beside it. formatCount holds
-// en-US in one place until the Driver rules on numerals.
+// en-US in one place until the numerals question is ruled on.
 // The `|| 0` stays: formatCount FORMATS and deliberately does not decide what empty means —
 // Number(undefined) is NaN, so handing it a missing count would print "NaN" where this has
 // always printed 0. The locale source changes; the empty policy does not.
@@ -112,7 +134,7 @@ const fmt = (n) => formatCount(Number(n) || 0)
 useShadowStyles(
   // ROW, NOT COLUMN, and overflow hidden. Stacked in a centred column the legend — a 360px card
   // with a 3x3 grid of 44px cells and four footer lines — is taller than the pane on its own, so
-  // the chart was pushed out of view entirely and the whole panel overflowed its host: rega saw
+  // the chart was pushed out of view entirely and the whole panel overflowed its host: it showed
   // the legend covering the row below and the caption drawn over the page tabs.
   // Every child gets min-height/min-width 0, because a flex item's default minimum is its CONTENT
   // size — without it an item never shrinks below its natural height and the container overflows
@@ -126,10 +148,10 @@ useShadowStyles(
   // had this; the centered one did not, which is the kind of difference two files drift into
   // when the same rule is written twice.
   // min-height in the narrow column: a flex child with auto content can resolve to zero height,
-  // which is what a 0x0 chart is. rega measured exactly that at 390px.
+  // which is what a 0x0 chart is, as measured at 390px.
     // flex-basis 0, not auto. The map inside is position:absolute, so the figure has NO intrinsic
   // width to be sized from — with basis auto it asks for its content, the content is nothing, and
-  // the legend beside it takes the column. rega measured the figure at 39px across while the
+  // the legend beside it takes the column. The figure measured 39px across while the
   // decoder card had the rest. Growing from zero makes the figure take the remaining space
   // whatever it happens to contain.
   // min-width is a FLOOR, not 0. The shipped CSS was right and the figure was still 39px wide:
@@ -171,7 +193,7 @@ useShadowStyles(
       </p>
     <template v-else-if="near">
       <div class="gcs-fig">
-        <!-- The figure is the whiteboard map, not SVG: the Driver asked for pan, zoom and labels
+        <!-- The figure is the whiteboard map, not SVG: pan, zoom and labels are required
              that appear as you zoom in, and the engine gives tiling and label collision that an
              SVG version would have to reimplement. The PRINTED component stays SVG — a sheet has
              no zoom and no hover, so the two media genuinely want different renderers. -->
@@ -190,7 +212,7 @@ useShadowStyles(
         </button>
         <!-- ★ @fullscreen WAS NOT BOUND. The legend declares emits ['select','fullscreen'] and
              renders a labelled, focusable full-screen button; only select was wired, so the
-             button rendered, looked right and did nothing. It is a Driver ask, and it is the
+             button rendered, looked right and did nothing. It is a required behaviour, and it is the
              half-wired-config shape: the visible half worked, so nothing looked broken.
              The handler delegates to the SHARED fullscreen implementation rather than calling
              requestFullscreen here. That is not ceremony: iOS Safari does not implement
@@ -201,7 +223,14 @@ useShadowStyles(
                       :active-ring="activeRing" :panel="panelEl" @select="activeRing = $event"
                       />
       </div>
-      <p v-if="tally.centre || tally.unplaced || prepared.unmatched" class="gcs-warn">
+      <!-- ★ THE POSITIVE TOTAL COMES FIRST, and it is the TRUE one, not a count of what happens to be
+           drawn at this zoom. In the dense mode the same groups render as an arc of colour when zoomed
+           out and as separate pins when zoomed in; a caption derived from what is currently visible
+           would change as the reader moved, which is exactly the way a chart misleads without ever
+           being wrong. The three clauses after it account for every group NOT on a ring, so the
+           paragraph reads as one reconciliation rather than four unrelated numbers. -->
+      <p v-if="placedTotal || tally.centre || tally.unplaced || prepared.unmatched" class="gcs-warn">
+        <span v-if="placedTotal">{{ T('gospelInternet.centered.shown', 'People groups on the rings:') }} <b dir="ltr">{{ fmt(placedTotal) }}</b>. </span>
         <span v-if="tally.centre">{{ T('gospelInternet.centered.reached', 'Already reached, so at the centre:') }} <b dir="ltr">{{ fmt(tally.centre) }}</b>. </span>
         <span v-if="tally.unplaced">{{ T('gospelInternet.centered.unplaced', 'No relation found, so not placed:') }} <b dir="ltr">{{ fmt(tally.unplaced) }}</b>. </span>
         <span v-if="prepared.unmatched">{{ T('gospelInternet.centered.unmatched', 'Not in the neighbour table at all, so not drawn:') }} <b dir="ltr">{{ fmt(prepared.unmatched) }}</b>.</span>

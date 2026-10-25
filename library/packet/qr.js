@@ -1,9 +1,9 @@
 // qr.js — a minimal, self-contained QR encoder. No dependency, no network.
 //
 // WHY HAND-ROLLED. The prayer cards need a QR per group linking back to that
-// group's live page, and the Driver's standing constraint is "as much data as you
-// can without compromising speed and without adding a lot of dependencies on the
-// internet". A QR symbol is pure computation — Reed-Solomon over GF(256) and a bit
+// group's live page, and the standing constraint is as much data as possible
+// without compromising speed and without adding a lot of dependencies on the
+// internet. A QR symbol is pure computation — Reed-Solomon over GF(256) and a bit
 // layout — so it costs one small file instead of a package, and it runs identically
 // in Node (build-time decks) and the browser (print-on-click).
 //

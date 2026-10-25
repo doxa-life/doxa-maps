@@ -1,3 +1,4 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * pplr-data-maps / index.js — bundle entry (emits pplr-data-maps.js), defines <pplr-data-maps>.
  *
@@ -5,7 +6,6 @@
  * folder's one profile, pplr-data-maps.vue; its ten views live in src/views/. The Mapbox RTL
  * text plugin is registered once here: many PG names are Arabic, Urdu or Hebrew.
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 const profileModules = import.meta.glob('./*.vue')
 

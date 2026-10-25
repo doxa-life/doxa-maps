@@ -33,15 +33,15 @@
  *   · ONCE PER VISIT — it appears on every page load and stays until the reader closes
  *     it with the ×. Nothing is remembered between loads: leaving and returning (or a
  *     reload) shows it again, because the invitation is the point.
- *   · SELF-DISMISSING — first pointer-down on the map (they learned it), the
- *     ✕ button, or a quiet 14s timeout. Never blocks the map; pointer-events
- *     none except on the pill itself.
+ *   · SELF-DISMISSING — the ✕ button, or the first PIN the reader taps (the gesture
+ *     it teaches; a pan does not count). Never blocks the map; pointer-events none
+ *     except on the pill itself.
  *
  * OPT-OUT via profile-config `pinHint: false`; label override via
  * `pinHintLabel`. Styles via useShadowStyles — a child component's <style> is
  * dropped from the custom element's shadow DOM (see WARNING.md).
  */
-import { ref, inject, computed, onMounted, onBeforeUnmount, getCurrentInstance, nextTick } from 'vue'
+import { ref, inject, computed, onMounted, onBeforeUnmount, getCurrentInstance, nextTick, watch } from 'vue'
 import { tStatic } from '@map/i18n/index.js'
 
 // This component's chrome, read out of the catalogue. tStatic and not useI18n: these mount inside
@@ -50,6 +50,7 @@ import { tStatic } from '@map/i18n/index.js'
 const T = (key, en) => tStatic(key) || en
 import { useOptionalI18n } from '@map/composables/useOptionalT.js'
 import { useShadowStyles } from '../../composables/useShadowStyles.js'
+import { pillFloor, pageScrolls } from './pinHintFloor.js'
 
 // ★ i18n IS OPTIONAL HERE, NOT REQUIRED. useI18n() THROWS ("Need to install with `app.use`
 // function") on any host that never installed vue-i18n, and seven bundles in this repo do not --
@@ -60,14 +61,18 @@ import { useShadowStyles } from '../../composables/useShadowStyles.js'
 // This call was mine, added in 9ba6ad7a. Same shape of fix: use the host's translations when it
 // has them, the English literal otherwise. `te` becomes a "no, I don't have it" so every caller
 // falls through to its own default.
-const PINHINT_FALLBACK = { 'messages.pinHint.tapDot': 'Tap a dot to see who still needs prayer' }
+const PINHINT_FALLBACK = {
+  'messages.pinHint.tapDot': 'Tap a dot to see who still needs prayer',
+  'pinHint.line1': 'Tap a coloured dot',
+  'pinHint.line2': 'someone still needs prayer',
+}
 // C4: the guard is library/composables/useOptionalI18n now. PINHINT_FALLBACK is passed in unchanged
 // and `te` still answers false on a bare host, so every caller keeps its own default.
 const { t, te } = useOptionalI18n('', { fallback: (key) => PINHINT_FALLBACK[key] })
 const uiStore = inject('uiStore', null)
 const profileConfig = inject('profileConfig', null)
 const isDark = computed(() => uiStore?.theme === 'dark')
-// ★ THE DEFAULT MUST NOT NAME A COLOUR (Driver, reported 5+ times).
+// ★ THE DEFAULT MUST NOT NAME A COLOUR (reported 5+ times).
 // The old default was "Tap a red dot — someone still needs prayer". It shipped on EVERY map,
 // because `pinHintLabel` is an override no profile has ever set and `pinHint:false` is an opt-out
 // no profile has ever used — verified: zero occurrences of either across plugin-designs/.
@@ -87,11 +92,17 @@ const isDark = computed(() => uiStore?.theme === 'dark')
 // English, and therefore invisible to everyone who could.
 // The key falls back to the English sentence when a locale lacks it, so a missing translation
 // degrades to today's behaviour rather than to "messages.pinHint.tapDot".
-const label = computed(() => {
+// ★ TWO LINES, EACH ITS OWN STRING, in a catalogue area only this component names (so it ships only
+// where this component does). Splitting the one-sentence string at its separator would have worked
+// for today's eleven translations, but they do not share one (a dash, a colon, a double dash), and a
+// future translation with an extra one would split in the wrong place with nothing to notice it; two
+// keys are explicit per locale, and the parity gate guards both. A profile's own label still wins,
+// on one line.
+const lines = computed(() => {
   const override = profileConfig?.value?.pinHintLabel
-  if (override) return override
-  const EN = 'Tap a coloured dot — someone still needs prayer'
-  try { return te('messages.pinHint.tapDot') ? t('messages.pinHint.tapDot') : EN } catch (_) { return EN }
+  if (override) return [override]
+  const one = (k) => { try { return te(k) ? t(k) : PINHINT_FALLBACK[k] } catch (_) { return PINHINT_FALLBACK[k] } }
+  return [one('pinHint.line1'), one('pinHint.line2')]
 })
 
 const visible = ref(false)
@@ -147,9 +158,17 @@ let settleTimers = []  // observes the attribution control (it resizes on its ow
 let hostRO = null    // observes the pill's layout parent, so a LATE layout re-runs the clamp
 let attribEl = null
 
-// The reader closes it; nothing else does — no timer, and no dismissal on the first pan,
-// so the invitation is still there when they come back to the map.
+// The reader closes it, or DOES what it asks. No timer, and no dismissal on the first pan, so the
+// invitation is still there when they come back to the map.
 function dismiss() { visible.value = false }
+// ★ THE GESTURE IT TEACHES DISMISSES IT. The first pin the reader taps opens what this pill invites them
+// to open (the detail card), and a pill still standing there sat over that card's rows (measured on
+// Prayer Progress at 390). Either signal is enough:
+//   · the shared uiStore's selection, for the maps that select through uiStore.selectPeopleGroup;
+//   · a 'dxmaps:pin-selected' event from inside this map's root, for a map with its own selection
+//     (Gospel Resources' country and people-group sheet).
+// A pan is not a tap on a pin, so panning still leaves the invitation up.
+if (uiStore) watch(() => uiStore.selectedPeopleGroup, (pg) => { if (pg) dismiss() })
 
 /**
  * From the map <canvas>, walk up to the element the pill should live inside: the
@@ -243,13 +262,33 @@ function sheetFloor(pill) {
   } catch (_) { return Infinity }
 }
 
+// The top of the map's licence credit, when it lies under the pill (same flavours as syncAttribClearance).
+function creditFloor(pill) {
+  try {
+    const a = hintRoot?.querySelector?.(
+      '.mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-attrib, .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib, '
+      + '.mapboxgl-ctrl-bottom-right .doxa-attribution, .maplibregl-ctrl-bottom-right .doxa-attribution, .doxa-attribution')
+    if (!a) return Infinity
+    const cr = a.getBoundingClientRect()
+    if (!(cr.height > 0) || !(cr.width > 0)) return Infinity
+    // A credit in the UPPER half of our layout parent (a host that moved it to the top) is no floor.
+    const hr = hintEl.value?.parentElement?.getBoundingClientRect?.()
+    if (hr && cr.top < hr.top + hr.height / 2) return Infinity
+    const apart = pill.right <= cr.left || cr.right <= pill.left
+    return apart ? Infinity : cr.top
+  } catch (_) { return Infinity }
+}
+
 function clampIntoView() {
   const el = hintEl.value
-  if (!el || !onScreen.value || !paneActive.value) return
+  if (!el) return
+  // Off screen or in a hidden pane: drop any lift first. A lift set while the map was partly visible must not
+  // survive into the next view; the clamp runs again when the pane or the map comes back.
+  if (!onScreen.value || !paneActive.value) { el.style.removeProperty('--pin-hint-lift'); return }
   try {
     // ★ ADJUST `bottom`, NEVER `transform`. My first attempt set el.style.transform and cleared it
     // between measurements — both wrong here, and the diagnosis took two failed builds:
-    //   · `.pin-hint` already uses `transform: translateX(-50%)` to CENTRE itself, so writing a
+    //   · `.pin-hint` used `transform: translateX(-50%)` to CENTRE itself (it is a centred band now), so writing a
     //     translateY would have silently destroyed the horizontal centring.
     //   · the pill's computed transform also carries the `pinhint-bob` keyframe animation, so a
     //     computed-transform reading is never just "my offset".
@@ -259,9 +298,20 @@ function clampIntoView() {
     el.style.removeProperty('--pin-hint-lift')
     const r = el.getBoundingClientRect()
     if (!r.height) return
-    // The lowest thing the pill may touch: the fold, or the top of the phone legend sheet when one
-    // is open beneath it. Whichever is higher wins.
-    const floor = Math.min(window.innerHeight, sheetFloor(r))
+    // The lowest thing the pill may touch: the top of the phone legend sheet when one is open beneath
+    // it, the top of the map's licence credit, or the fold, but the fold ONLY on a page that does not
+    // scroll (pinHintFloor.js says why). Whichever is higher wins.
+    // ★ THE CREDIT IS A FLOOR HERE TOO, not only a clearance in syncAttribClearance. That clearance
+    // is re-measured only when the credit RESIZES, and on a phone the credit is also MOVED (lifted
+    // above the legend bar) without resizing. MEASURED at 390 on DX Life's home page: the clearance
+    // stayed at a stale 43px and the pill covered 36px of the 37px credit, while the same page, measured
+    // later, sat at the cap. This check runs from the settle timers and the sheet and host observers,
+    // so it reads where the credit IS, whatever the clearance says.
+    // A map that starts below the fold or ends above the top cannot be a full-screen page: it is a block in a
+    // page that scrolls, whatever scroller the page uses.
+    const hr = el.parentElement && el.parentElement.getBoundingClientRect ? el.parentElement.getBoundingClientRect() : null
+    const offPage = !!hr && (hr.top >= window.innerHeight || hr.bottom <= 0)
+    const floor = pillFloor({ viewportH: window.innerHeight, scrolls: offPage || pageScrolls(document, window, el), sheetTop: sheetFloor(r), creditTop: creditFloor(r) })
     const overflow = Math.round(r.bottom - floor)
     if (overflow > 0) el.style.setProperty('--pin-hint-lift', (overflow + 8) + 'px')
   } catch (_) { /* detached — nothing to clamp */ }
@@ -279,13 +329,17 @@ function syncAttribClearance(root) {
   if (!el || !root?.querySelector) return
   let h = 0
   try {
-    // TWO attribution flavours ship in this repo and the pill must clear EITHER:
-    //   .mapboxgl-ctrl-attrib  — Mapbox's own control (useMapInstance, attributionControl:true)
-    //   .doxa-attribution      — our own credit line (useMapAttribution.js) on the profiles
-    //                            that construct with attributionControl:false
-    // Both are licence-required credit, so both are obstacles, never things to cover.
+    // THREE attribution flavours ship in this repo and the pill must clear ANY of them:
+    //   .mapboxgl-ctrl-attrib   — Mapbox's own control (useMapInstance, attributionControl:true)
+    //   .maplibregl-ctrl-attrib — MapLibre's, the DEFAULT engine. Missing from this list, the pill
+    //                             kept the 20px fallback and, on a 390px phone where the credit wraps
+    //                             to two lines (37px), covered it by 35px on every map. Mapbox measured 0.
+    //   .doxa-attribution       — our own credit line (useMapAttribution.js) on the profiles
+    //                             that construct with attributionControl:false
+    // All are licence-required credit, so all are obstacles, never things to cover.
     const a = root.querySelector(
-      '.mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-attrib, .mapboxgl-ctrl-bottom-right .doxa-attribution, .doxa-attribution')
+      '.mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-attrib, .maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib, '
+      + '.mapboxgl-ctrl-bottom-right .doxa-attribution, .maplibregl-ctrl-bottom-right .doxa-attribution, .doxa-attribution')
     if (a) {
       // Measure the strip the control OCCUPIES from the bottom of the box we are anchored
       // in, not the control's own height: Mapbox adds a margin inside
@@ -293,7 +347,11 @@ function syncAttribClearance(root) {
       const cr = a.getBoundingClientRect()
       const host = el.parentElement
       const hr = host ? host.getBoundingClientRect() : null
-      h = hr ? Math.max(cr.height || 0, hr.bottom - cr.top) : (cr.height || 0)
+      // ★ ONLY A CREDIT BELOW US. A host may move the credit to the TOP of the map (a phone layout with
+      // the sheet flush at the bottom); hostBottom - credit.top would then be the whole map height and
+      // float the pill up for nothing. A credit in the upper half of our layout parent is not ours to clear.
+      const low = !hr || cr.top >= hr.top + hr.height / 2
+      h = !low ? 0 : hr ? Math.max(cr.height || 0, hr.bottom - cr.top) : (cr.height || 0)
       // Mapbox collapses the credit to the compact "i" button AFTER first paint, and that
       // swap changes the CONTROL's height without changing the map's — so observe the
       // control itself or we stay pinned to the stale expanded measurement.
@@ -305,7 +363,11 @@ function syncAttribClearance(root) {
       }
     }
   } catch (_) { /* not painted yet */ }
-  const clear = Math.min(Math.max(Math.ceil(h) || 20, 20), 72)
+  // The cap only bounds a mis-measure. At 72 it cut a REAL need: on a 390px phone MapLibre's credit
+  // wraps to two lines and, on the leaf, sits above the bottom bar, 90px up from the box's bottom
+  // edge, so the pill still overlapped it by 6px. 120 covers that with room, and still bounds a
+  // runaway measurement.
+  const clear = Math.min(Math.max(Math.ceil(h) || 20, 20), 120)
   el.style.setProperty('--pin-hint-attrib-clear', clear + 'px')
   // ★ Clamp LAST and from HERE, not only from the mount hook. A single nextTick clamp measured a
   // layout that had not settled — in the cap-4 composite the nested child is still sizing then, so
@@ -321,6 +383,7 @@ onMounted(() => {
   const root = inst?.proxy?.$el?.getRootNode?.()
   if (!root || typeof root.querySelector !== 'function') return
   hintRoot = root
+  root.addEventListener('dxmaps:pin-selected', dismiss)
   let tries = 0
   watchTimer = setInterval(() => {
     tries++
@@ -385,6 +448,7 @@ onBeforeUnmount(() => {
   if (sheetRO) { try { sheetRO.disconnect() } catch (_) {} sheetRO = null } sheetWatched = null
   for (const t of settleTimers) clearTimeout(t)
   settleTimers = []
+  if (hintRoot) hintRoot.removeEventListener('dxmaps:pin-selected', dismiss)
   hintRoot = null
   // We appended our own element into a node Vue does not own. Vue removes the element
   // it created, but only from where IT thinks it is — so detach explicitly to be certain
@@ -396,7 +460,7 @@ onBeforeUnmount(() => {
 })
 
 useShadowStyles(`
-/* ★ NOT ON PAPER (rega, RQ-RGPRINT on fc93c97e4). "Tap a coloured dot — someone still needs
+/* ★ NOT ON PAPER (measured on a print of fc93c97e4). "Tap a coloured dot — someone still needs
    prayer" printed across the bottom of the map. It is an instruction for a finger, addressed to
    a reader who is now holding a sheet of paper; on the page it reads as part of the map's own
    caption and is simply untrue there. */
@@ -406,17 +470,41 @@ useShadowStyles(`
      LICENCE obligation (Mapbox ToS / OSM ODbL) and must never be covered — so the pill sits
      ABOVE it rather than on it. max-width keeps the pill inside narrow map panels instead of
      bleeding past their edges at 1024px and below. */
-  .pin-hint { position: absolute; left: 50%;
-    bottom: calc(var(--pin-hint-attrib-clear, 20px) + 12px + var(--pin-hint-lift, 0px)); transform: translateX(-50%);
-    z-index: 2147482000; pointer-events: none;
-    max-width: calc(100% - 24px); box-sizing: border-box;
+  /* ★ WIDTH: left:50% ALONE HALVED IT. An absolutely placed box sizes to fit the space from its left edge
+     to the container's right, so with left:50% the pill could never be wider than HALF the map (about 195px
+     at 390) and the sentence broke into four lines. width:max-content lets it take the width it needs, and
+     max-width caps it 16px short of each edge, so on a phone it wraps to at most two lines and never
+     touches the sides. The translate still centres it.
+     ★ LAYER: BELOW THE HOST'S CHROME. In the gallery a plugin's content shares one stacking context with
+     the layout's own controls (library/layouts/VerticalTabsLayout.vue: the menu button at 15, the drawer
+     at 20, and 1000 while it is open on a phone), and the old 2147482000 painted this pill over the open
+     drawer. 12 keeps it above the map's own base layers (the canvas, the scroll edges at 2, the control
+     column at 10) and below all of that chrome. It is never meant to cover anything else: its placement
+     already keeps it above the credit strip and the legend sheet (clampIntoView).
+     ★ CENTRED IN THE ROOM THE CORNER ☰ LEAVES. The gallery's round ☰ sits fixed in the bottom start
+     corner and publishes the room it takes on that side as --map-fab-beside, only while it shows. The pill
+     is a band from that edge (12px with no ☰) to 12px from the other, and centres itself in it, so it can
+     never reach the ☰ and has equal room on both sides; the legend sheet pads its collapsed strip by the
+     same variable, so the ☰, the legend and the pill agree by construction. Vertically the clamp keeps it
+     just above the legend sheet, clear of the legend's own caret and title.
+     ★ IT NEVER READS A MOVING VARIABLE. It lives inside the map, beside the legend, so it stays over the
+     legend by itself while the pane scrolls or a tab switches. */
+  .pin-hint { position: absolute; inset-inline-start: var(--map-fab-beside, 12px); inset-inline-end: 12px;
+    bottom: calc(max(var(--pin-hint-attrib-clear, 20px) + 12px, 8px) + var(--pin-hint-lift, 0px));
+    display: flex; justify-content: center;
+    z-index: 12; pointer-events: none; box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     animation: pinhint-in .5s ease both; }
-  .pin-hint-pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 9px;
-    padding: 9px 14px 9px 11px; border-radius: 999px;
-    background: rgba(23, 29, 38, .92); color: #fff; font-size: 13.5px; font-weight: 600;
+  /* 40px, the corner ☰'s size, with its two lines one above the other. touch-action:none: a drag that starts on
+     the pill does nothing. With the legend open the pill sits just above the sheet's top edge, and a drag meant
+     to resize the sheet that began on it scrolled the pane instead. Taps still fire, so the × still works. */
+  .pin-hint-pill { pointer-events: auto; touch-action: none; display: inline-flex; align-items: center; gap: 8px; text-align: center;
+    min-height: 40px; max-width: 100%; box-sizing: border-box; padding: 3px 12px 3px 10px; border-radius: 20px;
+    background: rgba(23, 29, 38, .92); color: #fff; font-size: 12px; line-height: 1.25; font-weight: 600;
     letter-spacing: .01em; box-shadow: 0 4px 18px rgba(0,0,0,.30);
     animation: pinhint-bob 2.6s ease-in-out 1s infinite; }
+  .pin-hint-text { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .pin-hint-line { display: block; }
   .pin-hint-dot { position: relative; width: 12px; height: 12px; flex: none; }
   .pin-hint-dot::before { content: ''; position: absolute; inset: 0; border-radius: 50%;
     background: #e05252; box-shadow: 0 0 0 2px rgba(224,82,82,.35); }
@@ -437,8 +525,8 @@ useShadowStyles(`
   .pin-hint.dark .pin-hint-x { color: #5a6470; }
   .pin-hint.dark .pin-hint-x:hover { color: #1b212b; }
   @keyframes pinhint-pulse { 0% { transform: scale(.6); opacity: .9 } 70% { transform: scale(1.5); opacity: 0 } 100% { opacity: 0 } }
-  @keyframes pinhint-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
-  @keyframes pinhint-in { from { opacity: 0; transform: translateX(-50%) translateY(10px) } to { opacity: 1; transform: translateX(-50%) translateY(0) } }
+  @keyframes pinhint-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+  @keyframes pinhint-in { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
   @media (prefers-reduced-motion: reduce) {
     .pin-hint, .pin-hint-pill, .pin-hint-dot::after { animation: none !important; }
   }
@@ -449,7 +537,7 @@ useShadowStyles(`
   <div v-if="visible" v-show="onScreen && paneActive" ref="hintEl" class="pin-hint" :class="{ dark: isDark }" role="status">
     <span class="pin-hint-pill">
       <span class="pin-hint-dot" aria-hidden="true"></span>
-      {{ label }}
+      <span class="pin-hint-text"><span v-for="(l, i) in lines" :key="i" class="pin-hint-line">{{ l }}</span></span>
       <button class="pin-hint-x" type="button" :aria-label="T('aria.dismissHint', 'Dismiss hint')" @click="dismiss">×</button>
     </span>
   </div>

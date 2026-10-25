@@ -6,7 +6,7 @@
  *
  * One board for sending gospel resources through the internet, embeddable by partners.
  *
- * SPEC: _qa-cycle/03-deployment-cycle/SPEC-GOSPEL-INTERNET-DASHBOARD.md (MVP = section 15, phase 1).
+ * How this board is built, and what it refuses to say: ./README.md
  *
  * THE SHELL, built on the dashboard kit: the selection bus (library useSelectionBus, filter / selection /
  * hover), the layout engine (library useDashboardLayout: three drag handles, keyboard operable,
@@ -39,6 +39,7 @@ import GiDrawer from './src/components/GiDrawer.vue'
 import GiTree from './src/components/GiTree.vue'
 import GiResources from './src/components/GiResources.vue'
 import GiCombos from './src/components/GiCombos.vue'
+import { isNarrowWidth } from './src/breakpoints.js'
 
 const T = useGiT()
 const board = useBoard()
@@ -76,7 +77,7 @@ board.readUrl()
 // partner's address bar is never rewritten. facetKeys is explicit: its default reads nothing on a cold load.
 useShareableView(bus, { mode: 'query', write: board.profileConfig.value?.urlState === 'query', facetKeys: SHARE_FACETS })
 
-// ── responsive: one panel at a time under 760px (ResizeObserver on the shell, not @container: a
+// ── responsive: one panel at a time under the shared breakpoint (ResizeObserver on the shell, not @container: a
 // container query cannot target the container itself, which is unreliable inside a shadow root) ──────
 const shell = ref(null)
 const isNarrow = ref(false)
@@ -84,7 +85,7 @@ const mobilePanel = ref('map')
 let ro = null
 onMounted(() => {
   if (shell.value && typeof ResizeObserver !== 'undefined') {
-    ro = new ResizeObserver(([e]) => { isNarrow.value = e.contentRect.width < 760 })
+    ro = new ResizeObserver(([e]) => { isNarrow.value = isNarrowWidth(e.contentRect.width) })
     ro.observe(shell.value)
   }
   board.load()
@@ -134,7 +135,7 @@ watch(() => board.centre.value, (c) => {
   if (c === 'bounded') boundedEver.value = true
   if (c === 'centered') centeredEver.value = true
 }, { immediate: true })
-// The Driver's order: Language tree, Bounded set, Centered set, then Map. The centered-set
+// The tab order is Language tree, Bounded set, Centered set, then Map. The centered-set
 // target waited for its data rather than shipping as an empty tab; ring and ringNb are
 // columns on near-neighbors.json now, so it is here.
 const CENTRE_TABS = computed(() => [
@@ -187,7 +188,7 @@ useShadowStyles(
   'grid-template-columns:var(--facet-w,264px) minmax(0,1fr) var(--rail-w,360px);' +
   'grid-template-rows:auto auto auto minmax(0,1fr) var(--table-h,38%);' +
   // The charts rail runs the full height beside the map AND the table: sized to the map row alone it was
-  // ~300px and clipped its four charts (rega, the Driver: "the charts don't look good").
+  // ~300px and clipped its four charts.
   'grid-template-areas:"top top top" "combos combos combos" "note note note" "facets map rail" "facets grid rail";' +
   'font:13px/1.35 Roboto,-apple-system,"Segoe UI",sans-serif;overflow:hidden}' +
   '.gb-top{grid-area:top;display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 14px;background:#fff;border-bottom:1px solid #d1d4cd}' +
@@ -261,7 +262,7 @@ useShadowStyles(
     </header>
     <GiCombos />
     <p class="gb-note" data-notice="standing">
-      {{ T('gospelInternet.notice.standing', 'Dots are approximate (where a people is found in its country, not a town). Internet figures are the country\'s, or the Indian state\'s, never the group\'s. "Found" means found in the sources checked.') }}
+      {{ T('gospelInternet.notice.standing', 'Dots are approximate: a dot marks a people group, not a town. Internet figures are the country\'s, or the Indian state\'s, never the group\'s. "Found" means found in the sources checked.') }}
       <span v-if="sourcesLine"> {{ T('gospelInternet.notice.sources', 'Sources:') }} {{ sourcesLine }}.</span>
     </p>
 

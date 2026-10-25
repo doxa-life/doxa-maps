@@ -1,7 +1,6 @@
 // build-hd-gallery.mjs — an HD review page for the 28 posters.
 //
-// Brief: "I want access to a page that lets me see all the HD versions of these
-// and copy them to clipboard."
+// One page shows every poster's HD version, each with a copy-to-clipboard action.
 //
 // What it gives you per poster:
 //   • the FULL-RESOLUTION PNG (3000x3000), lazily loaded so the page opens fast

@@ -25,5 +25,22 @@
   "region_southeast_asia_oceania": "Asie du Sud-Est + Océanie",
   "region_china_mongolia": "Chine + Mongolie",
   "region_india": "Inde",
-  "region_other": "Autres"
+  "region_other": "Autres",
+  "region_americas": "Amériques",
+  "region_europe": "Europe",
+  "region_deaf": "Sourds",
+  "zone_deaf": "Groupes de personnes sourdes",
+  "rendering": "Génération…",
+  "render_format": "Générer en {format}",
+  "progress_elapsed": "{time} écoulées",
+  "progress_tiles": "tuile {n} sur {total}",
+  "hint_up_to_minute": "Ce format peut prendre jusqu’à une minute.",
+  "hint_few_minutes": "Les grandes affiches peuvent prendre quelques minutes.",
+  "error_too_large": "Cette affiche est trop grande pour la mémoire de cet appareil. Choisissez un format plus petit ou une résolution plus basse.",
+  "error_failed": "L’affiche n’a pas pu être générée. Réessayez ou choisissez un format plus petit.",
+  "optional": "(facultatif)",
+  "phoneLimit": "Sur un téléphone, les plus grands formats sont désactivés : un téléphone ne peut pas dessiner une affiche aussi grande. Utilisez un ordinateur pour ceux-là.",
+  "phoneLimitAll": "Cela nécessite un ordinateur de bureau ou un portable.",
+  "glue_here": "coller ici",
+  "sectionNone": "Aucune affiche pour {scope}."
 }

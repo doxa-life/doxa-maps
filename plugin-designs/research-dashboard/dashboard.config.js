@@ -8,7 +8,7 @@
  * generically. Values are copied faithfully from the original research-dashboard so the
  * migrated bundle behaves identically.
  */
-import { lbl } from './src/composables/useDashboardAggregations.js'
+import { lbl } from '@map/composables/useFacetAggregation.js'
 import { tStatic } from '@map/i18n/index.js'
 import { RELIGION_FAMILIES } from '@map/colors/religion.js'
 import { canonicalFamilyName } from '@map/colors/language-family.js'
@@ -39,7 +39,7 @@ const code = (v) => (v && typeof v === 'object' ? (v.value ?? v.label ?? '') : (
 export default {
   // ── identity ──
   id: 'doxa-research-dashboard',
-  // "Big Picture Research Dashboard" (Driver 2026-09-20). The share button embeds THIS whole
+  // "Big Picture Research Dashboard" (decided 2026-09-20). The share button embeds THIS whole
   // element on a partner site, so the title is what a visitor reads there — it has to name the
   // product, not just the page. "Big Picture" is also the cap-4 composite's name and tab-1 of the
   // cap-5 SPA, so one term now runs consistently from the tab through to an embedded partner view.
@@ -145,7 +145,7 @@ export default {
     // ── Language TIER 1 — API value FIRST, ISO lookup as FALLBACK ──
     // MEASURED on the live API (2,107 rows, 2026-09-20): `imb_language_family` is null on
     // 2,073 of them — it is populated for just 34 rows (1.6%). Read alone, the Language tree
-    // (one of the Driver's four axes) renders as a near-empty stub and looks broken.
+    // (one of the four axes) renders as a near-empty stub and looks broken.
     //
     // `primary_language` IS populated on 100% of rows and its `.value` is an ISO-639-3 code
     // ('abf'), and the library already ships @map/data/langFamilyByIso.json (815 entries).
@@ -183,9 +183,8 @@ export default {
     // "Affinity Bloc" tree tier) that could never recognise each other: the tree stored
     // affinity_bloc='A012' while the dropdown stored rop1='South Asian Peoples', and
     // filteredRows byte-matches each key against its OWN accessor, so neither ever saw the
-    // other's selection. Driver, from behaviour: "there are duplicate affinity blocks, one
-    // called People, one called Affinity Bloc… the People filter IS by affinity block. So they
-    // are the same thing." He is right — the People filter always WAS the affinity-bloc filter.
+    // other's selection. Observed from behaviour: two filters, "People" and "Affinity Bloc", that are
+    // the same axis — the People filter always WAS the affinity-bloc filter.
     //
     // THE RULE THIS RESTORES: one axis = one filterable facet key. The CODE won as canonical
     // because every other People tier (cluster / people_group) already keys by code, and
@@ -219,14 +218,14 @@ export default {
   // `tree:'affinity'` tells the rail to resolve the People codes to human names via the shared
   // useAffinityBlockLegendData composable (single source of truth with the map's semantic tree).
   // ── THE FOUR STACKED TREES (card BUILD-STACKED-TREE-LEGEND) ──
-  // Driver: "if you had a team of people trying to fill the globe with the gospel… they need to be
-  // able to search by people, place, language, religion, and find who has the gospel resources and
-  // who doesn't." The legend is how a researcher navigates those FOUR axes, in THIS order.
+  // The purpose: a team working to bring the gospel to every place needs to search by people, place,
+  // language and religion, and to find who has gospel resources and who does not. The legend is how a
+  // researcher navigates those FOUR axes, in THIS order.
   //
   // `axis` names which cap-3 colour strategy paints the tree (see useTreeLegendColors.js) — the
   // legend reads the map's palettes, so the two can never drift. Status is NOT one of the four
   // axes; it stays below them as a flat utility list (`axis:null` = uncoloured), so the four
-  // trees read as the stack the Driver asked for rather than as five peers.
+  // trees read as the stack that was asked for rather than as five peers.
   facetRail: [
     { id: 'people', get title() { return tStatic('dashboard.people') || 'People' }, axis: 'people', drill: ['affinity_bloc', 'cluster', 'people_group'], tree: 'affinity', topN: [30, 40, 60] },
     { id: 'place', get title() { return tStatic('dashboard.place') || 'Place' }, axis: 'place', drill: ['wagf_region', 'wagf_block', 'country_code'] },
@@ -234,8 +233,8 @@ export default {
     // Religion was the odd flat axis; it is now the 2-tier tree the data always supported
     // (family → religion). See the `religion_family` facet above.
     { id: 'religion', get title() { return tStatic('dashboard.religion') || 'Religion' }, axis: 'religion', drill: ['religion_family', 'religion'], topN: [12, 24] },
-    // ★ THE 'Status' SECTION IS REMOVED ON DRIVER INSTRUCTION 2026-09-23 ("dont add the engable
-    // filter or status filter"). It rendered engagement_status as a rail section — 2 rows, Unengaged
+    // ★ THE 'Status' SECTION IS REMOVED, per the 2026-09-23 instruction not to add the engagement
+    // or status filter. It rendered engagement_status as a rail section — 2 rows, Unengaged
     // 2,081 / Engaged 27 — which is a status filter by another name.
     //
     // NOT DELETED, only unlisted: `engagement_status` survives as a facet accessor, a table column
@@ -315,8 +314,8 @@ export default {
   // One line, and it survives the MapLibre swap unchanged.
   map: {
     // ── PROVIDER: MapLibre ───────────────────────────────────────────────────────────────────
-    // DRIVER 2026-09-22: "the map on the big picture to be MapLibre"; and 2026-09-23 on the
-    // terms — "keep every Mapbox component working so we don't break Mapbox compatibility — we
+    // Asked 2026-09-22: the map on the big picture is to be MapLibre; and 2026-09-23 on the
+    // terms — keep every Mapbox component working so Mapbox compatibility is not broken — we
     // just want interoperability, so we can come back to Mapbox if this breaks things."
     //
     // ★ THIS ONE KEY IS THE WHOLE SWAP, AND THAT IS THE POINT. DashboardMapPanel reads it
@@ -329,18 +328,17 @@ export default {
     //
     // WHY IT COSTS NOTHING TO STAY DUAL: MapLibre ignores accessToken rather than rejecting it,
     // so the Mapbox credential stays threaded through untouched while MapLibre is live.
-    // ★ MAPBOX FOR THIS MAP, BY THE DRIVER'S OWN DESCRIPTION (2026-09-23). Every wording of the
-    // ask pointed at one thing: "like the Mapbox map", "a mirror or clone of Mapbox's globe space
-    // style with the stars", "water like Mapbox style". Mapbox Standard's globe NATIVELY renders
+    // ★ MAPBOX FOR THIS MAP. The target look is Mapbox's own: its globe, the space style with the
+    // stars, and its water. Mapbox Standard's globe NATIVELY renders
     // the starfield, the atmosphere and that water -- no clone can beat the original, and we hold
-    // a working baked token (the Driver's explicit ruling accepted it as public). MapLibre support
+    // a working baked token (accepted as a public token). MapLibre support
     // stays fully built and reversible: flip this one key back and the keyless VersaTiles path
     // returns. Interoperability was the requirement; it is intact.
     provider: 'mapbox',
 
     // 'galaxy' = "deep-space ground, blue oceans" (library/styles/registry.js).
-    // DRIVER 2026-09-23: "the map style needs to have the BLUE WATER with like the BLACK GALAXY
-    // background". It resolves on BOTH engines — MapLibre's keyless OpenFreeMap dark and Mapbox
+    // Asked 2026-09-23: the map style needs BLUE WATER with a BLACK GALAXY
+    // background. It resolves on BOTH engines — MapLibre's keyless OpenFreeMap dark and Mapbox
     // dark-v11 — each patched to the same blue water at style.load, so flipping `provider` above
     // does not change how the map LOOKS, only which engine draws it. That is what makes the
     // reversibility test above meaningful rather than cosmetic.
@@ -357,8 +355,8 @@ export default {
     // dataset of 200 groups, a 150 cutoff puts EVERY country in the bottom bin and the map renders
     // uniformly pale: not an error, not a crash, just a dashboard that says nothing. That failure
     // is invisible to every existing gate, because the code is perfectly correct — the ASSUMPTION
-    // is what moved. Driver: "that filter of 150 ... should be a variable. It shouldn't be a
-    // static ... I need to be able to reuse this dashboard for other maps, other data sets."
+    // is what moved. The cutoff of 150 must be a variable, not a static, so this dashboard can be
+    // reused for other maps and other data sets.
     //
     // So the thresholds are declared HERE, in the dashboard's own config, where every other
     // per-dataset fact already lives (facets, columns, kpis). Re-pointing this dashboard at a new
@@ -375,7 +373,7 @@ export default {
     //                        'quantile' DERIVES the edges from the data actually loaded (see
     //                        heartbeatQuantile). Opt-in: it changes the ramp per dataset, which is
     //                        the right behaviour for an unknown dataset and the WRONG behaviour
-    //                        for this one, where 150 is a deliberate, Driver-chosen number.
+    //                        for this one, where 150 is a deliberate, product-chosen number.
     //   heartbeatQuantile  — with mode 'quantile', the share of non-empty countries ABOVE the
     //                        heartbeat edge. 0.1 = "the top 10% of countries are heartbeat zones".
     //
@@ -390,25 +388,21 @@ export default {
     // ── COLOUR RAMP — a NAME, resolved in DashboardMapPanel.vue's RAMP_PRESETS ──────────────
     // Same pattern as `mapStyle` above: a name in config, not a URL/hex-array a host has to
     // construct. 'heartbeat-red' is the shipped default (unchanged if this key is omitted).
-    // 'greyscale' is the Driver's requested swappable alternative ("grey scale as a backdrop
-    // from grey to black, just in case I need to swap from red to black scale") — set this to
+    // 'greyscale' is the swappable alternative, a grey-to-black backdrop — set this to
     // 'greyscale' to swap the whole choropleth, legend included, with no other edit required.
-    // ★ SWITCHED TO GREYSCALE 2026-09-23 on the Driver's ruling: "instead of the red, we need to
-    // use the grey scale from grey to black". He had asked for this preset to exist earlier as a
-    // swappable alternative; this is him taking the swap. One key, and the choropleth AND its
-    // legend both move — which is why it was built as config rather than scattered hex.
+    // ★ THE SHIPPED VALUE IS GREYSCALE: the grey-to-black ramp replaced the red one. One key, and the
+    // choropleth AND its legend both move — which is why it was built as config rather than scattered hex.
     // The ramp is ['#e8e8e8','#a9a9a9','#6f6f6f','#3a3a3a','#060606'] (DashboardMapPanel.vue:467),
-    // measured worst-case pin visibility 1.96 vs red's 1.84 — see
-    // _qa-cycle/01-ideation-research/RESEARCH-map-colour-system-2026-09-23.md, which also notes
-    // the real fix for pin contrast is the lightness-conditional STROKE, independent of the ramp.
+    // measured worst-case pin visibility 1.96 vs red's 1.84. THE DURABLE FINDING: the real fix for
+    // pin contrast is the lightness-conditional STROKE, which holds whichever ramp is selected —
+    // swapping the ramp alone will not rescue a pin that fails against it.
     colorRamp: 'greyscale',
   },
 
   // ── charts ── (DashboardChartsRail)
   charts: [
-    // ★ HIGH-LEVEL RELIGIONS ONLY (Driver 2026-09-23: "it should not mention Ethnoreligion and
-    // Islam multiple times, just once -- just the high-level religions, not broken down into
-    // smaller categories"). The rollup ALREADY EXISTED as the religion_family facet ("Islam",
+    // ★ HIGH-LEVEL RELIGIONS ONLY: each religion appears once, at the high level, not broken down into
+    // smaller categories (Islam once, not "Islam - Sunni" and "Islam - Folk"). The rollup ALREADY EXISTED as the religion_family facet ("Islam",
     // "Hinduism", "Ethnoreligion" -- one row each); the chart was simply pointed at the
     // fine-grained `religion` facet ("Islam - Sunni", "Islam - Folk", ...). One word moves it.
     // religion_family is dashboardOnly by design (a derived value no row field carries), so a
@@ -446,14 +440,14 @@ export default {
     // `prayer_level` listed FIRST so the config owns the order rather than the adapter forcing
     // it. DashboardResearchFilters de-duplicates on that key, so naming it here cannot render
     // it twice — and if the adapter's forcing is ever removed, the order still holds.
-    // ★ EIGHT dropdowns. The Driver named them: "people, region, block, country, language, religion,
-    // prayer, engagement" — and separately asked for prayer FIRST. engagement_status was the one
+    // ★ EIGHT dropdowns: people, region, bloc, country, language, religion, prayer and engagement,
+    // with prayer FIRST. engagement_status was the one
     // missing: it was already fully built (label + getter at :112, the Status tree section at :201,
     // the Engagement table column at :256) and simply never registered here, so the rail rendered
     // SEVEN. Measured live before this change: 7 filter buttons (Prayer, People, Region, Bloc,
     // Country, Language, Religion).
     //
-    // ★ CORRECTED 2026-09-23 — this note used to say "GSEC is the underlying field the Driver named
+    // ★ CORRECTED 2026-09-23 — this note used to say "GSEC is the underlying field the spec named
     // for 'the phases of engagement' — engagement_status is the label derived from it." IT IS NOT
     // DERIVED FROM IT, and believing so is why the phases stayed unbuilt: the dropdown looked like it
     // already covered the ask. Measured on 2,108 live rows, the two fields DISAGREE — 12 groups are
@@ -463,10 +457,10 @@ export default {
     // The phases now have their own facet (`gospel_access`, reading imb_gsec) plus a Gospel Access
     // tree section, and they reach the grid through FACET_TO_PROP.
     //
-    // NOT a ninth dropdown, and the reason is the Driver's list, NOT layout. Measured at both 1440
+    // NOT a ninth dropdown, and the reason is the list, NOT layout. Measured at both 1440
     // and 1280: dropdowns are 168px on a 178px pitch, seven fit the first row (right edge 1250) and
     // the eighth wraps, with NO horizontal scrollbar at either width. A ninth would simply join the
-    // second row — so the layout would tolerate it. The list stays at the eight the Driver named;
+    // second row — so the layout would tolerate it. The list stays at the eight the spec named;
     // the ladder is reachable through the tree rail, which is where a five-rung ordinal reads better
     // than a dropdown anyway.
     //
@@ -477,9 +471,9 @@ export default {
     // viewport at either width, so the promise holds today.
     // Verify after any change to this list: the filter row must not produce a horizontal scrollbar at
     // 1440 or 1280.
-    // ★ ENGAGEMENT / STATUS REMOVED ON DRIVER INSTRUCTION 2026-09-23: "dont add the engable filter or
-    // status filter". `engagement_status` was the eighth dropdown; it is gone from this row. The
-    // earlier note above about "the Driver named eight ... engagement was the one missing" describes a
+    // ★ ENGAGEMENT / STATUS REMOVED, per the 2026-09-23 instruction not to add the engagement or
+    // status filter. `engagement_status` was the eighth dropdown; it is gone from this row. The
+    // earlier note above about "the spec named eight ... engagement was the one missing" describes a
     // SUPERSEDED instruction — kept because it records why the eighth was added, not because it is
     // still the ask. SEVEN dropdowns now, which all fit the first row (seven fit, ending at x=1250 on
     // the measured 178px pitch), so the no-horizontal-scrollbar promise gets easier, not harder.

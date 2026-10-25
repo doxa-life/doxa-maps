@@ -26,7 +26,7 @@
  *
  * Usage: node internal/build-packet-fixtures.mjs
  */
-import { existsSync, renameSync, readdirSync } from 'node:fs'
+import { existsSync, renameSync, readdirSync, mkdirSync, rmSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -38,6 +38,11 @@ const OUT = resolve(REPO, 'library/scripts/posters/out/packets')
 // Every fixture is built against this zone: the records come from the fixture, and the zone only
 // supplies page 1's map. Keeping it constant means a shape difference is the ONLY variable.
 const ZONE = 'asia-china-tibet-autonomous-region'
+// ★ BUILT IN THEIR OWN DIRECTORY. packet.mjs writes <zone>.html into its output dir, and every fixture is built
+// against the REAL Tibet zone; built straight into out/packets, each run overwrote the real Tibet packet and the
+// rename then removed it, so check:packets-all reported a generated zone as missing. PACKET_OUT sends each build
+// to a private directory; only the renamed fixture-<name>.html reaches out/packets.
+const BUILD = join(OUT, '.fixture-build')
 
 if (!existsSync(FIXTURES)) {
   console.log(`PACKET-FIXTURES: SKIP — no fixtures directory at ${FIXTURES}`)
@@ -54,16 +59,21 @@ console.log(`PACKET-FIXTURES: building ${fixtures.length} fixture(s)`)
 const built = []
 const failed = []
 
+mkdirSync(OUT, { recursive: true })
+mkdirSync(BUILD, { recursive: true })
 for (const fx of fixtures) {
   const name = fx.replace(/^records-/, '').replace(/\.json$/, '')
   const res = spawnSync(process.execPath, [join(REPO, 'library/scripts/posters/packet.mjs')], {
     cwd: REPO,
     encoding: 'utf8',
-    env: { ...process.env, PACKET_RECORDS: join(FIXTURES, fx), ONLY: ZONE },
+    env: { ...process.env, PACKET_RECORDS: join(FIXTURES, fx), ONLY: ZONE, PACKET_OUT: BUILD },
   })
-  const produced = join(OUT, `${ZONE}.html`)
+  const produced = join(BUILD, `${ZONE}.html`)
   if (res.status !== 0 || !existsSync(produced)) {
-    failed.push(`${fx}: ${(res.stderr || res.stdout || '').trim().split('\n').slice(-1)[0] || 'no output'}`)
+    // The ERROR line, not the last line: Node ends a crash with its version banner, so the last line
+    // of a TDZ ReferenceError read "Node.js v20.20.2" and named nothing.
+    const lines = (res.stderr || res.stdout || '').trim().split('\n')
+    failed.push(`${fx}: ${lines.find((l) => /\b\w*Error\b/.test(l)) || lines.slice(-1)[0] || 'no output'}`)
     console.log(`  ✗ ${fx}`)
     continue
   }
@@ -73,6 +83,8 @@ for (const fx of fixtures) {
   built.push(`fixture-${name}.html`)
   console.log(`  ✓ ${fx} -> fixture-${name}.html`)
 }
+
+try { rmSync(BUILD, { recursive: true, force: true }) } catch { /* best effort */ }
 
 if (failed.length) {
   console.error(`\nPACKET-FIXTURES: FAIL — ${failed.length} fixture(s) did not build`)

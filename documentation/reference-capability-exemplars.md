@@ -13,7 +13,7 @@
 > bundle `parameterized` (cap-2) no matter how light it looks, and a `meta.json` `type`
 > declares tiers 3/4/5.
 
-Generated from 24 bundle(s).
+Generated from 30 bundle(s).
 
 ### One canonical exemplar per tier (generated — quote these)
 
@@ -37,11 +37,15 @@ Generated from 24 bundle(s).
 | Bundle | Profile | Machine key |
 |---|---|---|
 | `all-people-groups` | `all-people-groups` | `single` |
+| `bible-posters` | `bible-posters` | `single` |
+| `bless-india-posters` | `bless-india-posters` | `single` |
 | `cities-internet` | `connectivity-list` | `single` |
 | `cities-internet` | `connectivity-map` | `single` |
 | `cities-internet` | `data-tables` | `single` |
+| `country-map` | `country-map` | `single` |
 | `country-posters` | `countries-map` | `single` |
 | `country-posters` | `country-poster-wall` | `single` |
+| `country-posters` | `poster-section` | `single` |
 | `golden-path-check` | `golden-path-check` | `single` |
 | `gospel-internet` | `board` | `single` |
 | `gospel-resources` | `charts` | `single` |
@@ -50,6 +54,8 @@ Generated from 24 bundle(s).
 | `gospel-resources` | `resources-map` | `single` |
 | `my-upg-100-list` | `poster-wall` | `single` |
 | `my-upg-100-list` | `upg-100-list` | `single` |
+| `poster-design` | `poster-sizes` | `single` |
+| `poster-design` | `poster-styles` | `single` |
 | `prayer-walk-planner` | `prayer-walk-planner` | `single` |
 | `regions-dashboard` | `region-dashboards` | `single` |
 | `regions-dashboard` | `regions-list` | `single` |
@@ -62,6 +68,7 @@ Generated from 24 bundle(s).
 | `doxa-simple-map` | `doxa-simple-map` | `parameterized` |
 | `doxa-vision-card` | `doxa-vision-card` | `parameterized` |
 | `people-groups-grid` | `people-groups-grid` | `parameterized` |
+| `poster-sections` | `poster-sections` | `parameterized` |
 
 ## Capability 3 — multi-view-element (monolithic)
 
@@ -82,6 +89,7 @@ Generated from 24 bundle(s).
 | `dashboard-plus-grid` | `dashboard-plus-grid` | `nested-elements-mfe` |
 | `gospel-resources` | `gospel-dashboard` | `nested-elements-mfe` |
 | `my-upg-100-list` | `upg-100-mfe` | `nested-elements-mfe` |
+| `poster-design` | `poster-design-mfe` | `nested-elements-mfe` |
 | `regions-dashboard` | `regions-mfe` | `nested-elements-mfe` |
 | `research-map-plus-grid` | `research-map-plus-grid` | `nested-elements-mfe` |
 | `stack-demo` | `stack-demo` | `nested-elements-mfe` |
@@ -92,4 +100,5 @@ Generated from 24 bundle(s).
 |---|---|---|
 | `doxa-maps-spa` | `doxa-maps-spa` | `nested-mfe-spa` |
 | `plugin-studio` | `plugin-studio` | `nested-mfe-spa` |
+| `posterverse` | `posterverse` | `nested-mfe-spa` |
 

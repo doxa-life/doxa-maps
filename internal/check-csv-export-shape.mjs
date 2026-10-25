@@ -2,8 +2,8 @@
 /**
  * check-csv-export-shape.mjs — the exported CSV must OPEN correctly in a spreadsheet.
  *
- * THE DEFECT THIS CATCHES (Driver-reported 2026-09-22: "this is me exporting the CSV directly without
- * making any edits... it does look a little bit glitched out"). The generator emitted a one-column
+ * THE DEFECT THIS CATCHES (reported 2026-09-22: a CSV exported directly, with no edits, looked a
+ * little glitched out). The generator emitted a one-column
  * provenance comment ABOVE the header:
  *     line 0 ... 1 column   "# Research Dashboard export — scope: ..."
  *     line 1 ... N columns  slug,name,religion,...
@@ -13,11 +13,11 @@
  *
  * ★ WHAT WAS *NOT* WRONG, AND MUST NOT BE "FIXED" ON SUSPICION — three plausible theories, all
  * refuted by measurement before a line was changed:
- *   - "it is tab-separated" — FALSE. The generator joins with commas; the tabs in the Driver's paste
- *     were his terminal rendering, not the bytes.
+ *   - "it is tab-separated" — FALSE. The generator joins with commas; the tabs in the pasted report
+ *     were a terminal's rendering, not the bytes.
  *   - "quoting is broken" — FALSE. esc() is genuinely RFC-4180: it quotes when , " CR or LF appear and
  *     doubles internal quotes. Embedded commas, quotes AND newlines survive a strict parser round trip.
- *   - "CSV injection" — already handled; a leading = + - @ is prefixed with a single quote.
+ *   - "CSV injection" — handled; a leading = + - @ TAB or CR is prefixed with a single quote (asserted in 5).
  * Only the POSITION was wrong. Chasing the other three would have produced churn and no fix.
  *
  * ★ WHY NO EXISTING GATE SAW IT. 46 gate-ish scripts exist and not one parses the export. The bug is
@@ -89,8 +89,10 @@ const rows = [
   { slug: 'kluet', name: 'Kluet', religion: 'Islam - Sunni',
     imb_people_description: 'Line one\nLine two, with a comma' },
   { slug: 'inj', name: '=SUM(A1)', religion: 'Islam - Sunni', imb_people_description: 'injection probe' },
+  { slug: 'inj-tab', name: '\t=cmd', religion: 'Islam - Sunni', imb_people_description: 'injection probe, a leading TAB' },
+  { slug: 'inj-cr', name: '\r=cmd', religion: 'Islam - Sunni', imb_people_description: 'injection probe, a leading CR' },
 ]
-const provenance = '# Research Dashboard export — scope: filter result; filters: religion=Islam - Sunni; rows: 3'
+const provenance = '# Research Dashboard export — scope: filter result; filters: religion=Islam - Sunni; rows: 5'
 const body = [cols.map(esc).join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))]
 const csv = (provenanceFirst ? [provenance, ...body] : [...body, provenance]).join('\r\n')
 
@@ -128,7 +130,7 @@ const first = parsed[0] || []
 if (first.length === 1 && String(first[0]).startsWith('#')) {
   fail('line 0 is a one-column "#" comment, so a spreadsheet will use it AS THE HEADER.',
     '  The scope sentence becomes the column names and the real header becomes data row 1 — which is\n' +
-    '  what the Driver saw as a "glitched" export. Put the provenance line LAST; a trailing one-column\n' +
+    '  what read as a "glitched" export. Put the provenance line LAST; a trailing one-column\n' +
     '  row is harmless, a leading one destroys the column mapping for the whole sheet.')
 }
 if (first[0] !== cols[0]) {
@@ -162,6 +164,18 @@ if (!(last.length === 1 && String(last[0]).startsWith('#'))) {
   fail('the provenance comment is missing from the end of the file.',
     '  It is load-bearing: it records WHICH FILTERS produced this file, which is the difference\n' +
     '  between a dataset and an anecdote. Keep it — just keep it last.')
+}
+
+// 5 — every formula trigger comes back NEUTRALISED (a leading single quote), so a spreadsheet shows it as text.
+// The probes cover = and OWASP's other two leading triggers, TAB and CR, which a spreadsheet can strip before
+// reading the = behind them. Checked by SLUG, so the rows above may be reordered.
+const bySlug = new Map(dataRows.map((r) => [r[0], r]))
+for (const [slug, raw] of [['inj', '=SUM(A1)'], ['inj-tab', '\t=cmd'], ['inj-cr', '\r=cmd']]) {
+  const got = bySlug.get(slug) && bySlug.get(slug)[1]
+  if (got !== "'" + raw) {
+    fail(`the formula probe ${JSON.stringify(raw)} came back as ${JSON.stringify(got)}, not neutralised with a leading quote.`,
+      '  esc() must prefix a single quote to a value starting with = + - @ TAB or CR (CSV injection).')
+  }
 }
 
 // Reaching here under --self-test means the gate WAVED THROUGH a known-broken export.

@@ -37,7 +37,7 @@
  * @returns {(key: string, params?: object) => string}
  */
 import { useI18n } from 'vue-i18n'
-import { tStatic } from '@map/i18n/index.js'
+import { tStatic, getRuntimeLocale, cldrChoiceIndex } from '@map/i18n/index.js'
 
 /** `{n}` interpolation. Exported so a gate can test it without a Vue setup scope. */
 export function fillParams(str, params) {
@@ -47,6 +47,23 @@ export function fillParams(str, params) {
   // leaves `{count}` visible. A visible placeholder is a bug you can see and fix; "null" reads as
   // content. Found by comparing against charts.vue before migrating it, not after.
   return String(str).replace(/\{(\w+)\}/g, (m, k) => (params[k] != null ? String(params[k]) : m))
+}
+
+/**
+ * Pick the form of a pipe-separated plural string for a count, the way an installed vue-i18n would:
+ * English by vue-i18n's OWN default rule (English sits outside the CLDR map), every other locale by the
+ * SAME CLDR selection library/i18n/index.js installs (cldrChoiceIndex: ru 4 forms, ar 6, zh 1). So a
+ * host without i18n picks the same form a host with it does, in every language — regions caught that
+ * the English rule alone would print the wrong Russian and Arabic forms there. No pipe: returned whole.
+ */
+export function pickPluralForm(str, n, locale = getRuntimeLocale()) {
+  const forms = String(str).split(/\s*\|\s*/)
+  if (forms.length < 2 || typeof n !== 'number') return String(str)
+  const lc = String(locale || 'en').split('-')[0].toLowerCase()
+  if (lc !== 'en') return forms[cldrChoiceIndex(n, forms.length, lc)]
+  const c = Math.abs(n)
+  const i = forms.length === 2 ? (c ? (c > 1 ? 1 : 0) : 1) : (c ? Math.min(c, 2) : 0)
+  return forms[Math.min(i, forms.length - 1)]
 }
 
 /** Prefix a bare key with its area, so callers may pass a bare key or an already-qualified one. */
@@ -68,16 +85,19 @@ export function qualify(namespace, key) {
  * @param {(key:string, params?:object)=>string} [opts.fallback]  used instead of tStatic when the host
  *        has no i18n, or when its catalogue lacks the key. Omit it to get the catalogue (the default).
  */
+// ★ THE THIRD ARGUMENT IS A PLURAL COUNT, and it is forwarded to vue-i18n, whose pluralRules map
+// (library/i18n/index.js) picks each locale's CLDR form: ru 4, ar 6, zh 1. Without it a pipe string
+// renders one form for every number. Omitted, the call is exactly the two-argument call it always was.
 export function useOptionalT(namespace, opts = {}) {
   const viaFallback = typeof opts.fallback === 'function'
-    ? (key, params) => fillParams(opts.fallback(qualify(namespace, key), params) ?? key, params)
-    : (key, params) => fillParams(tStatic(qualify(namespace, key)) ?? key, params)
+    ? (key, params, plural) => fillParams(pickPluralForm(opts.fallback(qualify(namespace, key), params) ?? key, plural), params)
+    : (key, params, plural) => fillParams(pickPluralForm(tStatic(qualify(namespace, key)) ?? key, plural), params)
   try {
     const i18n = useI18n()
-    return (key, params) => {
+    return (key, params, plural) => {
       const q = qualify(namespace, key)
-      const v = i18n.t(q, params || {})
-      return v === q ? viaFallback(key, params) : v
+      const v = typeof plural === 'number' ? i18n.t(q, params || {}, plural) : i18n.t(q, params || {})
+      return v === q ? viaFallback(key, params, plural) : v
     }
   } catch (_) {
     // No i18n on this host. Not an error: seven bundles deliberately install none.

@@ -84,7 +84,9 @@
     "asia": "亚洲",
     "europe": "欧洲",
     "latin_america_&_caribbean": "拉丁美洲",
-    "oceania": "大洋洲"
+    "oceania": "大洋洲",
+    "middle_east": "中东",
+    "north_america_&_non-spanish_caribbean": "北美及非西班牙语加勒比地区"
   },
   "sort_by_column_hint": "按{column}排序此表 — Shift+单击可添加第二列。排序只影响表格；卡片保持各自的顺序。",
   "fs_exit_hint": "退出全屏（Esc）— 返回七行视图",
@@ -92,5 +94,19 @@
   "fs_exit": "退出全屏",
   "fs_open": "全屏打开表格",
   "export_selected_hint": "导出全部字段 — 已选民族：{n}",
-  "export_all_hint": "导出全部字段 — 民族：{n}"
+  "export_all_hint": "导出全部字段 — 民族：{n}",
+  "map_init_failed": "地图无法启动。请检查访问令牌与地图容器。",
+  "show_filters": "显示筛选",
+  "hide_filters": "隐藏筛选 —— 放大地图",
+  "show_charts": "显示图表",
+  "hide_charts": "隐藏图表 —— 放大地图",
+  "export_copied": "已复制到剪贴板",
+  "export_done": "已导出",
+  "export_ready": "已就绪",
+  "export_toast": "✓ {rows} 行 × {fields} 字段 {how}",
+  "export_failed": "✕ 导出失败",
+  "pray_for_group": "为这个民族祷告",
+  "more_information": "更多信息",
+  "title": "研究面板",
+  "gospel_pending": "尚未就绪：未得之民的数字、数据来源密钥与界面形式仍在确定中。"
 }

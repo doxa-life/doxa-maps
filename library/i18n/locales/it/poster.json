@@ -25,5 +25,22 @@
   "region_southeast_asia_oceania": "Sud-est asiatico + Oceania",
   "region_china_mongolia": "Cina + Mongolia",
   "region_india": "India",
-  "region_other": "Altro"
+  "region_other": "Altro",
+  "region_americas": "Americhe",
+  "region_europe": "Europa",
+  "region_deaf": "Sordi",
+  "zone_deaf": "Gruppi di persone sorde",
+  "rendering": "Generazione…",
+  "render_format": "Genera {format}",
+  "progress_elapsed": "{time} trascorsi",
+  "progress_tiles": "riquadro {n} di {total}",
+  "hint_up_to_minute": "Questo formato può richiedere fino a un minuto.",
+  "hint_few_minutes": "I poster grandi possono richiedere alcuni minuti.",
+  "error_too_large": "Questo poster è troppo grande per la memoria di questo dispositivo. Scegli un formato più piccolo o una risoluzione più bassa.",
+  "error_failed": "Impossibile generare il poster. Riprova o scegli un formato più piccolo.",
+  "optional": "(facoltativo)",
+  "phoneLimit": "Sul telefono i formati più grandi sono disattivati: un telefono non può disegnare un poster così grande. Per quelli usa un computer.",
+  "phoneLimitAll": "Serve un computer desktop o portatile.",
+  "glue_here": "incollare qui",
+  "sectionNone": "Nessun poster per {scope}."
 }

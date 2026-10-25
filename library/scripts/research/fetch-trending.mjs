@@ -3,8 +3,8 @@
 //   node fetch-trending.mjs  ->  out/trending-by-country.json
 //
 // ═══ WHY THIS IS IN A GOSPEL-ACCESS DATASET ═════════════════════════════════
-// Brief: "what are trending websites in each city and what are trending topics
-// in each city — so we can reach people where they already are online."
+// The trending websites and topics of each city show where people already are
+// online, so they can be reached there.
 //
 // The chain the apps show: a people group has a LANGUAGE, that language may have
 // a RESOURCE, the people may have INTERNET, they are on SOME platform — and they
@@ -59,11 +59,11 @@ const DATE = process.env.TREND_DATE || '2026/07/15';
 // Special:/Search pages are among the most-visited articles in almost every country,
 // so leaving them in makes the top "topic" meaningless.
 //
-// LISTING SPELLINGS DOES NOT WORK, and I tried it twice. Each pass I enumerated the
-// main-page and namespace names I could think of, and each pass the data produced
-// ones I had not: "Wikidata:Main Page", "עמוד ראשי", then "Especial:Mudanças
+// LISTING SPELLINGS DOES NOT WORK; it was tried twice. Each pass enumerated the
+// main-page and namespace names known at the time, and each pass the data produced
+// new ones: "Wikidata:Main Page", "עמוד ראשי", then "Especial:Mudanças
 // recentes", "Hlavní strana", "الصفحة الرئيسة" (an Arabic variant differing from the
-// one I had already listed), "Специални:Търсене", "Musamman:RecentChanges". Every
+// one already listed), "Специални:Търсене", "Musamman:RecentChanges". Every
 // wiki localises BOTH the namespace prefix and the page title, so a spelling list is
 // unbounded and will always trail the data.
 //

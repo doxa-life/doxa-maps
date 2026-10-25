@@ -122,9 +122,9 @@ function fetchCountryPolygons() {
  * Returns { sourceId, dataReady: Promise<{ fc, sourceId }> }.
  * For blocking callers, await the returned promise directly.
  */
-// Theme-aware paint presets. Light mode renders polygons fully invisible
-// (per user spec 2026-05-02: "I prefer on light mode not to even show the
-// Polygon blue borders"). Dark mode keeps the dark-gray fill + blue line.
+// Theme-aware paint presets. Light mode renders polygons fully invisible: on a light basemap the
+// polygons' blue borders only add clutter, so neither fill nor line is drawn. Dark mode keeps the
+// dark-gray fill + blue line.
 export const POLYGON_PAINT = {
   dark:  { fillColor: '#1f2937',       fillOpacity: 0.35, lineColor: '#3b82f6',     lineOpacity: 0.5 },
   light: { fillColor: 'rgba(0,0,0,0)', fillOpacity: 0,    lineColor: 'rgba(0,0,0,0)', lineOpacity: 0 },
@@ -224,7 +224,7 @@ export function setCountryPolygonTheme(map, theme, sourceId = 'pplr-countries') 
  * touch + crowded zooms. We instead listen on the whole map and use
  * queryRenderedFeatures with a small bbox around the click point so the
  * effective hit-target is `tolerance × 2` pixels wide. No visual change to
- * the pin itself (per user 2026-05-02: don't restyle base pins).
+ * the pin itself (base pins are deliberately not restyled).
  *
  * Cursor change still uses the direct mouseenter/mouseleave on the layer so
  * the cursor only goes pointer when the user is actually over a pin —
@@ -247,9 +247,9 @@ export function bindFuzzyPinClick(map, layerId, handler, { tolerance = 8 } = {})
 
 /**
  * Selected-pin indicator: a Mapbox marker with an SVG pin icon hovering over
- * the clicked point. Mirrors the pattern DOXA's research-mfe uses ("the go
- * indicator that shows which pin you actually selected" — user feedback
- * 2026-05-02). Returns a controller object the profile holds onto.
+ * the clicked point. Mirrors the pattern DOXA's research-mfe uses (a go
+ * indicator that shows which pin is actually selected).
+ * Returns a controller object the profile holds onto.
  *
  * Usage:
  *   const indicator = makePinIndicator()
@@ -441,8 +441,11 @@ export class FullscreenToggleControl {
     this._btn = document.createElement('button')
     this._btn.type = 'button'
     this._btn.className = 'mapboxgl-ctrl-fullscreen'
-    this._btn.setAttribute('aria-label', 'Toggle fullscreen')
-    this._btn.title = 'Toggle fullscreen'
+    // The shared, translated name (buttons.toggleFullscreen), in the page's language when the map is
+    // built. a browser check saw the English "Toggle fullscreen" in ar and zh on every PPLR map view.
+    const label = tStatic('buttons.toggleFullscreen') || 'Toggle fullscreen'
+    this._btn.setAttribute('aria-label', label)
+    this._btn.title = label
     this._btn.innerHTML = '<span class="mapboxgl-ctrl-icon" aria-hidden="true"></span>'
     this._btn.addEventListener('click', () => this._toggle())
     this._sync = () => {

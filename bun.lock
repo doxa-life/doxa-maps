@@ -15,9 +15,9 @@
         "world-atlas": "^2.0.2",
       },
       "devDependencies": {
-        "@capacitor/android": "7",
-        "@capacitor/cli": "7",
-        "@capacitor/core": "7",
+        "@capacitor/android": "^7.6.9",
+        "@capacitor/cli": "^7.6.9",
+        "@capacitor/core": "^7.6.9",
         "@tauri-apps/cli": "^2.11.5",
         "@vitejs/plugin-vue": "^5.0.4",
         "playwright": "1.61.1",

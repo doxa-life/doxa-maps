@@ -3,6 +3,7 @@
 // Vue 3 Composition API - ES Module with NPM packages
 
 // Import Vue functions from NPM package
+import { retryFetch } from './retryFetch.js'
 import { ref, toRaw } from 'vue';
 import { resolveAssetsBase } from '../utils/embedBase.js'
 import { emissivePaint } from './useMapProvider.js';
@@ -434,7 +435,7 @@ export function useMapLayers(options = {}) {
             // EMPTY first so the addLayer below stays synchronous and keeps its z-order slot
             // (regions → shadow → pins → hitbox); setData once the fetch lands.
             map.addSource('regions', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-            fetch(`${resolveAssetsBase(null)}/boundaries/world-adm0-web.geojson`)
+            retryFetch(`${resolveAssetsBase(null)}/boundaries/world-adm0-web.geojson`)
                 .then((r) => r.json())
                 .then((gj) => {
                     // Tileset field is iso_3166_1_alpha_3; the geojson's is iso3. Normalise ONCE

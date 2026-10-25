@@ -1,7 +1,7 @@
 /**
  * treePoster.js — the language tree as a PRINTABLE POSTER: one vector SVG, 36 x 36 inches by default,
  * every family, branch, language and dialect in its colour, and every label placed so that NO TWO
- * LABELS OVERLAP (Driver, 2026-09-27: a 3 ft x 3 ft poster "that had no overlaps").
+ * LABELS OVERLAP (2026-09-27: a 3 ft x 3 ft poster with no overlaps).
  *
  * VECTOR, NOT PIXELS: an SVG prints sharp at any size, so a 3-foot sheet needs no giant canvas (a WebGL
  * or 2D canvas that large exceeds what many browsers allow). The map engine's own label placement is

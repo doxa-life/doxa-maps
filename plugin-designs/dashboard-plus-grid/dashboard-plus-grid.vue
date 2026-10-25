@@ -19,6 +19,8 @@ import { absoluteEmbedUrl } from '@map/utils/embedBase.js'
 import { useSharedMapToken, publishMapToken } from '@map/composables/useSharedMapToken.js'
 import { useHostTokenUrl } from '@map/composables/useHostTokenUrl.js'
 import StackLayout from '@map/layouts/StackLayout.vue'
+import LargerScreenNotice from '@map/components/LargerScreenNotice.vue'
+import { useScreenGate } from '@map/composables/useScreenGate.js'
 import ResearchDashboard from '../research-dashboard/research-dashboard.vue'
 import PeopleGroupsGrid from '../people-groups-grid/people-groups-grid.vue'
 
@@ -33,7 +35,7 @@ defineOptions({ inheritAttrs: false })
 
 
 // ── THE DASHBOARD → GRID LINK ────────────────────────────────────────────────────────────
-// THE BUG THIS FIXES (Driver-reported; measured 2026-09-22). Selecting anything in the
+// THE BUG THIS FIXES (reported from use; measured 2026-09-22). Selecting anything in the
 // dashboard above did not filter the grid below. Measured: the dashboard reacted every time
 // (rows 22→21 on search, 21→6 on the "Ethnoreligion" facet, 6→12 on a row select) while the
 // grid stayed at a byte-identical 24 cards. Row COUNT alone would have been an ambiguous
@@ -62,7 +64,7 @@ defineOptions({ inheritAttrs: false })
 // would compare "Hinduism" against codes and filter the grid to ZERO rows — a broken screen
 // that looks like a data bug. A real religion_family filter needs a matching prop on the grid.
 //
-// ★ COUNTRY WAS THE FIFTH TO EARN ITS MAPPING (Driver-reported 2026-09-22: "when I click on
+// ★ COUNTRY WAS THE FIFTH TO EARN ITS MAPPING (reported from use 2026-09-22: "when I click on
 // India in the top countries nothing happens and the people groups grid just stays the same").
 // That report was correct, and the cause was this map: `country_code` was one of the eight
 // dropped facets, so the "Top countries" chart had no prop to reach and the grid could not
@@ -80,7 +82,7 @@ defineOptions({ inheritAttrs: false })
 // the live 2,107 rows: 175 countries, 100% populated, and zero normalisation collisions between
 // any two of them. Seven facets remain deliberately unmapped, on the same rule.
 // ★ THE TREE'S OWN AXES EARN THEIR MAPPINGS (card BUG-SEMANTIC-TREE-SIDEBAR-NOT-INTEROPERABLE-
-// WITH-GRID). The Driver: "the people place language, religion sidebar… is not working with
+// WITH-GRID). Reported from use: "the people place language, religion sidebar… is not working with
 // interoperability between itself and with the people groups grid beneath it." Part of that was
 // an affordance bug in the rail (fixed there), but part was real: the rail's People and Language
 // trees filter on facet keys that had NO entry here, so a perfectly correct click could not
@@ -254,6 +256,11 @@ const hostToken = computed(() => {
 })
 if (hostToken.value) publishMapToken(hostToken.value)
 
+// ★ THE PHONE RULE, HERE AS WELL. This element is defined without ProfileLoader (it bakes its children
+// in), so the leaf's "mobile": "desktop-only" reached its profile-config and nothing read it: at 390px the
+// dashboard and the grid mounted anyway. useScreenGate is the same rule ProfileLoader applies.
+const { blocked: screenBlocked, advise: screenAdvise, dismiss: screenDismiss, label: screenLabel } = useScreenGate(hostConfig)
+
 // The provider is a host knob as well: resolveMapProvider reads profile-config.provider, and the
 // config the child sees is the one provided below. Dropping it left a host that asked for maplibre
 // on mapbox — demanding a token for the one configuration that exists to need none.
@@ -293,7 +300,7 @@ watchEffect(() => { if (hostLang.value) setRuntimeLocale(hostLang.value) })
 // Set on the custom-element HOST rather than on the layout inside it, deliberately: `dir` takes
 // effect through the inherited CSS `direction`, and inheritance crosses shadow boundaries — so one
 // attribute on the host covers this composite's own chrome AND every nested element beneath it,
-// which is the half the audit found missing. Only ever SET, never cleared: a host page that already
+// which is the half the audit found missing. Set and CLEARED, but only ever ours: a host page that already
 // declares its own dir owns that decision.
 const textDir = computed(() => {
   const l = hostLang.value || getRuntimeLocale() || detectLocale()
@@ -309,10 +316,29 @@ const textDir = computed(() => {
 // it is". Measured in this tree before, under Vue 3.5.42, when research-map.vue's emitFilterState
 // died the same way; the fix is its _selfInstance, and this is the same fix.
 const _selfInstance = getCurrentInstance()
+// ★ WE CLEAR ONLY THE DIRECTION WE SET. This was a one-way `if (rtl) setAttribute` with no else,
+// so ar -> zh kept a right-to-left layout for the rest of the session. The host page's own dir is
+// still respected: the value found before we first wrote is restored verbatim.
+// ★ CAPTURED AT MOUNT, NOT AT FIRST WRITE. The capture used to sit inside the rtl branch, so it
+// recorded whatever `dir` happened to be on the host the first time WE wrote — and if anything else
+// had already set rtl by then, that value was recorded as "the page's own" and faithfully restored
+// forever after. MEASURED on the Big Picture leaf: ar left rtl, and zh put rtl straight back.
+// Reading it on the FIRST call instead, before any write of ours, is the only moment the attribute
+// is certainly the page's and not ours.
+let _hostDir = null
+let _weSetDir = false
 function reflectDir() {
   try {
     const host = _selfInstance?.proxy?.$el?.getRootNode?.()?.host
-    if (host && textDir.value === 'rtl') host.setAttribute('dir', 'rtl')
+    if (!host || !host.setAttribute) return
+    if (_hostDir === null) _hostDir = host.getAttribute('dir') || ''
+    if (textDir.value === 'rtl') {
+      host.setAttribute('dir', 'rtl')
+      _weSetDir = true
+    } else if (_weSetDir) {
+      if (_hostDir) host.setAttribute('dir', _hostDir); else host.removeAttribute('dir')
+      _weSetDir = false
+    }
   } catch (_) { /* no host (SSR/tests) — nothing to reflect */ }
 }
 onMounted(reflectDir)
@@ -338,9 +364,19 @@ const mapboxToken = computed(() => hostToken.value || sharedToken.value || '')
 provide('mapboxToken', mapboxToken)
 
 // The host's people-group LIST (library/lists/), threaded like the engine: into the dashboard's
-// provided config below, and to the grid as the only key of its profile-config.
+// provided config below, and into the grid's profile-config.
 const hostList = computed(() => (typeof hostConfig.value?.list === 'string' ? hostConfig.value.list : ''))
-const gridConfig = computed(() => (hostList.value ? JSON.stringify({ list: hostList.value }) : ''))
+// ★ AND THE HOST'S LANGUAGE, under both keys because each reader prefers one. The grid is mounted as
+// a COMPONENT, so it shares this element's host, and its reflectDir writes onto Big Picture itself.
+// Given no locale here, its language fell through to the page URL. On an English page opened with
+// ?lang=ar, the grid set rtl on the whole of Big Picture, so English was laid out backwards
+// (measured 2026-09-29 on the Deep Research page, before and after the dir-clear alike).
+const gridConfig = computed(() => {
+  const c = {}
+  if (hostList.value) c.list = hostList.value
+  if (hostLang.value) { c.locale = hostLang.value; c.lang = hostLang.value }
+  return Object.keys(c).length ? JSON.stringify(c) : ''
+})
 
 const SHARE_LEAF = 'dashboard-plus-grid/dashboard-plus-grid/index.html'
 
@@ -364,7 +400,7 @@ watchEffect(() => { if (hostLang.value && appI18n) appI18n.global.locale.value =
 
 const sections = [
   // The research-dashboard leaf SELF-TITLES (its own DashboardTopBar renders a "Research Dashboard"
-  // title bar), so a StackLayout section title here would be a DUPLICATE — the Driver saw "Research
+  // title bar), so a StackLayout section title here would be a DUPLICATE — it was seen as "Research
   // Dashboard" twice. Omit title (and sub, which StackLayout only shows alongside a title) → the leaf's
   // own header is the single source of truth for this section. See BUG-RESEARCH-DASHBOARD-HEADER-STACK-WRONG.
   //
@@ -372,7 +408,7 @@ const sections = [
   // grid with `height:100%` and a `1fr` map-hero plus inner-scroll (overflow:auto/hidden) regions. When
   // it renders in a scroll-page section with NO definite height, `height:100%` collapses to its 560px
   // floor and its inner-scroll regions swallow the wheel, so the OUTER page never grows past it → the
-  // Driver couldn't scroll down to the grid. Fix: give this section a definite ONE-SCREEN height
+  // it was impossible to scroll down to the grid. Fix: give this section a definite ONE-SCREEN height
   // (minHeight === maxHeight below via the composite's `dashboardHeight`). The `1fr` map now has real
   // height to fill, the dashboard is one clean scroll-page band, and the PAGE grows below it so the grid
   // is reachable by page scroll. `overflow:hidden` on the section keeps the dashboard's own inner scroll
@@ -385,7 +421,7 @@ const sections = [
   // height (--rd-map-h) so it cannot collapse, and the table sizes to its rows. The section is free
   // to be as tall as its content, which is what makes the page scroll past it.
   { key: 'dashboard' },
-  // NO section title/sub (BUILD-BIGPIC-DROP-REDUNDANT-SECTION-HEADERS). The Driver does not want a
+  // NO section title/sub (BUILD-BIGPIC-DROP-REDUNDANT-SECTION-HEADERS). There must not be a
   // black element header that repeats the element's name or tells them to scroll — one header per
   // element, not two. StackLayout only renders .stl-sec-head when `title` is set, so omitting it
   // removes the strip entirely. The dashboard self-titles; the grid needs no label to be legible.
@@ -396,12 +432,14 @@ const sections = [
 <template>
   <!-- No `title` and no #meta: the layout's own top bar is omitted entirely when neither is used,
        so the composite shows ONLY the nested elements' own chrome. -->
-  <StackLayout :sections="sections">
+  <LargerScreenNotice v-if="screenBlocked" mode="desktop-only" :label="screenLabel" :locale="hostConfig.locale || ''" />
+  <LargerScreenNotice v-else-if="screenAdvise" mode="larger-screens" :locale="hostConfig.locale || ''" @dismiss="screenDismiss" />
+  <StackLayout v-if="!screenBlocked" :sections="sections">
     <template #section-dashboard>
       <ResearchDashboard @dashboard-filter="onDashboardFilter" />
     </template>
     <template #section-grid>
-      <!-- NO explainer line here. An earlier attempt added one as its own <p>, which the Driver
+      <!-- NO explainer line here. An earlier attempt added one as its own <p>, which was
            correctly rejected: it created a SECOND header and re-introduced the vertical gap between
            the dashboard and the grid that we had just removed. The hint belongs INSIDE the table's
            existing header bar — centred, beside the live count — so it costs zero extra height.

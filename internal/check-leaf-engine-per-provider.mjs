@@ -2,7 +2,7 @@
 /**
  * check-leaf-engine-per-provider — a leaf loads the engine its PROVIDER asks for, and no other.
  *
- * THE BUG (card BUG-LEAF-PAGES-PRELOAD-MAPBOX-EVEN-UNDER-MAPLIBRE; measured by exp-shepherd at
+ * THE BUG (card BUG-LEAF-PAGES-PRELOAD-MAPBOX-EVEN-UNDER-MAPLIBRE; measured at
  * 577149af). generate-tree chose a leaf's engine peer at BUILD time, from the instance config, and
  * baked it into <head> as static tags: mapbox-gl.css, the geocoder css, mapbox-gl.js and the geocoder
  * js, all from api.mapbox.com. The provider is chosen at RUNTIME (resolveMapProvider:
@@ -62,7 +62,7 @@ if (!leaves.length) { console.log('LEAF-ENGINE: NOT MEASURED — no leaves match
 
 async function serve(dir) {
   const port = await new Promise((ok) => { const s = createServer().listen(0, '127.0.0.1', () => { const n = s.address().port; s.close(() => ok(n)) }) })
-  const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', dir], { stdio: 'ignore' })
+  const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', dir, '--exit-with-parent'], { stdio: 'ignore' })
   let up = false
   for (let i = 0; i < 40 && !up; i++) { await new Promise((r) => setTimeout(r, 150)); up = await fetch(`http://127.0.0.1:${port}/${TREE_NAME}/manifest.json`).then((r) => r.ok).catch(() => false) }
   if (!up) { try { srv.kill() } catch { /* gone */ } return null }

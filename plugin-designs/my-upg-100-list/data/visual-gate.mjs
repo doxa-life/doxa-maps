@@ -484,7 +484,7 @@ async function main() {
     // booted dark, so the first move used to be dark→light). This proves nothing
     // assumed the boot theme: handleToggleTheme flips isDark false→true → setStyle
     // dark-v11 → style.load re-adds tapestry/pins/isolation. The ThemeToggleButton
-    // is the .mcb control with data-control="theme" (studio L54) — untranslatable,
+    // is the .mcb control with data-control="theme" — untranslatable,
     // unlike the "Switch to …" title this used to match, which is localized AND dynamic.
     const themeBtn = page.locator(`${EL} button.mcb[data-control="theme"]`);
     let toggled = false;
@@ -639,7 +639,7 @@ async function main() {
     await clearFilter(page);
 
     // ── (4) controls present in DOM (zoom, theme, fullscreen) ──────────────────
-    // ★ QUERY data-control, NEVER THE TITLE (studio L54). Each wrapper writes
+    // ★ QUERY data-control, NEVER THE TITLE. Each wrapper writes
     // data-control="zoom-in|zoom-out|fullscreen|theme|location|help|share" on
     // MapControlButton; it is not a declared prop, so it falls through onto the
     // rendered <button>. Untranslatable, so this works in every locale.
@@ -974,8 +974,8 @@ async function main() {
         const point = m.project(avg); // REAL mapbox Point — required by fire's qRF
         let hit = []; try { hit = m.queryRenderedFeatures(point, { layers: ['tapestry-fill'] }); } catch (_) {}
         if (!hit.length) continue; // centroid fell in a hole / outside the polygon
-        let pins = []; try { pins = m.queryRenderedFeatures(point, { layers: ['upg-pins'] }); } catch (_) {}
-        if (pins.length) continue; // a pin sits here → a click would open the detail panel
+        let pins = []; try { pins = m.queryRenderedFeatures(point, { layers: [m.getLayer('upg-pins-hit') ? 'upg-pins-hit' : 'upg-pins'] }); } catch (_) {}
+        if (pins.length) continue; // a pin's tap target (the invisible 'upg-pins-hit' twin) is here → a click would open the detail panel
         seen.add(key);
         picked.push({ point, props: { shapeName: p.shapeName || null, iso3: p.iso3 || null } });
         if (picked.length === 3) break;
@@ -1095,7 +1095,7 @@ async function main() {
         const point = m.project(avg); // REAL Point
         let hit = []; try { hit = m.queryRenderedFeatures(point, { layers: ['tapestry-fill'] }); } catch (_) {}
         if (!hit.length) continue;
-        let pins = []; try { pins = m.queryRenderedFeatures(point, { layers: ['upg-pins'] }); } catch (_) {}
+        let pins = []; try { pins = m.queryRenderedFeatures(point, { layers: [m.getLayer('upg-pins-hit') ? 'upg-pins-hit' : 'upg-pins'] }); } catch (_) {}
         if (pins.length) continue;
         m.fire('click', { lngLat: m.unproject(point), point, originalEvent: {} }); // NO shift
         return { fired: true, countAfter: s.count };
@@ -1159,7 +1159,7 @@ async function main() {
     // ★ FIND BY CLASS, ASSERT THE TITLE SEPARATELY — the title is LOCALIZED.
     // This used to be `.upg-rail-batch[title="Batch Select"]`, which pinned the gate
     // to one English string: once the title became `:title="BATCH_SELECT_TITLE"`
-    // (studio L53) the selector matched in `en` and NOWHERE ELSE, and the gate would
+    // the selector matched in `en` and NOWHERE ELSE, and the gate would
     // report "button not in the toolbar" — a product failure — for what is really a
     // broken query. `.upg-rail-batch` is already proven unique by railBtns === 1
     // below, so the class alone is the identity. The title is still checked, as the
@@ -1304,7 +1304,7 @@ async function main() {
         const point = m.project(avg);
         let hit = []; try { hit = m.queryRenderedFeatures(point, { layers: ['tapestry-fill'] }); } catch (_) {}
         if (!hit.length) continue;
-        let pins = []; try { pins = m.queryRenderedFeatures(point, { layers: ['upg-pins'] }); } catch (_) {}
+        let pins = []; try { pins = m.queryRenderedFeatures(point, { layers: [m.getLayer('upg-pins-hit') ? 'upg-pins-hit' : 'upg-pins'] }); } catch (_) {}
         if (pins.length) continue;
         const before = s.count;
         m.fire('click', { lngLat: m.unproject(point), point, originalEvent: {} });

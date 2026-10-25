@@ -14,12 +14,18 @@ and a change here can break other maps.
 
 ### Components (reusable UI)
 
+- **BackToTopButton** — BackToTopButton — a ↑ that appears once a long list has been scrolled, and sits NEXT TO the  
+  `import … from '@map/components/BackToTopButton.vue'`
+- **LargerScreenNotice** — LargerScreenNotice — what a map says on a phone when its <profile>.meta.json declares mobile  
+  `import … from '@map/components/LargerScreenNotice.vue'`
 - **PeopleGroupDetail** — (no description)  
   `import … from '@map/components/PeopleGroupDetail.vue'`
 - **ResearchMapFilterPanel** — ResearchMapFilterPanel.vue — Multi-field filter UI for the research-map.  
   `import … from '@map/components/ResearchMapFilterPanel.vue'`
 - **ResearchMapSideMenu** — ResearchMapSideMenu.vue — Side drawer specific to the research-map profile.  
   `import … from '@map/components/ResearchMapSideMenu.vue'`
+- **ShellLanguageMenu** — ShellLanguageMenu — the language menu a header-off shell puts in VerticalTabsLayout's #phone-end  
+  `import … from '@map/components/ShellLanguageMenu.vue'`
 - **SideMenuDrawer** — SideMenuDrawer.vue — Slide-in side panel for the map application.  
   `import … from '@map/components/SideMenuDrawer.vue'`
 - **ViewSelect** — ViewSelect.vue — the "SELECT VIEW" switcher: a fieldset + legend wrapping a row of  
@@ -32,18 +38,18 @@ and a change here can break other maps.
   `import … from '@map/components/charts/ProgressBar.vue'`
 - **ShareCalendar** — ShareCalendar — the same 5,200-cell grid, shaded by a population-weighted share.  
   `import … from '@map/components/charts/ShareCalendar.vue'`
-- **VisionFunnel** — VisionFunnel — the inverted triangle: all peoples → unreached → frontier, and where a list sits.  
-  `import … from '@map/components/charts/VisionFunnel.vue'`
-- **DashboardBreadcrumb** — ── KIT LANDING 4c-4: MOVED FROM plugin-designs/research-dashboard/ ───────────────────────────  
-  `import … from '@map/components/dashboards/DashboardBreadcrumb.vue'`
 - **DashboardFacetRail** — DashboardFacetRail (was Sidebar.vue) — RDASH redesign phase 2: the floating @map SemanticTreeLegend is DROPPED  
   `import … from '@map/components/dashboards/DashboardFacetRail.vue'`
 - **DashboardFilterChips** — DashboardFilterChips — the live filterSet rendered as removable AND-stacked chips  
   `import … from '@map/components/dashboards/DashboardFilterChips.vue'`
 - **PinHint** — PinHint.vue — the conversion coach-mark (bottom-center of any map).  
   `import … from '@map/components/hints/PinHint.vue'`
+- **MapInfo** — MapInfo.vue — a map's "what can this do for you?" button, one-time pointer and example popup.  
+  `import … from '@map/components/info/MapInfo.vue'`
 - **ApproxPinNote** — ApproxPinNote.vue — the ONE wording every map with people-group pins uses (APPROXPIN, 2026-09-26).  
   `import … from '@map/components/legends/ApproxPinNote.vue'`
+- **LegendCollapseCaret** — LegendCollapseCaret.vue — SHARED (@map/components/legends/LegendCollapseCaret.vue).  
+  `import … from '@map/components/legends/LegendCollapseCaret.vue'`
 - **LegendDesktop** — This component's chrome, read out of the catalogue. tStatic and not useI18n: these mount inside  
   `import … from '@map/components/legends/LegendDesktop.vue'`
 - **LegendMobile** — (no description)  
@@ -54,8 +60,6 @@ and a change here can break other maps.
   `import … from '@map/components/legends/LegendRows.vue'`
 - **LegendTools** — Does the Fly + Clusters toolbar render for this legend type?  
   `import … from '@map/components/legends/LegendTools.vue'`
-- **ListSelectorLegend** — ListSelectorLegend.vue — the Driver's VERTICAL LEGEND, used to SELECT a list and filter by it.  
-  `import … from '@map/components/legends/ListSelectorLegend.vue'`
 - **SemanticTreeLegend** — SemanticTreeLegend — reusable hierarchical legend for any one-to-many semantic tree.  
   `import … from '@map/components/legends/SemanticTreeLegend.vue'`
 - **FullscreenButton** — FullscreenButton.vue — Toggles fullscreen for the map host element.  
@@ -64,7 +68,7 @@ and a change here can break other maps.
   `import … from '@map/components/map-controls/GeocoderComponent.vue'`
 - **HamburgerButton** — HamburgerButton.vue — Toggle button for the side menu drawer.  
   `import … from '@map/components/map-controls/HamburgerButton.vue'`
-- **HelpButton** — HelpButton.vue — Opens the "About this map" help modal.  
+- **HelpButton** — HelpButton.vue — the map's "?" control: what this map is and how to use it.  
   `import … from '@map/components/map-controls/HelpButton.vue'`
 - **LocationButton** — LocationButton.vue — Flies the map to the user's current location via the  
   `import … from '@map/components/map-controls/LocationButton.vue'`
@@ -72,6 +76,8 @@ and a change here can break other maps.
   `import … from '@map/components/map-controls/MapControlButton.vue'`
 - **MapControlMenu** — MapControlMenu.vue — the ONE menu every map control opens.  
   `import … from '@map/components/map-controls/MapControlMenu.vue'`
+- **MapInfoButton** — MapInfoButton.vue — the map's "what can this map do for you?" control, IN the map's control column.  
+  `import … from '@map/components/map-controls/MapInfoButton.vue'`
 - **MapToolbar** — MapToolbar.vue — Positioned layout shell for map control buttons.  
   `import … from '@map/components/map-controls/MapToolbar.vue'`
 - **ShareButton** — ShareButton.vue — Non-technical share modal for the map toolbar.  
@@ -82,10 +88,20 @@ and a change here can break other maps.
   `import … from '@map/components/map-controls/ZoomInButton.vue'`
 - **ZoomOutButton** — ZoomOutButton.vue — Decrements the map zoom level by one step.  
   `import … from '@map/components/map-controls/ZoomOutButton.vue'`
+- **RegionCountryMap** — RegionCountryMap.vue — DX-life's CountryMap, rebuilt on the dx-maps map library.  
+  `import … from '@map/components/maps/RegionCountryMap.vue'`
+- **MapPrintProgress** — MapPrintProgress.vue — SHARED. The loading screen of a map print (mapPrintTemplate.js).  
+  `import … from '@map/components/poster/MapPrintProgress.vue'`
+- **PanelSheets** — PanelSheets.vue — SHARED. A preview of a large poster as the sheets it prints on: the sheets pulled apart, eac  
+  `import … from '@map/components/poster/PanelSheets.vue'`
 - **PosterDialog** — PosterDialog.vue — modal for previewing + rendering a poster export.  
   `import … from '@map/components/poster/PosterDialog.vue'`
 - **PosterPreview** — PosterPreview.vue — scaled live preview of the poster composition.  
   `import … from '@map/components/poster/PosterPreview.vue'`
+- **PosterSection** — PosterSection.vue — ONE section of a poster wall: its head (the name, the count, the collapse toggle) and its  
+  `import … from '@map/components/poster/PosterSection.vue'`
+- **PosterSectionView** — PosterSectionView.vue — ONE poster section on its own: the profile behind <dxm-poster-section>.  
+  `import … from '@map/components/poster/PosterSectionView.vue'`
 - **PosterWall** — PosterWall.vue — THE SHARED POSTER WALL.  
   `import … from '@map/components/poster/PosterWall.vue'`
 - **FooterSlot** — FooterSlot.vue — STUB. Poster-rendering slot for FooterSlot.  
@@ -117,6 +133,10 @@ and a change here can break other maps.
 
 ### Composables (reusable logic — Vue Composition API)
 
+- **host-token-url** — host-token-url.js — the tokenUrl rule, with NO framework import, so a gate can run it.  
+  `import … from '@map/composables/host-token-url.js'`
+- **joinBase** — joinBase.js — SHARED (@map/composables/joinBase.js). Join a host-supplied base URL to a path.  
+  `import … from '@map/composables/joinBase.js'`
 - **researchLegendOptions** — researchLegendOptions.js — research-mfe-only options passed to the shared  
   `import … from '@map/composables/legends/researchLegendOptions.js'`
 - **useAffinityBlockLegendData** — useAffinityBlockLegendData — 4-tier affinity-block legend data for SemanticTreeLegend.  
@@ -125,14 +145,20 @@ and a change here can break other maps.
   `import … from '@map/composables/legends/useLanguageFamilyLegendData.js'`
 - **useLegendData** — useLegendData — builds a unified, data-driven legend item tree  
   `import … from '@map/composables/legends/useLegendData.js'`
+- **useLegendMapBridge** — useLegendMapBridge — the wiring between a semantic-tree legend and the map beside it.  
+  `import … from '@map/composables/legends/useLegendMapBridge.js'`
 - **useWagfRegionsLegendData** — useWagfRegionsLegendData — 3-tier WAGF Regions legend for SemanticTreeLegend.  
   `import … from '@map/composables/legends/useWagfRegionsLegendData.js'`
+- **mapPrintTemplate** — mapPrintTemplate.js — SHARED (@map/composables/poster/mapPrintTemplate.js).  
+  `import … from '@map/composables/poster/mapPrintTemplate.js'`
 - **useMapPoster** — useMapPoster — render a Mapbox GL map to a poster-grade PNG or PDF blob.  
   `import … from '@map/composables/poster/useMapPoster.js'`
 - **usePosterLayout** — usePosterLayout — slot positioning math for poster compositions.  
   `import … from '@map/composables/poster/usePosterLayout.js'`
 - **printInPlace** — printInPlace.js — SHARED (@map/composables/printInPlace.js).  
   `import … from '@map/composables/printInPlace.js'`
+- **retryFetch** — retryFetch.js — fetch(), with the same transient-blip retry the lazy components already get.  
+  `import … from '@map/composables/retryFetch.js'`
 - **retryableAsyncComponent** — retryableAsyncComponent.js — SHARED (@map/composables/retryableAsyncComponent.js).  
   `import … from '@map/composables/retryableAsyncComponent.js'`
 - **useAvatarGenerator** — Avatar Generator Composable  
@@ -157,6 +183,10 @@ and a change here can break other maps.
   `import … from '@map/composables/useFacetAggregation.js'`
 - **useGeocoderSearch** — Shared geocoder→map search logic (kind-switch + Mapbox filter builder + the  
   `import … from '@map/composables/useGeocoderSearch.js'`
+- **useHostTokenUrl** — useHostTokenUrl.js — a composite honours tokenUrl the way ProfileLoader does.  
+  `import … from '@map/composables/useHostTokenUrl.js'`
+- **useHostedHelp** — useHostedHelp — a map's "?" that its HOST answers.  
+  `import … from '@map/composables/useHostedHelp.js'`
 - **useMapAttribution** — useMapAttribution.js — the data-credit line every map MUST carry.  
   `import … from '@map/composables/useMapAttribution.js'`
 - **useMapClustering** — useMapClustering.js — Map Clustering Composable  
@@ -173,12 +203,12 @@ and a change here can break other maps.
   `import … from '@map/composables/useMapLayers.js'`
 - **useMapProvider** — useMapProvider.js — resolve the active map engine ("provider").  
   `import … from '@map/composables/useMapProvider.js'`
-- **useMapSelection** — useMapSelection.js - Map Selection Composable  
-  `import … from '@map/composables/useMapSelection.js'`
 - **useMapTheme** — useMapTheme.js — shared light/dark theme for every map profile.  
   `import … from '@map/composables/useMapTheme.js'`
 - **useOptionalT** — ★ NO <area>.<key>-SHAPED EXAMPLES IN THIS FILE'S COMMENTS. check:i18n-keys-exist reads any such  
   `import … from '@map/composables/useOptionalT.js'`
+- **usePaneConfig** — usePaneConfig — keep a composite's panes' profile-config in step with the outer element's.  
+  `import … from '@map/composables/usePaneConfig.js'`
 - **usePosterPrints** — usePosterPrints.js — THE print actions every poster wall shares.  
   `import … from '@map/composables/usePosterPrints.js'`
 - **usePplrInstance** — usePplrInstance.js — per-map "instance store" mediator.  
@@ -187,6 +217,8 @@ and a change here can break other maps.
   `import … from '@map/composables/usePrayedLocally.js'`
 - **usePrayerStatistics** — usePrayerStatistics.js — the ONE authoritative prayer-coverage source of truth.  
   `import … from '@map/composables/usePrayerStatistics.js'`
+- **useScreenGate** — useScreenGate — the phone rule for one element (SPEC-MOBILE-FLAG).  
+  `import … from '@map/composables/useScreenGate.js'`
 - **useSearch** — useSearch.js — Local geocoder search composable  
   `import … from '@map/composables/useSearch.js'`
 - **useSelectedPin** — useSelectedPin.js - Selected Pin Highlight + Animated GO Marker  
@@ -195,6 +227,8 @@ and a change here can break other maps.
   `import … from '@map/composables/useSelectionBus.js'`
 - **useSelectionCamera** — useSelectionCamera.js — "select rows in the table, the map zooms to that selection."  
   `import … from '@map/composables/useSelectionCamera.js'`
+- **useSentence** — useSentence.js — a translated SENTENCE that carries values and markup, as one key.  
+  `import … from '@map/composables/useSentence.js'`
 - **useShadowStyles** — useShadowStyles.js — Shadow DOM Style Injection  
   `import … from '@map/composables/useShadowStyles.js'`
 - **useShareableView** — useShareableView — a dashboard's view state in the address bar, so a narrowed table can be SENT.  
@@ -203,6 +237,8 @@ and a change here can break other maps.
   `import … from '@map/composables/useSharedMapToken.js'`
 - **useTextHighlight** — highlightRanges(value, indices) — wrap each matched index range in  
   `import … from '@map/composables/useTextHighlight.js'`
+- **useViewAddress** — useViewAddress.js — the page's ADDRESS for the view a reader is on: which app tab, which view inside it, which  
+  `import … from '@map/composables/useViewAddress.js'`
 
 ### Utilities (pure helper functions)
 
@@ -230,12 +266,24 @@ and a change here can break other maps.
   `import … from '@map/utils/formatCount.js'`
 - **geoUtils** — geoUtils.js — Geographic / GeoJSON Utility Functions  
   `import … from '@map/utils/geoUtils.js'`
+- **hostElement** — hostElement — the custom element a component is mounted inside.  
+  `import … from '@map/utils/hostElement.js'`
 - **html** — html.js — the two helpers every HTML string built in library/ must use (CRITIC-3, 2026-09-26).  
   `import … from '@map/utils/html.js'`
 - **languageLabel** — languageLabel.js — turn the API's comma-inverted language label into the natural reading.  
   `import … from '@map/utils/languageLabel.js'`
+- **languageRequest** — languageRequest.js — how a shell asks its HOST PAGE before it changes language.  
+  `import … from '@map/utils/languageRequest.js'`
 - **loadPinnedUmd** — loadPinnedUmd — load a PINNED, integrity-checked UMD library and capture it WITHOUT touching the host  
   `import … from '@map/utils/loadPinnedUmd.js'`
+- **peopleGroupName** — peopleGroupName.js — a people group's name in the reader's language, or English if it was machine-translated.  
+  `import … from '@map/utils/peopleGroupName.js'`
+- **peopleGroupPoints** — peopleGroupPoints.js — SHARED (@map/utils/peopleGroupPoints.js).  
+  `import … from '@map/utils/peopleGroupPoints.js'`
+- **publicEmbed** — publicEmbed.js: the Share menu's Embed codes for THIS plugin, from the tree's PUBLIC address.  
+  `import … from '@map/utils/publicEmbed.js'`
+- **scrollport** — findScrollportAncestor — the nearest ancestor that actually scrolls.  
+  `import … from '@map/utils/scrollport.js'`
 - **viewportScrim** — viewportScrim.js — make a position:fixed full-screen SCRIM actually cover the VIEWPORT,  
   `import … from '@map/utils/viewportScrim.js'`
 

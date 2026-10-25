@@ -26,7 +26,13 @@ from PIL import Image
 
 HERE  = os.path.dirname(os.path.abspath(__file__))
 SRC   = os.path.join(HERE, 'out', 'posters')
-REPO  = os.path.abspath(os.path.join(HERE, '..', '..'))
+# ★ THREE LEVELS, NOT TWO. HERE is <root>/library/scripts/posters, so '..','..' lands on
+# <root>/library and every output went to library/plugin-designs/... and library/data/posters --
+# directories nothing reads and nothing serves. The script REPORTED success and wrote real WebPs,
+# so a preview run looked like it had worked while the served previews never changed. Found by
+# dry-running this step on a single poster before a 174-sheet reshoot; it would otherwise have
+# silently produced 174 files in the wrong tree and shipped the old thumbnails.
+REPO  = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 # WHICH APP the previews belong to. The country-posters app renders from the SAME
 # generator into the SAME out/posters, so the only thing that differs is where the
 # WebPs land — parameterize rather than fork this script.

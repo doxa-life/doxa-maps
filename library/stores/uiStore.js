@@ -552,15 +552,37 @@ export const useUIStore = defineStore('ui', {
          * @param {object|null} peopleGroup - People group data object or null
          */
         selectPeopleGroup(peopleGroup) {
+            // ★ SAVE ONLY ON ENTERING DETAIL, AND ONLY ONCE. This used to save on every call with a
+            // group, so a SECOND call while a detail was already open stored the 'open' this method
+            // had just forced, over the 'collapsed' it saved on entry — and the later clear restored
+            // 'open'. A reader who collapsed the legend, opened a detail and closed it got the
+            // legend back open, having never asked for it.
+            //
+            // ⚠ ONE PICK IS NOT ONE CALL — MEASURED, NOT ASSUMED. The pin click handler is
+            // registered per map layer, and every visible pin has an invisible hitbox twin at the
+            // same point (same source, larger radius, added alongside it) so that taps are easier
+            // to land. A layer-scoped click fires once per layer with a feature under the point,
+            // so EVERY pin click calls this exactly twice, 3ms apart — measured on the leaf at
+            // 1440 on 2026-09-29, on two different pins. One pick was therefore already enough to
+            // corrupt the saved state; it never needed two.
+            //
+            // Guarding on `entering` rather than on call count is what makes that harmless: this
+            // stays idempotent for as long as one detail is open, whatever the caller count. The
+            // duplicate binding is a real defect and is being fixed separately, but this method
+            // should not have depended on being called once in the first place.
+            const entering = peopleGroup && !this.selectedPeopleGroup;
             this.selectedPeopleGroup = peopleGroup;
 
             if (peopleGroup) {
-                this._legendStateBeforeDetail = this.legendState;
+                if (entering) this._legendStateBeforeDetail = this.legendState;
                 this.legendState = 'open';
                 this._customLegendHeight = null;
                 this.setLegendMode('detail');
             } else {
-                this.legendState = this._legendStateBeforeDetail || 'open';
+                // Restore only what was actually saved, then forget it: a stale value left here
+                // would be applied to a later detail that never recorded one.
+                if (this._legendStateBeforeDetail) this.legendState = this._legendStateBeforeDetail;
+                this._legendStateBeforeDetail = null;
                 this._customLegendHeight = null;
                 this.setLegendMode('prayer');
             }

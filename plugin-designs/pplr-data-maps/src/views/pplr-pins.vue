@@ -7,7 +7,7 @@
 import { inject, onMounted, onBeforeUnmount, ref } from 'vue'
 import { glFor, exposeMap, releaseMap, whenGeojsonDrawn } from '../utils/pplrData.js'
 import { usePplrT } from '../composables/usePplrT.js'
-import { formatCount } from '@map/utils/formatCount.js'   // counts stay fixed en-US: numerals are held for the Driver
+import { formatCount } from '@map/utils/formatCount.js'   // counts stay fixed en-US: numerals are held, pending a product decision
 import { tStatic } from '@map/i18n/index.js'
 import { useMapInstance } from '@map/composables/useMapInstance.js'
 import { addCountryPolygons, addPGPoints, popupForPG, POPUP_CSS } from '../utils/pplrMap.js'

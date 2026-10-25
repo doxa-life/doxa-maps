@@ -84,7 +84,9 @@
     "asia": "Ásia",
     "europe": "Europa",
     "latin_america_&_caribbean": "América Latina",
-    "oceania": "Oceania"
+    "oceania": "Oceania",
+    "middle_east": "Oriente Médio",
+    "north_america_&_non-spanish_caribbean": "América do Norte e Caribe não hispânico"
   },
   "sort_by_column_hint": "Ordenar esta tabela por {column} — Shift+clique adiciona uma segunda coluna. A ordenação afeta apenas a tabela; os cartões mantêm a própria ordem.",
   "fs_exit_hint": "Sair da tela cheia (Esc) — voltar a sete linhas",
@@ -92,5 +94,19 @@
   "fs_exit": "Sair da tela cheia",
   "fs_open": "Abrir a tabela em tela cheia",
   "export_selected_hint": "Exportar todos os campos — povos selecionados: {n}",
-  "export_all_hint": "Exportar todos os campos — povos: {n}"
+  "export_all_hint": "Exportar todos os campos — povos: {n}",
+  "map_init_failed": "O mapa não conseguiu iniciar. Verifique o token de acesso e o contentor do mapa.",
+  "show_filters": "Mostrar filtros",
+  "hide_filters": "Ocultar filtros — ampliar o mapa",
+  "show_charts": "Mostrar gráficos",
+  "hide_charts": "Ocultar gráficos — ampliar o mapa",
+  "export_copied": "copiado para a área de transferência",
+  "export_done": "exportado",
+  "export_ready": "pronto",
+  "export_toast": "✓ {rows} linhas × {fields} campos {how}",
+  "export_failed": "✕ Falha ao exportar",
+  "pray_for_group": "Ore por este povo",
+  "more_information": "Mais informações",
+  "title": "Painel de pesquisa",
+  "gospel_pending": "Ainda não está pronto: o número de não alcançados, a chave da fonte de dados e a forma da interface estão por decidir."
 }

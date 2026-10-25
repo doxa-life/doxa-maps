@@ -31,6 +31,7 @@
  *   outline.clearCountry()
  */
 
+import { retryFetch } from './retryFetch.js'
 import { resolveAssetsBase } from '../utils/embedBase.js'
 import { emissivePaint } from './useMapProvider.js'
 
@@ -90,7 +91,7 @@ function countryFilter(code, isMaplibre) {
   // field, this cannot be bridged in the loader: there is no worldview to invent. It is a fact
   // about the Mapbox tileset's shape, so only the Mapbox path asks for it.
   // MEASURED: against the real 162 features, the clause admits 0 and the branch below admits its
-  // country — _qa-cycle/02-builder-cycle/_chk-worldview-clause-guarded-per-engine.mjs.
+  // country.
   if (isMaplibre) return byCode
   return [
     'all',
@@ -161,7 +162,7 @@ export function useCountryOutline(getMap, opts = {}) {
         // Add EMPTY first, then setData after the fetch, so addLayer below stays SYNCHRONOUS and
         // the outline keeps its place in the layer order.
         m.addSource(SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-        fetch(`${resolveAssetsBase(null)}/boundaries/world-adm0-web.geojson`)
+        retryFetch(`${resolveAssetsBase(null)}/boundaries/world-adm0-web.geojson`)
           .then((r) => r.json())
           .then((gj) => {
             // The tileset names the ISO field iso_3166_1_alpha_3; the geojson names it iso3.

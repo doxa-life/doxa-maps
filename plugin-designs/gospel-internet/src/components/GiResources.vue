@@ -11,7 +11,7 @@ function setGlobal(name, value) {
  * groups in scope. Pick a family on the tree, a country on the map or a facet in the rail, and this lists
  * what already exists for those languages: type, scope, source, and the link.
  *
- * The rows are gospel-plugin's screened links (gospel-resource-links.json, cut to the board's languages at
+ * The rows are the screened links (gospel-resource-links.json, cut to the board's languages at
  * build). Scope is the board's: a language is listed when at least one group in scope speaks it, and the
  * "groups here" column counts those groups. CSV exports exactly what is listed.
  */
@@ -87,7 +87,7 @@ function exportCsv() {
     { key: 'resource', header: 'resource' }, { key: 'scope', header: 'scope' }, { key: 'source', header: 'source' },
     { key: 'url', header: 'url' }, { key: 'groups', header: 'groups_in_scope' }]
   const filters = Object.entries(board.bus.filterSet).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`).join('; ') || 'none'
-  const csv = buildCsv(rows.value, cols, { provenance: `# Gospel x Internet resources export — list: ${board.listId.value}; filters: ${filters}${board.treeNode.value ? '; tree node: ' + board.treeNode.value : ''}; rows: ${rows.value.length}; source: gospel-resource-links (gospel-plugin, every link screened)` })
+  const csv = buildCsv(rows.value, cols, { provenance: `# Gospel x Internet resources export — list: ${board.listId.value}; filters: ${filters}${board.treeNode.value ? '; tree node: ' + board.treeNode.value : ''}; rows: ${rows.value.length}; source: gospel-resource-links (every link screened)` })
   try { navigator.clipboard && navigator.clipboard.writeText(csv).catch(() => {}) } catch (_) {}
   try {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))

@@ -8,7 +8,7 @@
 //
 // ★ THIS IS NOT THE RESEARCH MAP. library/scripts/research/out/iso3-to-iso2.json is a different file
 // with a different job: the 176-country spine that drives the data FETCHES. Expanding that one changes
-// what gets fetched, which is a data-scope decision for the Driver (dx-shepherd, REG242B) and must not
+// what gets fetched, which is a product decision about data scope and must not
 // happen as a side effect of adding country names. This map drives no fetch. The two are deliberately
 // not interchangeable, which is why they have different names, different shapes and this paragraph.
 //

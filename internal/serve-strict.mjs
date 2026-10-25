@@ -33,7 +33,11 @@
  * HTTP 200 on the box's PUBLIC IP while a browser gate was running. Override with HOST only if you
  * deliberately want another host to reach it.
  *
- * Usage: node internal/serve-strict.mjs [--port 4173] [--directory public]
+ * Usage: node internal/serve-strict.mjs [--port 4173] [--directory public] [--exit-with-parent]
+ *   --exit-with-parent  for a gate that spawns this server: exit once the process that started it is gone.
+ *                       A gate that crashes or is refused by the browser-slot guard cannot kill its child, and
+ *                       on 2026-09-29 41 such servers had outlived their gates (279 MB, the oldest 5 days).
+ *                       Opt-in, so a server someone deliberately left running is never taken down.
  */
 import { createServer } from 'node:http'
 import { createReadStream, statSync } from 'node:fs'
@@ -49,6 +53,10 @@ const argOf = (name, dflt) => { const i = argv.indexOf(name); return i >= 0 && a
 const PORT = Number(process.env.PORT || argOf('--port', '4173'))
 const HOST = process.env.HOST || '127.0.0.1'
 const DIR = resolve(ROOT, argOf('--directory', 'public'))
+if (argv.includes('--exit-with-parent')) {
+  const parent = process.ppid
+  setInterval(() => { if (process.ppid !== parent) process.exit(0) }, 2000).unref()
+}
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',

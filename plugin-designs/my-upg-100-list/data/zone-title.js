@@ -2,11 +2,11 @@
  * zone-title — compose a zone's DISPLAY TITLE from parts that are ALREADY translated, so adding a
  * project list costs no new translation and adding a locale costs no code change.
  *
- * THE PROBLEM (Driver, 2026-09-27). Every zone label is a hand-written English string — "Middle East
+ * THE PROBLEM. Every zone label is a hand-written English string — "Middle East
  * Core", "Malabar Coast" — so the Arabic map reads English. Hand-translating them does not scale,
  * because UPG-100 is becoming a PATTERN: Project 7000 / 4700 / 3000 / 2000 / 700 each invent their own
- * ~100 clusters, and a per-title translation is a cost paid again for every list, forever. The Driver's
- * question was precisely "how do you generate a title without a new translation each time".
+ * ~100 clusters, and a per-title translation is a cost paid again for every list, forever.
+ * The question is how to generate a title without a new translation each time.
  *
  * ★ WHAT THE DATA ACTUALLY ALLOWS, measured before any of this was written (2026-09-27):
  *
@@ -37,7 +37,7 @@
  * `pg_slugs` whose every record is ONE country (measured: asia-india-kerala is 78/78 IND), so countries
  * would render "India" twelve times and could not tell "Malabar Coast" from "Northwest India" — those
  * labels are SUB-NATIONAL. Naming them needs a province/subdivision source, which Intl has none of; the
- * curated-table-vs-keep-English choice is with the Driver (repo's digest item D). Until it is decided
+ * curated-table-vs-keep-English choice is a pending product decision. Until it is decided
  * this returns null for tier C and the caller keeps the existing label, so nothing regresses.
  *
  * THE ONLY TRANSLATED STRINGS ARE THE TWO JOINERS — `zone_join` ("{a} + {b}") and `zone_join_more`
@@ -70,8 +70,8 @@ export function zoneCountryCodes(selector) {
  *        page/packet already loaded AT THE READER'S LOCALE. The preferred source: no alpha-2 mapping,
  *        no second service, and it agrees with Intl where both have an answer.
  * @param {string} [opts.locale]  used only by the Intl fallback.
- * @param {(iso3:string, locale:string)=>string} [opts.countryName]  regions-plugin's coming library
- *        helper (their card BUILD-LOCALIZED-COUNTRY-NAMES-ISO3-TO-ISO2). Injected rather than imported
+ * @param {(iso3:string, locale:string)=>string} [opts.countryName]  the coming library
+ *        helper (localized country names, ISO-3 → ISO-2). Injected rather than imported
  *        so this module does not depend on an unlanded file; when it lands, pass it and it wins over
  *        the local Intl fallback.
  * @returns {string|null} null rather than the raw code — see below.
@@ -79,13 +79,13 @@ export function zoneCountryCodes(selector) {
 export function countryLabel(iso3, opts = {}) {
   const code = String(iso3 || '').toUpperCase()
   if (!code) return null
-  // ★ ORDER: regions' helper (or Intl) FIRST, the records' label SECOND — and this order is the
-  // opposite of the one I wrote first, corrected by measuring what the two sources actually say.
+  // ★ ORDER: the shared country-name helper (or Intl) FIRST, the records' label SECOND — and this order
+  // is the opposite of the first version, corrected by measuring what the two sources actually say.
   // The records API returns the FORMAL country name, which is wrong for a poster header:
   //     LAO  "Lao People's Democratic Republic"   vs Intl "Laos"
   //     IRN  "Islamic Republic of Iran"           vs Intl "Iran"
   //     CHN  "People's Republic of China"         vs Intl "China"
-  // 28 of our 175 country labels are long formal forms like these. My first version preferred the
+  // 28 of our 175 country labels are long formal forms like these. The first version preferred the
   // records because they were already localized and needed no code mapping — true, and it produced
   // "Lao People's Democratic Republic" as the title of the zone whose hand-written label was "Laos",
   // i.e. a generated title WORSE than the one it replaced. Intl gives the short common form in every
@@ -97,8 +97,8 @@ export function countryLabel(iso3, opts = {}) {
   }
   // ⚠ Intl REGIONS TAKE ALPHA-2 AND THROW ON ALPHA-3 — `new Intl.DisplayNames(['en'],{type:'region'})
   // .of('IND')` is a RangeError, not a miss. So a 3-letter code needs a mapping, and `alpha2` is that
-  // mapping, INJECTED rather than imported: regions-plugin owns the ISO-3→ISO-2 table (their card
-  // BUILD-LOCALIZED-COUNTRY-NAMES-ISO3-TO-ISO2) and it has not landed, so this module must work without
+  // mapping, INJECTED rather than imported: the ISO-3→ISO-2 table belongs to the library's
+  // localized-country-names work and it has not landed, so this module must work without
   // it and improve when it arrives. With no mapper a 3-letter code simply falls through to the records
   // label below — the formal name, but a real localized name.
   // That THROW-vs-ECHO asymmetry with the language type is also why every lookup here ends in null
@@ -134,8 +134,44 @@ export function countryLabel(iso3, opts = {}) {
  * @returns {string|null}
  */
 export function zoneTitle(zone, strings, opts = {}) {
+  // ★ AN AFFINITY-BLOC ZONE HAS NO COUNTRY TO NAME IT, BUT IT HAS A NAME OF ITS OWN. The Deaf row
+  // (affinity bloc A017) spans every region, so the country path below declines it — and the packet
+  // then printed the legend's internal label, "Deaf (affinity bloc A017)", as its title. Its name is
+  // translated once per language in the packet strings, keyed by bloc: zone_affinity_<rop1>. Any other
+  // affinity bloc a list adds is named the same way, with one string and no code.
+  const sel = zone?.selector
+  if (sel && sel.type === 'affinity_bloc' && sel.rop1) {
+    const name = strings && strings[`zone_affinity_${sel.rop1}`]
+    return typeof name === 'string' && name.trim() ? name : null
+  }
   const codes = zoneCountryCodes(zone?.selector)
   if (!codes.length) return null              // tier C — declined, caller keeps its label
+
+  // ★ ONE COUNTRY ONLY. A multi-country zone DECLINES, exactly as tier C
+  // does, and keeps its hand-written label.
+  //
+  // This is not a limitation of the joiner below — the joiner works. It is that A MULTI-COUNTRY ZONE
+  // HAS A NAME THAT IS NOT A LIST OF ITS MEMBERS, so no assembly of country names can produce it.
+  // MEASURED over all 29 zones in en/es/ar before wiring anything, and the generated title was WORSE
+  // than the hand-written one it would replace — in ENGLISH TOO, so this was never a localization
+  // trade-off:
+  //     "Middle East Core"      would become  "Iran + Yemen + 11 more"      (2 named of 13)
+  //     "Scattered / Diaspora"  would become  "Andorra + Cocos (Keeling) Islands + 2 more"
+  // and no maxParts rescues it: 2 → 3 → 4 → 13 just walks toward a full 13-country enumeration.
+  // "Middle East Core" names a REGION; "Scattered / Diaspora" names a KIND of zone. Country names
+  // cannot say either.
+  //
+  // ⚠ THE GUARD IS HERE, NOT AT THE CALLER, AND THAT IS DELIBERATE. Six product call sites supply
+  // this across three surfaces (the legend in upg-100-list.vue x3, posters, packets) — a caller-side
+  // `codes.length === 1` test would have to be repeated six times and would drift the first time one
+  // was missed, silently regressing one surface while the others stayed right. One guard, one
+  // behaviour, every surface.
+  //
+  // What still works: tier A generates in all 11 locales at zero translation cost (Sudan / Sudán /
+  // السودان). Tier B keeping its label is the SAME null-means-keep-yours contract tier C uses, so
+  // this widens an existing path rather than adding a new one.
+  if (codes.length > 1) return null
+
   const maxParts = Math.max(1, opts.maxParts ?? 2)
 
   const named = codes.map((c) => countryLabel(c, opts))

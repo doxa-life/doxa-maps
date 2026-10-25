@@ -2,7 +2,7 @@
 /**
  * check-leaf-english-leaks — a translated key must not render in English, on ANY leaf.
  *
- * THE METHOD is rega's, by way of dx-shepherd, and is already proven in
+ * THE METHOD comes from the browser review and is already proven in
  * check-gospel-english-leaks.mjs. A string is a LEAK when the catalogue has a DIFFERENT value
  * for the locale and the page still shows the English one. That is a render or wiring fault,
  * and it is a different thing from an untranslated string, which is a catalogue gap.
@@ -145,7 +145,7 @@ for (const t of TARGETS) {
             // {value:'unengaged', label:'Unengaged'}, 2 distinct values, 100% populated, and
             // dashboard.config.js:132 counts 2,081 Unengaged / 27 Engaged. They are API VALUES
             // that happen to equal a catalogue string.
-            // That is the population rega's method excludes by name ("DATA, the people-group and
+            // That is the population the method excludes by name ("DATA, the people-group and
             // place names that come from the publishers"). Whole-label matching stops a substring
             // impersonating a label; it cannot stop a DATA CELL rendering the same text. So the
             // table body is excluded by ROLE, the way prose already is.

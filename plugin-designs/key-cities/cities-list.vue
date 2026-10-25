@@ -1,15 +1,15 @@
 <script setup>
 /**
- * cities-list.vue — KEY CITIES: where the unengaged people groups actually live.
+ * cities-list.vue — KEY CITIES: clusters of unengaged people-group pins.
  *
- * The population centres derived from people-group locations, grouped by region,
- * each showing which groups are there and what languages they speak.
+ * Clusters of people-group pins, grouped by region, each showing which groups'
+ * pins fall in it and what languages they speak.
  *
  * ═══ WHAT A "KEY CITY" IS HERE — READ THIS BEFORE TRUSTING A ROW ════════════
- * A row is a CLUSTER OF PEOPLE-GROUP CENTROIDS within ~25km, not a municipal
+ * A row is a CLUSTER OF PEOPLE-GROUP PINS within ~25km, not a municipal
  * boundary. The distinction is the integrity of the whole dataset.
  *
- * The pins are people-group centroids, not settlements — measured: India's 855
+ * Each pin marks a people group, not a settlement — measured: India's 855
  * pins resolve to 625 distinct ~11km cells. So clustering them into "cities" and
  * naming those clusters ourselves would MANUFACTURE placenames, and a fabricated
  * placename in a persecution-sensitive dataset is the dangerous kind of wrong.
@@ -26,7 +26,11 @@
  * PERSECUTION-SAFETY: locations of PEOPLE GROUPS, which is public ethnographic
  * data. No church, believer or meeting-point information, and it must not gain any.
  */
-import { computed, inject, ref, onMounted } from 'vue'
+import { computed, inject, ref, onMounted, h } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { sentenceParts, keep, ltr } from '@map/composables/useSentence.js'
+import { regionLabel } from './regionLabel.js'
+import { formatList } from '@map/i18n/index.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
 
@@ -40,7 +44,7 @@ const assetsBase = computed(() => resolveAssetsBase(profileConfig.value))
 // it and block first paint. Measured on the other two apps: static imports took
 // them to 2.0MB and 2.9MB before this fix.
 const table = ref({ rows: [] })
-const loadErr = ref(null)
+const loadErr = ref(null)   // the engine's or the server's own words: shown INSIDE a translated line
 onMounted(async () => {
   try {
     const r = await fetch(`${assetsBase.value}/tables/key-cities.json`)
@@ -50,16 +54,14 @@ onMounted(async () => {
 })
 
 const rows = computed(() => table.value.rows || [])
+const { t } = useI18n()
 const named = computed(() => rows.value.filter((r) => r.named))
 
 // Default to the NAMED population centres: a first screen of 1,369 unnamed
 // single-group clusters would read as broken rather than as honest.
 const filter = ref('named')
-const FILTERS = [
-  { id: 'named', label: 'Named population centres' },
-  { id: 'multi', label: 'Multi-group clusters' },
-  { id: 'all',   label: 'All locations' },
-]
+// Labels are keyCities.list.filters.<id> (the template translates them).
+const FILTERS = [{ id: 'named' }, { id: 'multi' }, { id: 'all' }]
 
 const shown = computed(() => {
   if (filter.value === 'named') return named.value
@@ -70,6 +72,9 @@ const shown = computed(() => {
 const sections = computed(() => {
   const by = new Map()
   for (const r of shown.value) {
+    // The RAW data value is the key (sections, :key, collapse state); only the heading is translated,
+    // at render (secLabel below). 'Other' is a data guard for a row with no region: the sentinel
+    // dashboard.other projects. No row has an empty region today; "Other" and "N/A" are region values.
     const k = r.region || 'Other'
     if (!by.has(k)) by.set(k, [])
     by.get(k).push(r)
@@ -87,6 +92,20 @@ const collapsed = ref({})
 const isShut = (n) => !!collapsed.value[n]
 const toggle = (n) => { collapsed.value = { ...collapsed.value, [n]: !collapsed.value[n] } }
 const fmt = (n) => (Number(n) || 0).toLocaleString()
+const secLabel = (name) => regionLabel(t, name)
+// A row's languages: the first three, then "and N more" when there are more, in the page's own list
+// grammar (formatList: Intl.ListFormat). The cut is the list's LAST item, so a shortened list never
+// reads as complete. The row's languages field is data, joined with ", " by the table builder.
+const langList = (joined) => {
+  const all = String(joined).split(', ').filter(Boolean)
+  const shown = all.slice(0, 3)
+  return formatList(all.length > 3 ? [...shown, t('keyCities.list.moreLanguages', { n: fmt(all.length - 3) })] : shown)
+}
+// ONE key for the caveat's sentence: the count and the gazetteer's name go in as values, the name as
+// its own left-to-right island (it is a proper name, never translated), so each language orders it.
+const caveatRow = computed(() => h('span', sentenceParts(
+  t('keyCities.list.caveat.row', keep('n', 'source')),
+  { n: fmt(named.value.length), source: ltr('Nominatim/OpenStreetMap', true) })))
 
 useShadowStyles(
   '.kc{position:absolute;inset:0;overflow-y:auto;padding:20px 18px 44px;background:#f6f7f9;color:#0f1419;' +
@@ -139,7 +158,7 @@ const band = (a) => a === 'yes' ? 'ok' : a === 'partial' ? 'mid' : a === 'no' ? 
       {{ $t('keyCities.list.intro', { named: fmt(named.length), clusters: fmt(rows.length) }) }}
     </p>
 
-    <div v-if="loadErr" class="caveat">{{ loadErr }}</div>
+    <div v-if="loadErr" class="caveat" role="alert">{{ $t('keyCities.loadFailed', { detail: loadErr }) }}</div>
 
     <div class="kc-tabs">
       <button v-for="f in FILTERS" :key="f.id" type="button"
@@ -151,7 +170,7 @@ const band = (a) => a === 'yes' ? 'ok' : a === 'partial' ? 'mid' : a === 'no' ? 
     <section v-for="sec in sections" :key="sec.name" class="sec">
       <button type="button" class="sec-head" @click="toggle(sec.name)">
         <span class="sec-caret" :class="{ open: !isShut(sec.name) }">▶</span>
-        <h3 class="sec-name">{{ sec.name }}</h3>
+        <h3 class="sec-name">{{ secLabel(sec.name) }}</h3>
         <span class="sec-meta">
           {{ $t('keyCities.list.locations', { n: sec.items.length }) }} · {{ $t('keyCities.list.peopleGroups', { n: fmt(sec.groups) }) }}
         </span>
@@ -167,29 +186,24 @@ const band = (a) => a === 'yes' ? 'ok' : a === 'partial' ? 'mid' : a === 'no' ? 
             </div>
             <div class="r-meta">
               {{ r.country }}<template v-if="r.admin_state"> · {{ r.admin_state }}</template>
-              · {{ r.people_group_count }} group{{ r.people_group_count === 1 ? '' : 's' }}
-              <template v-if="r.languages"> · {{ r.languages.split(', ').slice(0, 3).join(', ') }}</template>
+              · {{ $t('keyCities.list.peopleGroups', { n: fmt(r.people_group_count) }) }}
+              <template v-if="r.languages"> · {{ langList(r.languages) }}</template>
             </div>
           </div>
           <div class="r-num">{{ fmt(r.upg_population) }}</div>
           <span class="pill" :class="band(r.country_internet_access)">
-            {{ r.country_internet_pct != null ? r.country_internet_pct + '%' : 'unknown' }}
+            {{ r.country_internet_pct != null ? r.country_internet_pct + '%' : $t('keyCities.map.unknown') }}
           </span>
         </div>
       </div>
     </section>
 
     <div class="caveat">
-      <b>What a row is.</b> A cluster of people-group centroids within ~25km — <b>not</b> a municipal
-      boundary. Pins mark where a people group is centred, not a settlement, so clusters are never
-      named by inference: the {{ fmt(named.length) }} multi-group centres were resolved by
-      <b>Nominatim/OpenStreetMap</b> (ODbL, cited per row) and the rest stay unnamed rather than guessed.
+      <b>{{ $t('keyCities.list.caveat.rowLead') }}</b> <component :is="caveatRow" />
       <br><br>
-      <b>Internet figures are NATIONAL</b>, shown as context. Per-city connectivity is not publicly
-      available at this scale, and a national figure must not be read as a city measurement.
+      <b>{{ $t('keyCities.map.national') }}</b> {{ $t('keyCities.list.caveat.internet') }}
       <br><br>
-      This page carries people-group locations and connectivity only — no church, believer or
-      meeting-point data, by design.
+      {{ $t('keyCities.list.caveat.scope') }}
     </div>
   </div>
 </template>

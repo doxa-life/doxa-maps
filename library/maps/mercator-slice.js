@@ -1,8 +1,8 @@
 /**
  * mercator-slice.js — cut a map's bounds into EQUAL-HEIGHT rows, which is not the same as equal degrees.
  *
- * ★ THE DEFECT THIS EXISTS FOR (Driver, 2026-09-28, Simple Research's poster export): the poster "shows
- * too much of Antarctica" and comes out at the wrong, vertical aspect.
+ * ★ THE DEFECT THIS EXISTS FOR (Simple Research's poster export): the poster showed too much of
+ * Antarctica and came out at the wrong, vertical aspect.
  *
  * The big-poster renderer stitches a grid of tiles, each rendered into an EQUAL-HEIGHT slot in the
  * output image. It chose each tile's latitude band by dividing the degree span evenly:
@@ -13,7 +13,7 @@
  * DEGREE bands are not equal SCREEN bands. MEASURED on a -60..75 view in 4 rows: the top band is 37.0%
  * of the true screen height and is drawn into 25% of the poster; the next is 19.7% drawn into 25%. Every
  * row is squeezed or stretched, which is the wrong aspect, and the high-latitude bands — where a degree
- * is worth the most pixels — are the most over-represented, which is the Antarctica the Driver saw.
+ * is worth the most pixels — are the most over-represented, which is where the excess Antarctica came from.
  *
  * Slicing in MERCATOR Y instead gives 25.0% per row exactly, because that IS the screen coordinate.
  *

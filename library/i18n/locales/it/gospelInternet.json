@@ -17,7 +17,8 @@
     "failed": "Non è stato possibile caricare la tabella dei vicini, quindi questo grafico non viene disegnato.",
     "reached": "Già raggiunti, quindi al centro:",
     "unmatched": "Non presenti nella tabella dei vicini, quindi non disegnati:",
-    "unplaced": "Nessuna relazione trovata, quindi non collocati:"
+    "unplaced": "Nessuna relazione trovata, quindi non collocati:",
+    "shown": "Popoli sugli anelli:"
   },
   "centre": {
     "aria": "Mostra",
@@ -150,7 +151,7 @@
     "messaging": "App di messaggistica principale (paese)",
     "messagingNote": "La più scaricata nell’App Store di Apple del paese: solo iOS, una classifica di download, non di uso.",
     "province": "India e Cina: stato o provincia",
-    "provinceNote": "Approssimativo: collocato dove vive un popolo, non in una città.",
+    "provinceNote": "Approssimativo: ricavato dal punto del gruppo sulla mappa, non da una città.",
     "region": "Regione",
     "religion": "Religione",
     "wayIn": "Via d’accesso quando non c’è niente nella loro lingua"
@@ -199,11 +200,11 @@
     "aria": "Mappa dei gruppi etnici, ombreggiata secondo quanto ogni paese usa internet"
   },
   "notice": {
-    "pin": "Il punto indica dove vive questo popolo in {country}, non una città.",
-    "pins": "Un punto indica dove vive un popolo nel suo paese, non una città. {n} gruppi condividono un punto con un altro gruppo.",
+    "pin": "Il punto rappresenta questo popolo, non una città.",
+    "pins": "Un punto rappresenta un popolo, non una città. {n} gruppi condividono un punto con un altro gruppo.",
     "shares": "Condivide il punto con {n} altro/i gruppo/i.",
     "sources": "Fonti:",
-    "standing": "I punti sono approssimativi (dove vive un popolo nel suo paese, non una città). I dati di internet sono del paese o dello stato indiano, mai del gruppo. «Trovato» significa trovato nelle fonti consultate."
+    "standing": "I punti sono approssimativi: un punto rappresenta un popolo, non una città. I dati di internet sono del paese o dello stato indiano, mai del gruppo. «Trovato» significa trovato nelle fonti consultate."
   },
   "panel": {
     "charts": "Grafici",
@@ -284,7 +285,6 @@
     "posterOmitted": "{n} nomi omessi dove si sovrapporrebbero a un altro; ogni cerchio è disegnato.",
     "posterPrint": "Stampa",
     "posterSizeAria": "Dimensione del poster",
-    "posterSvg": "Scarica SVG",
     "posterTitle": "L’accesso al vangelo, famiglia linguistica per famiglia linguistica",
     "sources": "Albero: Glottolog (CC BY 4.0). Risorse: eBible, Faith Comes By Hearing, Scripture Earth, PNG.Bible, film JESUS, Global Recordings e altre, per ISO 639-3.",
     "st": {

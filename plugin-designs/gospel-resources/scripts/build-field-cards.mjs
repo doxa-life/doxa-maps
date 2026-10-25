@@ -117,7 +117,7 @@ for (const r of roster) {
     },
     /* ⚠ EVERY CHIP READ "unchecked" IN CARD MODE, and that understates the work: these links ARE
        verified, but the state lives in gospel-link-verification.json which the card never fetches.
-       rega caught it on central-sama, whose Scripture and film are both verified. The states for
+       It showed on central-sama, whose Scripture and film are both verified. The states for
        THIS group's own URLs ship with it — the state only, never a re-derivation — keyed by URL
        exactly as linkVerify is, so the sheet's existing vchip()/vtitle() work unchanged. */
     verified: (() => {

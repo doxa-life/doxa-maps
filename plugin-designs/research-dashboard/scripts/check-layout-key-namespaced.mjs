@@ -82,7 +82,7 @@ if (!existsSync(ENGINE)) { console.log(`${TAG}: SKIP — no ${ENGINE.replace(ROO
 }
 
 // ── D. the drag mirrors under RTL, and the keyboard agrees with it ───────────────────────────
-// go-int, 2026-09-27: the x delta was computed once, in LTR. Under dir=rtl the grid mirrors — the
+// Found 2026-09-27: the x delta was computed once, in LTR. Under dir=rtl the grid mirrors — the
 // facet rail sits on the RIGHT — so dragging its handle toward the map moves clientX the other way,
 // and in Arabic the facet handle shrank the CHARTS rail. It reaches Big Picture in ar, not only a
 // new consumer. The keyboard path is asserted too: if only the pointer mirrored, the two input

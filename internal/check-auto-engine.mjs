@@ -1,21 +1,28 @@
 #!/usr/bin/env node
 /**
- * check-auto-engine — the default engine is 'auto': Mapbox WHEN a token is available, MapLibre otherwise.
+ * check-auto-engine — the default engine ('auto') is MapLibre, token or not; Mapbox only when asked for.
  *
- * WHY (2026-09-25, by project decision). The public repo carries no Mapbox token. With a default of
- * 'mapbox', a keyless visitor got a map that could not draw and a paste-a-token prompt, and the only
- * way out was a token in the repo. 'auto' asks the token ladder instead (useMapProvider.js), and the
- * generated leaf asks the same ladder before it mounts (generate-tree.mjs, PROVIDER).
+ * WHY. The public repo carries no Mapbox token, so a default of 'mapbox' gave a keyless visitor a map
+ * that could not draw. From 2026-09-25 'auto' asked the token ladder (a token meant Mapbox); since
+ * 2026-09-28 it is MapLibre whether or not a token is present (useMapProvider.js, resolveMapProvider):
+ * holding a token is a capability, choosing Mapbox is a decision. A token still authenticates a map
+ * that asked for Mapbox, and place search uses one on either engine.
+ *
+ * ⚠ THIS GATE ASSERTED THE OLD RULE FOR A DAY AND NOBODY SAW: it sat in no chain, so its case 2
+ * (a host token draws Mapbox) never ran against the change that made it false. It is now in
+ * gates:post, where it is NOT MEASURED outside the browser slot and runs in it.
  *
  * THREE CASES, on one map leaf of THIS tree (or --dir), each in a fresh browser context:
- *   1 NO TOKEN        the map draws with MapLibre, makes ZERO requests to any *.mapbox.com host, and
- *                     PAINTS (distinct colours on the canvas, not a blank rectangle).
- *   2 HOST TOKEN      the host sets window.MAP_TOKEN before the page runs: the map draws with Mapbox,
- *                     and THAT token is the access_token on its requests to Mapbox.
- *   3 EXPLICIT WINS   the same host token, with ?provider=maplibre: MapLibre, zero Mapbox requests.
- * The token in case 2 is a well-formed FAKE, built at run time; Mapbox requests that carry it are
- * recorded and aborted, never sent. The engine is read from the canvas that drew
- * (mapboxgl-canvas / maplibregl-canvas), not from which globals happen to exist.
+ *   1 NO TOKEN          the map draws with MapLibre, makes ZERO requests to any *.mapbox.com host, and
+ *                       PAINTS (distinct colours on the canvas, not a blank rectangle).
+ *   2 HOST TOKEN ALONE  the host sets window.MAP_TOKEN before the page runs and names no provider: the
+ *                       map STILL draws with MapLibre, paints, and makes ZERO Mapbox requests. This is
+ *                       the case the 09-28 rule exists for.
+ *   3 ASKED FOR MAPBOX  the same host token with ?provider=mapbox: the map draws with Mapbox, and THAT
+ *                       token is the access_token on its requests to Mapbox.
+ * The token is a well-formed FAKE, built at run time; Mapbox requests that carry it are recorded and
+ * aborted, never sent. The engine is read from the canvas that drew (mapboxgl-canvas /
+ * maplibregl-canvas), not from which globals happen to exist.
  *
  * USAGE  node internal/check-auto-engine.mjs [--dir <tree root>] [--leaf <bundle>/<profile>]
  *        Run through internal/browser-slot.sh.
@@ -43,7 +50,7 @@ const FAKE_TOKEN = ['pk', b64({ u: 'auto-engine-check', a: 'not-a-real-token' })
 if (!existsSync(join(DIR, TREE_NAME, LEAF, 'index.html'))) { console.log(`AUTO-ENGINE: NOT MEASURED — no ${LEAF} under ${DIR}/${TREE_NAME}/`); process.exit(75) }
 
 const port = await new Promise((ok) => { const s = createServer().listen(0, '127.0.0.1', () => { const n = s.address().port; s.close(() => ok(n)) }) })
-const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR], { stdio: 'ignore' })
+const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR, '--exit-with-parent'], { stdio: 'ignore' })
 const stop = () => { try { srv.kill() } catch { /* gone */ } }
 let up = false
 for (let i = 0; i < 40 && !up; i++) { await new Promise((r) => setTimeout(r, 150)); up = await fetch(`http://127.0.0.1:${port}/${TREE_NAME}/manifest.json`).then((r) => r.ok).catch(() => false) }
@@ -108,8 +115,8 @@ async function measure({ hostToken = '', query = '' }) {
 const results = []
 try {
   results.push({ name: '1 no token', r: await measure({}) })
-  results.push({ name: '2 host token', r: await measure({ hostToken: FAKE_TOKEN }) })
-  results.push({ name: '3 explicit maplibre + token', r: await measure({ hostToken: FAKE_TOKEN, query: '?provider=maplibre' }) })
+  results.push({ name: '2 host token alone', r: await measure({ hostToken: FAKE_TOKEN }) })
+  results.push({ name: '3 provider mapbox + token', r: await measure({ hostToken: FAKE_TOKEN, query: '?provider=mapbox' }) })
 } finally { await browser.close(); stop() }
 
 let bad = 0, unmeasured = 0
@@ -118,17 +125,16 @@ for (const { name, r } of results) {
   if (r.err) { console.log(`  ??    ${name.padEnd(30)} NOT MEASURED — ${r.err}`); unmeasured++; continue }
   const withToken = r.mapbox.filter((u) => u.searchParams.has('access_token'))
   const summary = `engine ${r.engine}, ${r.mapbox.length} Mapbox request(s)${r.prompt ? ', TOKEN PROMPT shown' : ''}`
-  if (name.startsWith('1')) {
+  if (name.startsWith('1') || name.startsWith('2')) {
+    // The same verdict for both: a token that is merely PRESENT must change nothing about the engine.
     say(r.engine === 'maplibre' && r.mapbox.length === 0 && r.colours >= MIN_COLOURS && !r.prompt, name,
       `${summary}, ${r.colours} colours (floor ${MIN_COLOURS}) — want maplibre, 0 Mapbox requests, painted, no prompt`)
-  } else if (name.startsWith('2')) {
+  } else {
     const carries = withToken.length > 0 && withToken.every((u) => u.searchParams.get('access_token') === FAKE_TOKEN)
     say(r.engine === 'mapbox' && carries, name,
       `${summary}, ${withToken.length} carry a token${withToken.length && !carries ? ' — NOT the host token' : ''} — want mapbox, the host token on its requests`)
-  } else {
-    say(r.engine === 'maplibre' && r.mapbox.length === 0, name, `${summary} — want maplibre, 0 Mapbox requests`)
   }
 }
 if (bad) { console.log(`AUTO-ENGINE: FAIL — ${bad} of 3 case(s) do not hold.`); process.exit(1) }
 if (unmeasured) { console.log(`AUTO-ENGINE: NOT MEASURED — ${unmeasured} case(s) could not be judged.`); process.exit(75) }
-console.log('AUTO-ENGINE: PASS — no token draws MapLibre keyless; a host token draws Mapbox with that token; an explicit provider wins.')
+console.log('AUTO-ENGINE: PASS — the default draws MapLibre keyless with or without a host token; provider mapbox draws Mapbox with that token.')

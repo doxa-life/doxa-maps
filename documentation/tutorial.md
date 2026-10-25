@@ -153,7 +153,7 @@ single script tag:
 
 ```html
 <script src="/doxa-maps/harvest-map/harvest-map.js"></script>
-<harvest-map profile-config='{"profile":"harvest-map","tk":"pk.eyJ..."}'></harvest-map>
+<harvest-map profile-config='{"profile":"harvest-map","tk":"MAPBOX_PUBLIC_TOKEN"}'></harvest-map>
 ```
 
 The element tag matches your map — the agent sets it when it renames the template. A

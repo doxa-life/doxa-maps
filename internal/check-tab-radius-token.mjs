@@ -7,7 +7,7 @@
  * row — under a real instruction to imitate the YouTube active row. Measured against the rest of
  * the product that is the only thing shaped that way: .vtl-collapse is 8px, the filter toggles in
  * library/components/search are 8px, and 8px is already the most common radius in the layout file.
- * The Driver reversed it: "there is nowhere else in the app that has that same roundedness."
+ * That was reversed: nothing else in the app has that same roundedness.
  *
  * ★ WHY A GATE AND NOT JUST THE FIX. The 999px rationale is still in the file, kept deliberately as
  * history. A superseded rationale that still reads as current is exactly how a reversed decision
@@ -17,7 +17,7 @@
  *
  * WHAT IT ASSERTS, and why each assertion is here rather than the obvious one:
  *   A. .vtl-tab declares its radius through var(--vtl-radius,…), not a literal. Asserting the
- *      TOKEN rather than the value "8px" is the point: the Driver's requirement is that the tabs,
+ *      TOKEN rather than the value "8px" is the point: the requirement is that the tabs,
  *      the collapse button and the filter toggles agree, which a shared knob guarantees and three
  *      matching literals only coincidentally satisfy.
  *   B. The token's fallback equals .vtl-collapse's literal radius, READ FROM THE FILE. A hard-coded
@@ -53,13 +53,21 @@ const fail = (m) => { console.error('TAB-RADIUS: FAIL — ' + m); process.exit(1
 // catches 999px, 9999px and the occasional 50vh.
 const PILL_MIN = 100
 
+// Does this line open a rule whose selector list names `cls` as a WHOLE selector? `.vtl-collapse, .vtl-home {`
+// counts (the home link joined Collapse's rule so the two share one box); `.vtl-collapse:hover`,
+// `.vtl-collapse-tx` and `.vtl.rail-collapsed .vtl-collapse` do not.
+function opensRuleFor(ln, cls) {
+  const m = ln.match(/^\s*([^{}]+)\{/)
+  return !!m && m[1].split(',').map((x) => x.trim()).includes(cls)
+}
+
 function auditLines(lines) {
   const problems = []
 
   // ── the reference: .vtl-collapse's literal radius, read from the file, never assumed ──────────
   const collapse = []
   lines.forEach((ln, i) => {
-    if (!/^\s*\.vtl-collapse\s*\{/.test(ln)) return
+    if (!opensRuleFor(ln, '.vtl-collapse')) return
     const m = ln.match(/border-radius:\s*([^;]+);/)
     if (m) collapse.push({ line: i + 1, value: m[1].trim() })
   })
@@ -124,7 +132,7 @@ function auditLines(lines) {
     if (tok[1].trim() !== reference) {
       problems.push(`${REL}:${t.line} — the token fallback is ${tok[1].trim()} but .vtl-collapse ` +
         `(line ${collapse[0].line}) is ${reference}.\n` +
-        '    These are the two surfaces the Driver named as needing to match. Change both or neither.')
+        '    These are the two surfaces named as needing to match. Change both or neither.')
     }
   }
 
@@ -151,6 +159,9 @@ if (process.argv.includes('--self-test')) {
       'cursor:pointer; border-radius:999px; font:inherit;')],
     ['literal-instead-of-token', (s) => s.replace('cursor:pointer; border-radius:var(--vtl-radius,8px); font:inherit;',
       'cursor:pointer; border-radius:8px; font:inherit;')],
+    // the reference must be read from Collapse's rule even inside a selector list: change ONLY that rule's
+    // radius and the (unchanged) tabs no longer agree with it.
+    ['collapse-radius-moved', (s) => s.split('\n').map((l) => (opensRuleFor(l, '.vtl-collapse') ? l.replace(/border-radius:\s*8px;/, 'border-radius:12px;') : l)).join('\n')],
   ]
   let bad = 0
   for (const [name, poison] of cases) {
@@ -161,7 +172,7 @@ if (process.argv.includes('--self-test')) {
     if (!caught) bad++
   }
   if (bad) { console.error(`TAB-RADIUS SELF-TEST: FAIL — ${bad} case(s) not caught.`); process.exit(1) }
-  console.log('TAB-RADIUS SELF-TEST: PASS — both regressions caught; tree untouched (poisoned in memory).')
+  console.log('TAB-RADIUS SELF-TEST: PASS — every regression caught; tree untouched (poisoned in memory).')
   process.exit(0)
 }
 

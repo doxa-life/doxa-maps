@@ -1,3 +1,4 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * plugin-designs/gospel-resources/index.js — bundle entry for GOSPEL RESOURCES.
  *
@@ -17,7 +18,6 @@
  * plugin call before a map exists would be dead code implying a capability the
  * bundle does not have.
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 // Evaluated by Vite at build time relative to THIS file, so it captures only this
 // bundle's profiles.

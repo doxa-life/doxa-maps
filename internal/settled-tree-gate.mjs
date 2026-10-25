@@ -60,7 +60,7 @@ const MIN_DIRS = Number(process.env.MIN_DIRS || 21)
 // The old floor was set when generate-tree.mjs also emitted a <bundle>/index.html CHOOSER page for
 // every bundle. Those 19 pages were removed deliberately (they returned HTTP 200, mounted NOTHING,
 // were referenced by the manifest ZERO times, and their stylesheet was literally named
-// "staging-forge" — they are the duplicate staging surface the Driver asked to archive). Removing
+// "staging-forge" — they are the duplicate staging surface that was to be archived). Removing
 // them legitimately drops the recursive index.html count from 63 to 44.
 //
 // ★ WHY THIS EDIT MATTERS MORE THAN THE NUMBER: left at 50, a CORRECT tree fails this gate forever,

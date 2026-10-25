@@ -4,7 +4,7 @@ import { inject, ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue
 const profileConfig = inject('profileConfig', null)
 const treeType = computed(() => profileConfig?.value?.treeType || null)
 
-// One tree per category (per user spec). Each parent has exactly 2 children to
+// One tree per category. Each parent has exactly 2 children to
 // keep the visual pattern obvious. Lang tree intentionally shows one language
 // WITH dialects and one WITHOUT (to convey "not every language has dialects").
 const TREES = [
@@ -287,7 +287,7 @@ onBeforeUnmount(() => resizeObs?.disconnect())
 </template>
 
 <style scoped>
-/* Per user 2026-05-02: all 4 cells must fit in the viewport without scroll.
+/* All 4 cells must fit in the viewport without scroll.
    .page is now a flex column that fills the profile; .trees-grid takes the
    remaining height with two equal rows. Each cell hides overflow so a
    text-heavy cell (the discovery "?" cell) cannot make its row taller than
@@ -329,7 +329,7 @@ onBeforeUnmount(() => resizeObs?.disconnect())
   border-radius: 8px;
   padding: 6px 8px;
   box-shadow: 0 3px 10px rgba(0,0,0,0.22);
-  /* Per user 2026-05-02: cells were hiding field columns. Allow per-cell
+  /* Cells were hiding field columns. Allow per-cell
      scrolling instead — full content stays visible inside its tile. */
   overflow: auto;
   display: flex; flex-direction: column;
@@ -337,8 +337,8 @@ onBeforeUnmount(() => resizeObs?.disconnect())
 .tree-cell::-webkit-scrollbar { width: 6px; height: 6px; }
 .tree-cell::-webkit-scrollbar-thumb { background: #484f58; border-radius: 3px; }
 
-/* ── Table+SVG container: scrolls horizontally if columns don't fit (per user
-   2026-05-02: don't hide field columns just to keep cells slim) ── */
+/* ── Table+SVG container: scrolls horizontally if columns don't fit (field
+   columns are never hidden just to keep cells slim) ── */
 .tree-table-wrap {
   position: relative;
   overflow-x: auto;

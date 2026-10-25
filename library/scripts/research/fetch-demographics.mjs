@@ -3,8 +3,8 @@
 //   node fetch-demographics.mjs  ->  out/demographics-by-country.json
 //
 // ═══ THE QUESTION THIS ANSWERS ══════════════════════════════════════════════
-// design note 2026-08-01: "we want to keep up with population growth in all these
-// cities globally… so we can know how many people die every day without Christ."
+// Population growth is tracked for these cities worldwide, so the number of people who
+// die each day without Christ can be estimated.
 //
 // The strategic point is a RATE COMPARISON, not a body count: is gospel access
 // growing faster than the population it has to reach? A people group whose

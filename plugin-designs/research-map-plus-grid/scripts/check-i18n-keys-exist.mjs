@@ -120,7 +120,7 @@ for (const p of catalogues) {
 const files = listFiles((p) => /\.(vue|js|mjs)$/.test(p) && !p.includes('/scripts/') && !p.includes('/locales/'))
 
 // ── ★ A TRANSLATOR CAN ARRIVE FROM A COMPOSABLE, NOT ONLY FROM A LOCAL WRAPPER ───────────────
-// go-int planted a poison key behind `const T = useGiT()` and this gate PASSED. Three failures of
+// a poison key was planted behind `const T = useGiT()` and this gate PASSED. Three failures of
 // the same shape stacked up: (1) the file never writes the word tStatic, so the precondition below
 // skipped it outright; (2) `useGiT` is not `tStatic`, so aliasesIn() found no alias at all; and
 // (3) the alias is PREFIXED — useOptionalT carries a namespace — while its call sites pass BARE
@@ -267,7 +267,7 @@ function aliasesIn(src) {
 }
 
 // ── ★ SELF-TEST, BECAUSE THIS GATE ALREADY PASSED A PLANTED POISON KEY ────────────────────────
-// go-int planted `T('poison_key')` behind `const T = useGiT()` and this gate reported the tree
+// a poison key `T('poison_key')` was planted behind `const T = useGiT()` and this gate reported the tree
 // clean. That is the failure a check cannot be forgiven for: a red gate gets fixed, a green one that
 // should be red gets BELIEVED, and this one guards goal (d). Measured before and after, with the
 // same poison on disk: the version on main PASSES it, this version FAILS it as

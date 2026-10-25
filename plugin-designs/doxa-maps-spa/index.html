@@ -35,7 +35,9 @@
         with no page reload; each map tab loads lazily on first open.</p>
     </div>
     <div class="frame">
-      <doxa-maps-spa id="dms" title="DX-Maps"></doxa-maps-spa>
+      <!-- urlOwner 'app': this page is ours (the dev server serves it), so a tab pick writes ?tab= and a reload or a
+           sent link opens that tab (useViewAddress). A partner's page leaves it out and is never written. -->
+      <doxa-maps-spa id="dms" heading="Deep Research" profile-config='{"urlOwner":"app"}'></doxa-maps-spa>
     </div>
   </div>
 

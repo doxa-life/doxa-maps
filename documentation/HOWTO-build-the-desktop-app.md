@@ -4,22 +4,23 @@ Rudder (`plugin-designs/rudder-voice`) is voice-to-text that runs on your own co
 local engine (`backend/rudder-engine`, Go) that drives NVIDIA's NeMo-Speech.cpp speech server. The
 desktop app is a Tauri window around the built web tree, with the engine started as a **sidecar**.
 
-This page is written for an agent following it cold. **Read "What is proven" first**: most of the
-desktop path has never been run by anyone, and the steps say so where that is the case.
+This page is written for an agent following it cold. **Read "What is proven" first**: the Linux app is
+proven and in use; the macOS and Windows path has not been run yet, and the steps say so where that is
+the case.
 
 ## What is proven, and what is not
 
 | Piece | State |
 |---|---|
 | The web tree (`bun run build` → `public/dx-maps/`) | Proven. Every landing builds it. |
-| The generic Tauri shell (`deployment/src-tauri/`) | Exists. It opens the Research Gallery, builds only a Linux `.deb`, and has never been packaged on macOS or Windows. |
+| The generic Tauri shell (`deployment/src-tauri/`) | Exists. It opens Deep Research, builds only a Linux `.deb`, and has never been packaged on macOS or Windows. |
 | The engine on Linux (`bun run dev`, laptop mic) | Proven. |
 | The engine taking the **webview's** microphone (`RUDDER_AUDIO=browser`) | Proven on Linux: audio streamed over `/api/rudder/stream` came back as the full test sentence. |
 | The engine **compiling** for macOS (arm64, x86_64) and Windows (x86_64) | Proven by cross-compiling. It has **never been run** on either. |
 | The engine accepting a WebSocket from the Tauri webview (`tauri://localhost`, `http://tauri.localhost`) | Proven against a running engine; another site's origin is refused. |
 | NeMo-Speech.cpp runtime for macOS / Windows | Published by NVIDIA (release v0.1.0: `macos-aarch64-cpu`, `macos-aarch64-metal`, `macos-x86_64-cpu`, `windows-x86_64-cpu` / `-cuda` / `-vulkan`). **Never run here.** |
-| `bun run desktop:build rudder-voice` on **Linux** | Proven: produced `Rudder_0.1.0_amd64.deb` (8.8 MB) holding the app and the `rudder-engine` sidecar side by side. The app has **not been launched** from it yet (no display on the build box). |
-| The shell starting and stopping the engine sidecar | Built (`deployment/src-tauri/src/main.rs`), compiled into that installer; not yet run. |
+| `bun run desktop:build rudder-voice` on **Linux** | Proven: produced `Rudder_0.1.0_amd64.deb` (8.8 MB) holding the app and the `rudder-engine` sidecar side by side. The installed Linux app has since been launched and is in use: it is used to dictate the work on these maps. |
+| The shell starting and stopping the engine sidecar | Built (`deployment/src-tauri/src/main.rs`), compiled into that installer. The installed Linux app works (the row above); not yet run on macOS or Windows. |
 | First-run model download | **Not built.** Run `setup-runtime.sh` into the app's data folder by hand (step 7). |
 
 ## 1. Prerequisites
@@ -124,6 +125,6 @@ macOS and Windows the app must do the same on first run:
 - `desktop:build` has run on Linux only; the app it produced has not been launched yet. Nothing has run on macOS or Windows.
 - The macOS/Windows runtime archive layout, and whether the engine's derived path matches it.
 - The first-run download, including resuming an interrupted 742 MB download.
-- Mapbox basemaps in the Research Gallery need the token host to allow the Tauri origin
+- Mapbox basemaps in Deep Research need the token host to allow the Tauri origin
   (`deployment/src-tauri/README.md`). Rudder itself needs no token.
 - If the engine crashes, its speech server may keep running (and holding ~1 GB) until the app quits.

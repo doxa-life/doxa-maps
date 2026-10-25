@@ -2,7 +2,7 @@
 /**
  * check-language-code-link.mjs — the map's language selection must reach the grid, or narrow nothing.
  *
- * THE BUG (rega, 2026-09-26, main 49992a5d, MapLibre, BOTH locales). Languages > Language >
+ * THE BUG (measured on main 49992a5d, MapLibre, BOTH locales). Languages > Language >
  * "Arabic": the map emitted `map-filtered` with {language:"Arabic", languageCode:""}, the composite
  * handed the grid an empty code, and the grid went 2,107 -> 0. An empty grid reads as "no results",
  * which is the worst shape a wiring bug can take — the reader believes the data.
@@ -48,11 +48,11 @@
  *   E. no tier may produce a value that selects zero rows. That is the user-visible invariant and
  *      it is asserted directly, not inferred.
  *   F. a DIALECT reports a NAME and not a tree node id, and the emitter sends ONE event per
- *      settled selection rather than a burst. Both from rega's row 43 case 3.
+ *      settled selection rather than a burst. Both from a measured case.
  *   G. that ONE event is not the cascade's transient EMPTY state. Same case, second measurement:
  *      the coalescing worked and the single event was EMPTY in 3 of 4 runs.
  *
- * NO NETWORK, NO BROWSER (Playwright is rega's alone). The fixture is committed and was taken from
+ * NO NETWORK, NO BROWSER (Playwright is the browser-QA lane's alone). The fixture is committed and was taken from
  * the live source; refresh it with --refresh-fixture when the source's language set changes.
  *
  * NEGATIVE-TESTED 2026-09-26, each FAILS:
@@ -221,7 +221,7 @@ if (matchesLanguage) {
 }
 
 // ── E. the dialect tier: a name, and one event ───────────────────────────────────────────────
-// rega, row 43 case 3, on BOTH engines in BOTH locales: clicking "Arabic, Sudanese" emitted the
+// Measured on BOTH engines in BOTH locales: clicking "Arabic, Sudanese" emitted the
 // right languageCode and narrowed the grid in only ONE of four runs, while the `language` slot read
 // ", Afro-Asiatic__Arabic__Sudanese".
 //   THE NAME: selectedDialect.key is the TREE NODE ID (family__baseLang__dialect) and
@@ -258,7 +258,7 @@ if (matchesLanguage) {
 }
 
 // ── G. an empty report after a filled one is re-taken, and the re-take is BOUNDED ────────────
-// rega, row 43 case 3 at 52eeb0db: coalescing landed — one event per click — and in 3 of 4 runs
+// measured at 52eeb0db: coalescing landed — one event per click — and in 3 of 4 runs
 // that one event was EMPTY, so the grid stayed at 2,107. The cascade behind a dialect click passes
 // through a fully-cleared store state (mapStore.selectLanguage sets selectedDialect = null BEFORE
 // setting the language), and the settle timer fired inside it.
@@ -272,7 +272,7 @@ if (matchesLanguage) {
   if (!/_lastEmitWasFilled/.test(src) || !/const isEmpty/.test(src)) {
     fails.push('G  research-map.vue no longer guards an all-empty report. A dialect click passes through a fully-cleared store state, so the settled read can be taken mid-cascade and ship {language:"",languageCode:""} — which the composite correctly reads as "the reader cleared everything".')
   } else if (!/EMPTY_SETTLE_CEILING_MS/.test(src)) {
-    // ★ THE BOUND'S SHAPE CHANGED AND THE INVARIANT DID NOT. It used to be a retry COUNT; rega
+    // ★ THE BOUND'S SHAPE CHANGED AND THE INVARIANT DID NOT. It used to be a retry COUNT; it was
     // measured that 3 x 60ms catches the cascade on MapLibre and not on Mapbox, so the count became
     // a TIME CEILING — the difference being what the number is FOR. A count is a guess at how long
     // the cascade takes, which cannot be known from here; a ceiling is how long before a clear is
@@ -285,7 +285,7 @@ if (matchesLanguage) {
 }
 
 // ── H. the echo guard survives the coalescing ────────────────────────────────────────────────
-// rega, row 50: a region click emitted the selection and then an EMPTY event, passing only because
+// Measured: a region click emitted the selection and then an EMPTY event, passing only because
 // the composite's 1.2s push window swallowed the second. emitFilterState has always opened with
 // `if (applyingExternal) return` — a change pushed DOWN by the host is not a change to report back
 // up — and that worked while the emit ran synchronously inside the watcher. Debouncing moved the

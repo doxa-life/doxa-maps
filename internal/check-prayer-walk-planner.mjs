@@ -3,8 +3,8 @@
  * check-prayer-walk-planner.mjs — the Prayer Walk Planner must be a full-page tool that prints a
  * real walking map.
  *
- * WHAT THIS PROTECTS (the Driver: "the prayer walk planner is still a very tiny map, not expanding
- * the full page", and "the printed map is a ~10px sliver"):
+ * WHAT THIS PROTECTS (as reported: the prayer walk planner was still a very tiny map that did not
+ * fill the page, and the printed map was a ~10px sliver):
  *   1. SIZE — the map canvas fills the page below the toolbar, standalone (its leaf) AND inside the
  *      Research Gallery, at 1280x800 and 390x844. Measured before the fix: 747x76 in the gallery on
  *      desktop and 390x0 on a phone, while the leaf filled — the gallery's inline host style fell
@@ -34,7 +34,7 @@ try { ({ chromium } = await import('./lib/playwright-guarded.mjs')) } catch { co
 const OUT = process.env.OUT || '/tmp'
 const free = () => new Promise(ok => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)) }) })
 const TP = await free(), HP = await free(), TREE = `http://127.0.0.1:${TP}/${TREE_NAME}`
-const srv = spawn('node', ['internal/serve-strict.mjs', '--port', String(TP)], { cwd: ROOT, stdio: 'ignore' })
+const srv = spawn('node', ['internal/serve-strict.mjs', '--port', String(TP), '--exit-with-parent'], { cwd: ROOT, stdio: 'ignore' })
 const host = createServer((q, r) => { const l = new URL(q.url, 'http://x').searchParams.get('l') || 'en'; r.writeHead(200, { 'content-type': 'text/html' }); r.end(`<!doctype html><html lang="${l}"><body style="margin:0"><script src="${TREE}/doxa-maps-spa/doxa-maps-spa.js"></script><doxa-maps-spa tab="prayer-walk-planner" style="height:100vh"></doxa-maps-spa></body></html>`) }).listen(HP, 'localhost')
 await new Promise(r => setTimeout(r, 800))
 
@@ -104,7 +104,7 @@ try {
   // 5. PRINT RESOLUTION, MEASURED: the real printed sheet laid out as PRINT at the printable width
   // (8.5in - 2 x 12mm @page margins = 725 CSS px; emulateMedia alone does NOT apply @page margins,
   // which is how a first measurement read the frame as 8.48in wide). DPI = natural px / printed in.
-  // The Driver: "a print that stays sharp when zoomed" — at >= 300 DPI a zoomed PDF shows real
+  // The ask: a print that stays sharp when zoomed — at >= 300 DPI a zoomed PDF shows real
   // street names and house outlines, not an upscaled screen grab.
   await p.evaluate(() => { new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.tagName === 'IFRAME') { try { n.contentWindow.print = () => {} } catch (_) {} window.__pwpFrame = n } }).observe(document.body, { childList: true }) })
   await p.evaluate(`(async () => { const el = (${findEl.toString()})(); const z = el.listPolygons().find(x => x.title === 'Balat'); el.selectPolygon(z.id, true); await el.print() })()`)

@@ -2,7 +2,7 @@
 /**
  * check-no-credentials-omit.mjs — no data fetch in library/ or plugin-designs/ may use credentials:'omit'.
  *
- * WHY (dx-shepherd, 2026-09-27): behind any login gate (basic auth, a session cookie, OIDC) the Research
+ * WHY (2026-09-27): behind any login gate (basic auth, a session cookie, OIDC) the Research
  * Gallery said "Could not load Big Picture", because doxa-maps-spa fetched its SAME-ORIGIN manifest with
  * credentials:'omit', so the gate's cookie never went and the request was refused. 'same-origin' (the fetch
  * default) sends credentials only to the page's own origin: a cross-origin CDN or token service still

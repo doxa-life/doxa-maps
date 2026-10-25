@@ -3,9 +3,8 @@
 // ★ ONE RENDERER, TWO CALLERS. The packet is produced in two places:
 //   - library/scripts/posters/packet.mjs   (build time, Node, writes files)
 //   - the UPG-100 legend's Export > Prayer packet action (click time, browser)
-// Both import THIS module, so a change to a page lands in both. The backlog card
-// asked for exactly this: "reuse the existing print actions rather than growing a
-// fourth implementation."
+// Both import THIS module, so a change to a page lands in both. That is the design:
+// reuse the existing print actions rather than grow a fourth implementation.
 //
 // It is pure: no fs, no process, no DOM. Everything it needs is passed in —
 // strings, language, the zone, its groups, photos, and the map SVG. That is what
@@ -35,22 +34,26 @@ const RTL = new Set(['ar', 'he', 'fa', 'ur', 'ps', 'sd', 'yi']);
 // ⚠ A width heuristic got this exactly backwards — it reported Arabic and Chinese
 // broken and Hindi fine, because Devanagari tofu boxes happen to match real glyph
 // advance. Never infer glyph coverage from measurements; look at the pixels.
+const DEVANAGARI_ALSO = "'Noto Sans Devanagari','Mangal','Nirmala UI','Kohinoor Devanagari'";
 const SCRIPT_FONT = {
+  // `also`: the Devanagari faces a device commonly has, named after the vendored one, so a print whose caller
+  // supplies no fontData still lands on a real Devanagari face rather than on whatever the browser falls to.
   hi: { family: 'Noto Serif Devanagari', dir: 'noto-serif-devanagari',
-        file: 'noto-serif-devanagari-400-devanagari.woff2' },
+        file: 'noto-serif-devanagari-400-devanagari.woff2', also: DEVANAGARI_ALSO },
   mr: { family: 'Noto Serif Devanagari', dir: 'noto-serif-devanagari',
-        file: 'noto-serif-devanagari-400-devanagari.woff2' },   // Marathi, same script
+        file: 'noto-serif-devanagari-400-devanagari.woff2', also: DEVANAGARI_ALSO },   // Marathi, same script
   ne: { family: 'Noto Serif Devanagari', dir: 'noto-serif-devanagari',
-        file: 'noto-serif-devanagari-400-devanagari.woff2' },   // Nepali, same script
+        file: 'noto-serif-devanagari-400-devanagari.woff2', also: DEVANAGARI_ALSO },   // Nepali, same script
 };
 
-import { scatterCells } from '../components/charts/packetCharts.js'
 // The set LAYOUTS (gospel's figures, promoted to library/ by regions). Imported rather than injected
 // because — unlike describeGroup's country resolver — these have ZERO imports of their own and run
 // under plain node, so they cannot break `node internal/check-*.mjs`. Verified by importing and
 // CALLING them, not by reading them. They return data; the SVG is ours.
 import { layoutBoundedSet, boundedSetTally } from '../components/charts/boundedSet.js'
-import { layoutCenteredSet, ringTally, RING_MAX } from '../components/charts/centeredSet.js'
+import { layoutCenteredSet, ringTally, ringRadii, RING_MAX } from '../components/charts/centeredSet.js'
+import { bandFill } from '../components/charts/ringBands.js'
+import { peoplePerCell } from '../components/charts/packetCharts.js'
 
 // `describe` is INJECTED at the same seam as `strings`, and deliberately not imported. This module
 // has (almost) no imports on purpose: the SAME file runs under Node for the offline generator and
@@ -84,6 +87,10 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
     // they are structure and scripture addresses, not prose.
     return { ...en, ...Object.fromEntries(Object.entries(loc).filter(([, v]) => v !== undefined && v !== '')) };
   });
+  // Point 4's reading list, merged the same way: English fixes the length and the scripture addresses,
+  // a locale supplies only the names (a partial block keeps the English name for the rest).
+  const LH = Array.isArray(L.point4_heart) ? L.point4_heart : [];
+  const HEART = (EN.point4_heart || []).map((en, i) => ({ ...en, who: (LH[i] && LH[i].who) || en.who }));
   const fill = (s, vars) => String(s).replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ''));
   const flat = (v) => (v && typeof v === 'object' ? (v.label ?? v.value ?? '') : (v ?? ''));
 
@@ -92,7 +99,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   const PAGE_W_IN = 8.5;
   const SCALE = (PAGE_W_IN * 96 / W).toFixed(6);   // print scale: one sheet = one page
   const M = 60, HEAD = 90;                          // margins + running header
-  // ★ THE PROFILE TABLE (Driver brief A1 item 1): ~20 per page, picture | generated localized
+  // ★ THE PROFILE TABLE (brief A1, item 1): ~20 per page, picture | generated localized
   // description | three prayer checkboxes. This replaces the 2-column card grid with 20 FULL-WIDTH
   // ROWS. PER_PAGE stays 20, so this is a change of LAYOUT SHAPE, NOT OF PAGINATION — which is what
   // lets check-packet-render's dropped-groups assertion (sheets === 1 + … + ceil(cards/PER_PAGE) + 2)
@@ -100,13 +107,16 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // comment refuses a ±1 tolerance, so a rewrite that needed it loosened would be the wrong rewrite.
   const ROWS = 20, PER_PAGE = ROWS;
   const COLS = 1;
-  // ★ THE THREE PRAYER COLUMNS, the Driver's own three questions (2026-09-27), in his order:
-  //   1 have I blessed them
-  //   2 God, what do you want me to KNOW about them
-  //   3 God, what do you want me to DO to help them
-  // A tick box per group per question, printed on the card so the packet is a WORKING sheet rather
-  // than a reference: the reader marks it as they pray. Deliberately three and not more — the brief
-  // is one hour with God, and a fourth column turns a prayer aid into a form.
+  // ★ THE THREE PRAYER COLUMNS, three questions in this order:
+  //   1 did I bless them
+  //   2 Jesus, what do you want me to KNOW about them
+  //   3 Jesus, what do you want me to DO for them
+  // The headings ARE the questions, asked of Jesus in the reader's own voice: "What to know" and "What to
+  // do" did not say who was being asked. A TALLY cell per group per question, not a tick box: the list is
+  // prayed through again and again (see the pace table), so a cell counts every time, where a tick could
+  // only say "once". Printed on the row so the packet is a WORKING sheet rather than a reference.
+  // Deliberately three and not more — the brief is one hour with God, and a fourth column turns a
+  // prayer aid into a form.
   const PRAY_COLS = ['pray_blessed', 'pray_know', 'pray_do'];
   const GUT = 14;
   const CW = (W - 2 * M - GUT * (COLS - 1)) / COLS;   // 1380px — the full row width
@@ -118,7 +128,23 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   const PHOTO = Math.min(CH - 8, 64);                 // the picture column: square, row-height-capped
   // The three checkbox cells. Each holds a box plus its short label; sized so all three fit beside
   // the description without the labels wrapping in the longest locale we ship.
-  const PRAY_CELL = 84;
+  // The tally cells no longer carry their question under each box: the three questions head the table ONCE
+  // per page (.pray-head), so a cell is all tally room. 84 -> 116 gives every box more of it and the heads a
+  // readable 15px (three short lines; at 96px they were three tiny ones).
+  const PRAY_CELL = 160;
+  // The question heads above the first row of every page, and the first page's explanation (the intro,
+  // the blessing, the band) in a reserved block, so the first page holds FD_FIRST rows and the rest 20.
+  // FD_TOP_H is MEASURED: with a 100-group list the tallest locales' block uses 612px (es fr pt de it ro ru hi;
+  // en 591, ar 507, zh 513), so 640 keeps 28px; with the 62px head row the first page holds 11 rows. check:packet-render fails a block
+  // whose content outgrows it (the block clips rather than overlap the rows, so only a measurement sees it).
+  const PRAY_HEAD_H = 62, FD_TOP_H = 720;
+  const FD_ROWS_TOP = M + HEAD + FD_TOP_H + PRAY_HEAD_H;
+  const SET_PANEL = 660;                              // one square sets panel: two + a 40px gap fit 1380px
+  const SET_SOLO = 960;                               // one chart per page: a large square, centred
+  // ★ MEASURED FILL, 2026-09-29: at 960px the single-chart pages ended 60-69% of the way down the sheet
+  // (525-702px of blank paper below). The chart is an SVG, so it scales: the bounded set has nothing
+  // under it and takes nearly the full 1380px row; the centered set keeps room for its ring legend.
+  const SET_SOLO_W = { bounded: 1320, centered: 1240 };
   const PRAY_W = PRAY_CELL * PRAY_COLS.length;        // 252px
   // What is left is the description — the widest column on the page, and the point of the table.
   // For comparison an ENTIRE card in the old 2x10 grid was 683px wide; the description alone is 50%
@@ -150,7 +176,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // editing 22 hardcoded Georgia declarations. The browser falls through per
   // CHARACTER, so Latin text in a Hindi packet still renders in Georgia.
   const scriptStack = SF
-    ? `.sheet,.sheet *{font-family:'${SF.family}',Georgia,'Palatino Linotype',serif !important}`
+    ? `.sheet,.sheet *{font-family:'${SF.family}',${SF.also ? SF.also + ',' : ''}Georgia,'Palatino Linotype',serif !important}`
     : '';
 
   function css() {
@@ -180,40 +206,160 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
        (1380/52)=26.5px per side x 100 rows = 2,654px of grid in 1,521px of printable height — it
        overflows the page by 1.7x. Caught by computing the height before rendering rather than by
        looking at an overflowing PDF. 13px rows put 100 rows in 1,300px with room for the legend. */
-    .lc-grid{display:grid;grid-template-columns:repeat(52,1fr);grid-auto-rows:13px;gap:2px;width:100%}
-    .lc-c{display:block;width:100%;height:100%;border:1px solid #d8d3c4;border-radius:1px;background:#fff}
-    .lc-on{background:#b9b2a0;border-color:#b9b2a0}
+    /* ★ SUPERSEDED BY THE PRINTED LIFE CALENDAR'S LAYOUT (2026-09-29). Squares now, because the grid no
+       longer stretches to the page width: 11px boxes on a 14px pitch make 100 rows + 9 decade rules
+       ~1,500px tall and 52 columns ~730px wide, centred in a frame like the Module 1 sheet.
+       Height budget, measured on paper not guessed: head+lede end near y=210, the frame is ~1,560px,
+       the legend and foot ~80px, which lands above the ${H - M}px margin with room to spare. */
+    .pg-head-c,.pg-lede-c{text-align:center;margin-inline:auto}
+    .lc-frame{width:max-content;margin:0 auto;padding:10px 3px;border:1.5px solid #3b463d;background:#fff}
+    /* The life grid is one SVG (lifeGrid): two paths of boxes, hairlines between decades, small numbers. */
+    .lc-svg{display:block}
+    .lc-svg .lc-off{fill:#fff;stroke:#8f8a78;stroke-width:1}
+    .lc-svg .lc-on{fill:#c9a13b;stroke:#a8832a;stroke-width:1}
+    .lc-svg .lc-reached{fill:#2f6d4f;stroke:#2f6d4f;stroke-width:1}
+    .lc-svg .lc-rule{stroke:#3b463d;stroke-width:1.6}
+    .lc-svg .lc-rule-q{stroke:#cfc8b4;stroke-width:1;stroke-dasharray:3 3}
+    .lc-svg .lc-t{font:700 18px Georgia,serif;fill:#3b463d}
+    .lc-svg .lc-big{font-size:20px;fill:#1b1a17}
+    .lc-c{display:block;box-sizing:border-box;width:22px;height:11px;border:1px solid #8f8a78;background:#fff}
+    /* Jesus' 33 years: warm gold, the one shading on the life page. */
+    .lc-on{background:#c9a13b;border-color:#a8832a}
     /* The shaded share on the %-evangelical grid is the REACHED share, so it takes the accent colour and the
        unshaded majority stays quiet — the visual weight belongs to what is still waiting. */
     .lc-reached{background:#2f6d4f;border-color:#2f6d4f}
-    .lc-legend{display:flex;gap:34px;margin:20px 0 0;font:400 17px Georgia,serif;color:#413d35}
-    .lc-legend i{display:inline-block;width:15px;height:15px;vertical-align:-2px;margin-inline-end:8px}
-    .lc-foot{margin:14px 0 0;font:400 14px Georgia,serif;color:#6f6a5c}
+    .lc-legend{display:flex;justify-content:center;gap:34px;margin:16px 0 0;font:400 17px Georgia,serif;color:#413d35}
+    .lc-legend i{display:inline-block;vertical-align:-1px;margin-inline-end:8px}
+    .lc-per{margin:8px 0 0;text-align:center;font:600 16px Georgia,serif;color:#413d35}
+    .lc-foot{margin:12px auto 0;max-width:1180px;text-align:center;font:400 14px Georgia,serif;color:#6f6a5c}
+    .sheet-map-poster{background:#fff}
+    /* ⚠ THE FLOW PAGES HAD NO PADDING. .sheet is a bare box, and the pages laid out in flow (the life
+       calendar, the % grid, the sets) started their heading at the sheet's very edge, where a printer's
+       unprintable margin cuts it. Every flow page now keeps the same margin the absolute pages do. */
+    .sheet-flow{box-sizing:border-box;padding:${M + 12}px ${M}px ${M}px}
+    /* ── THE LIGHTWEIGHT WORKSHEET ── white paper, one header row per page, rows sized to tick. */
+    .sheet-worksheet{background:#fff}
+    .ws-top{display:flex;justify-content:space-between;margin:0 0 14px;font:400 15px Georgia,serif;color:#8a8577}
+    .ws-h1{font-size:34px}
+    .ws-intro{margin:8px 0 20px;max-width:1180px;font:400 22px/1.5 Georgia,serif;color:#413d35}
+    .ws-head,.ws-row{display:grid;grid-template-columns:58px ${WS_PHOTO}px 1fr repeat(${PRAY_COLS.length},${WS_TALLY_W}px);align-items:center;column-gap:8px}
+    /* The tally headings are questions of two short lines; text-wrap:balance breaks them evenly in every
+       language ("What do you / want me to know?") instead of leaving one word on a last line. */
+    .ws-head{align-items:end;padding:0 0 8px;border-bottom:2px solid #3b463d;font:700 15.5px/1.25 Georgia,serif;color:#6f6a5c;text-align:center}
+    .ws-head span{text-wrap:balance}
+    .ws-head span:nth-child(3){text-align:start}
+    .ws-ph{display:block;width:${WS_PHOTO}px;height:${WS_PHOTO}px;box-sizing:border-box;border-radius:3px;object-fit:cover}
+    .ws-ph.nophoto{border:1px solid #d6d0c0;background:#f2efe6;display:flex;align-items:center;justify-content:center;
+                   font:italic 11px Georgia,serif;color:#a89f8c;text-align:center;padding:3px}
+    .ws-row{height:${WS_ROW}px;box-sizing:border-box;border-bottom:1px solid #e2ddd0}
+    .ws-n{font:700 19px Georgia,serif;color:#8a8577;text-align:end;padding-inline-end:10px}
+    .ws-name{min-width:0}
+    .ws-name b{display:block;font:700 26px/1.2 Georgia,serif;color:#1b1a17;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ws-name small{display:block;font:400 18px/1.3 Georgia,serif;color:#6f6a5c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ws-name small.ws-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;
+                   font:400 ${WS_DESC_PX}px/1.3 Georgia,serif;margin-top:2px}
+    /* A TALLY cell: room for several groups of five marks, not a box for one tick. */
+    .ws-box{justify-self:center;width:${WS_TALLY_W - 10}px;height:${WS_ROW - 22}px;box-sizing:border-box;border:1.5px solid #b0a993;border-radius:6px;background:#fff}
+    .ws-foot{position:absolute;left:0;right:0;bottom:50px;text-align:center;font:400 12px Georgia,serif;color:#a89f8c}
+    /* The first page's description and pace table: quiet type, one rule per section, nothing boxed. */
+    .ws-sec{margin:0 0 6px;font:700 14px Georgia,serif;letter-spacing:.14em;text-transform:uppercase;color:#8a8577}
+    /* THE EXPLANATION BAND (explainBand): ruled above and below like the poster's header band, three columns
+       between short rules; the third is exactly the table's tally block, so its example sits over the cells. */
+    .xb-bless{margin:0 0 14px}
+    .xb-lead{margin:0 0 4px;font:400 19px/1.45 Georgia,serif;color:#413d35}
+    .xb{display:grid;column-gap:40px;border-top:1.5px solid #c9bfa4;border-bottom:1.5px solid #c9bfa4;padding:14px 0 12px;margin:0 0 16px}
+    .xb-col{position:relative;min-width:0}
+    .xb-col + .xb-col::before{content:'';position:absolute;inset-inline-start:-20px;top:4px;bottom:4px;border-inline-start:1px solid #d6ccb4}
+    .xb-p{margin:0 0 6px;font:400 16px/1.4 Georgia,serif;color:#413d35}
+    .xb .ws-pace-t{font-size:15px;table-layout:auto}
+    .xb .ws-pace-t td.xb-word{white-space:nowrap}
+    .xb .ws-pace-t th,.xb .ws-pace-t td{padding:3px 6px;border-bottom:1px solid #e2ddd0;text-align:start;font-size:15px;line-height:1.3}
+    .xb .ws-pace-t th{font-weight:700;color:#1b1a17}
+    .xb .ws-pace-t .xb-word{font-weight:700;color:#6d766e}
+    .xb .ws-cols li{font-size:16px;line-height:1.4;margin:0 0 7px}
+    .xb-ex-head,.xb-ex-row{display:grid}
+    .xb-ex-head{align-items:end;padding:0 0 6px;border-bottom:2px solid #3b463d;font:700 13px/1.2 Georgia,serif;color:#6f6a5c;text-align:center}
+    .xb-ex-head span{text-wrap:balance;padding:0 2px}
+    .xb-ex-row{padding:8px 0}
+    .xb-cell{justify-self:center;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:1.5px solid #b0a993;border-radius:6px;background:#fff}
+    .xb-cell-ws{width:${WS_TALLY_W - 10}px;height:${WS_ROW - 22}px}
+    .xb-cell-fd{width:${PRAY_CELL - 12}px;height:${Math.round(CH - 22)}px}
+    .xb-marks{height:60%;max-width:92%;stroke:#3b463d;stroke-width:2.6;stroke-linecap:round;fill:none}
+    .xb-ex-note{margin-top:4px;font-size:14px;color:#6f6a5c}
+    /* The prayer themes and scenes above the twelve points: a thin numbered list, ruled off below. */
+    .pt-themes{margin:0 0 10px;padding:0 0 6px;border-bottom:1.5px solid #c9bfa4}
+    .pt-th-h{font:400 var(--pt-th,19px)/1.3 Georgia,serif;color:#413d35}
+    .pt-th-h b,.pt-sc-h b{font:700 var(--pt-thb,20px) Georgia,serif;color:#1b1a17;letter-spacing:.02em}
+    .pt-th-i{font-style:italic;color:#6d766e}
+    .pt-th-list{display:flex;flex-wrap:wrap;gap:1px 20px;margin:2px 0 0;padding:0;list-style:none;font:400 var(--pt-th,19px)/1.3 Georgia,serif;color:#3b3226}
+    .pt-n{display:inline-block;min-width:1.3em;font-weight:700;color:#7a3b2e}
+    .pt-sc-r{font:600 var(--pt-scr,18px) Georgia,serif;color:#7a3b2e}
+    .ws-cols{margin:0;padding:0;list-style:none}
+    .ws-cols li{margin:0 0 6px;font:400 19px/1.45 Georgia,serif;color:#413d35}
+    .ws-cols li b{color:#1b1a17}
+    .ws-bless{margin:6px 0 4px;padding:2px 0;padding-inline-start:18px;border-inline-start:3px solid #d8cfb5;
+              font:italic 20px/1.45 Georgia,serif;color:#2b2924}
+    .ws-bless cite{display:block;margin-top:2px;font:400 14px Georgia,serif;font-style:normal;color:#8a8577}
+    .ws-refs{white-space:nowrap;overflow:hidden;font:400 16px/1.4 Georgia,serif;color:#6f6a5c}
+    .ws-wheel{margin:4px 0 14px;font:italic 18px/1.45 Georgia,serif;color:#413d35}
+    .ws-pace-lead{margin:0 0 6px;font:400 18px/1.45 Georgia,serif;color:#413d35}
+    .ws-pace-t{width:100%;border-collapse:collapse;table-layout:fixed;text-align:center;font:400 17px/1.3 Georgia,serif;color:#413d35}
+    .ws-pace-t th{padding:6px 4px;border-bottom:1.5px solid #3b463d;font:700 17px/1.25 Georgia,serif;color:#1b1a17}
+    .ws-pace-t td{padding:5px 4px;border-bottom:1px solid #e2ddd0}
+    .ws-pace-t .ws-pace-word td{font-weight:700;color:#6d766e}
+    .ws-pace-t .ws-pace-best{background:#f3efe3}
+    .ws-pace-note{margin:6px 0 16px;font:400 15px/1.4 Georgia,serif;color:#6f6a5c}
+    /* Upright, not italic, in scripts with no true italic: a slanted Arabic, Chinese or Devanagari line is a
+       synthesized oblique, which reads as a rendering fault rather than as emphasis. */
+    .ws-bless:lang(ar),.ws-wheel:lang(ar),.ws-bless:lang(zh),.ws-wheel:lang(zh),.ws-bless:lang(hi),.ws-wheel:lang(hi){font-style:normal}
+    /* Arabic SCRIPTURE (the blessing, Mark 5) names real Arabic faces before the generic serif: Georgia has no
+       Arabic, so each Arabic letter falls to the first named face the device has, instead of to whatever
+       system font the browser picks, which on one test machine had no glyph for a letter the Van Dyck text
+       used. The text itself now uses only common letters (_meta.note_on_blessing); this is the second guard.
+       Scoped to the scripture blocks, so no other page's measured fit moves. */
+    .ws-bless:lang(ar),.p4-passage:lang(ar),.p4-passage:lang(ar) *{font-family:Georgia,'Palatino Linotype','Noto Naskh Arabic',Amiri,'Traditional Arabic',Tahoma,serif !important}
 
     /* ── THE BOUNDED + CENTERED SETS (back matter) ──────────────────────────
        Two figures side by side. The SVGs carry no width/height — they scale to their
        column through the viewBox, which is what keeps gospel's boundary gap intact:
        the gap lives in the LAYOUT's coordinates and scaling the viewBox cannot
        compress it, whereas nudging r or spread would. */
-    .set-row{display:flex;gap:60px;align-items:flex-start;margin-top:26px}
-    .set-col{width:var(--set-col,600px);flex:0 0 auto;text-align:center}
-    .set-h{margin:0 0 10px;font:700 22px Georgia,serif;color:#1b1a17}
-    .set-svg{width:100%;height:auto;overflow:visible}
-    .set-ring{fill:none;stroke:#3b463d;stroke-width:2}
-    .set-ring-faint{fill:none;stroke:#d8d3c4;stroke-width:1}
-    .set-in{fill:#2f6d4f}
-    .set-out{fill:#b9b2a0}
-    /* ⚠ UNKNOWN IS INKED, NOT OMITTED — regions' rule, and it is right for print: a printed page
-       has no hover, so a category the reader cannot SEE is one they will read as zero. Hollow so it
-       is visibly neither inside nor outside rather than a third opinion. */
-    .set-unk{fill:#fff;stroke:#b9b2a0;stroke-width:1.5}
-    .set-centre{fill:#2f6d4f}
-    .set-cap{margin:10px 0 0;font:400 15px Georgia,serif;color:#413d35}
-    /* The ring legend: only the rings this zone actually fills, in ring order. Left-aligned inside
-       the centred column because a ragged-right list of names reads far better than centred prose. */
-    .set-rings{margin:10px 0 0;padding:0;list-style:none;text-align:start;
-               font:400 13px Georgia,serif;color:#6f6a5c;line-height:1.5}
-    .set-rings b{color:#1b1a17;font-weight:700}
+    /* ★ ONE PAGE, TWO SQUARE PANELS SIDE BY SIDE (2026-09-29, after the Module 1 "list of 100"
+       sheet, which closes on BOUNDED SET | CENTERED SET as two squares). Each panel is a framed square
+       with its heading on top; the ring legend runs under both at full width. */
+    .set-row{display:flex;gap:40px;justify-content:center;align-items:stretch;margin-top:30px}
+    .set-panel{width:${SET_PANEL}px;flex:0 0 auto;box-sizing:border-box;border:1.5px solid #3b463d;
+               background:#fff;padding:18px 18px 16px;text-align:center}
+    .set-h{margin:0;font:700 26px Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#1b1a17}
+    .set-sub{margin:4px 0 8px;font:italic 17px Georgia,serif;color:#6f6a5c}
+    .set-svg{display:block;width:100%;height:auto}
+    .set-ring{fill:none;stroke:#b8453a;stroke-width:3}
+    .set-band-a{fill:#f1eee4;stroke:#b9b2a0;stroke-width:1}
+    .set-band-b{fill:#fff;stroke:#b9b2a0;stroke-width:1}
+    .set-band-out{fill:none;stroke:#b9b2a0;stroke-width:1;stroke-dasharray:5 5}
+    .set-num{fill:#fff;stroke:#8f8a78;stroke-width:1}
+    .set-num-t{font:700 12px Georgia,serif;fill:#3b463d;text-anchor:middle;dominant-baseline:central}
+    .set-in{fill:#2f6d4f;stroke:#fff;stroke-width:1}
+    .set-out{fill:#9d977f;stroke:#fff;stroke-width:1}
+    /* The centre is Christ: a cross at the heart of both figures, over a soft gold disc. */
+    .set-core{fill:#fbf3dc;stroke:#c9a13b;stroke-width:2}
+    .set-cross rect{fill:#7a4f1d;stroke:#fff;stroke-width:2;paint-order:stroke}
+    .set-cap{margin:10px 0 0;font:400 16px Georgia,serif;color:#413d35}
+    /* The legend names EVERY ring, numbered as the figure numbers them, so a reader can read the scale
+       from the same dialect outward to the language family — including rings this list leaves empty. */
+    .set-row-solo .set-panel{width:${SET_SOLO}px}
+    .set-solo-bounded .set-panel{width:${SET_SOLO_W.bounded}px}
+    .set-solo-centered .set-panel{width:${SET_SOLO_W.centered}px}
+    .set-solo-centered + .set-legend, .set-solo-centered ~ .set-legend{max-width:${SET_SOLO_W.centered}px}
+    .set-legend{margin:26px auto 0;max-width:${SET_SOLO}px}
+    .set-legend-h{font:700 17px Georgia,serif;color:#1b1a17;margin:0 0 8px}
+    .set-legend-p{margin:0 0 10px;font:400 16px/1.45 Georgia,serif;color:#413d35}
+    .set-rings{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;column-gap:40px;
+               row-gap:6px;font:400 16px Georgia,serif;color:#413d35}
+    .set-rings li{display:flex;align-items:center;gap:10px}
+    .set-rings .ring-n{flex:0 0 24px;height:24px;border-radius:50%;border:1px solid #8f8a78;background:#fff;
+               font:700 12px/22px Georgia,serif;text-align:center;color:#3b463d;box-sizing:border-box}
+    .set-rings .ring-c{margin-inline-start:auto;font-weight:700;color:#1b1a17}
 
     /* ── THE THREE PRAYER COLUMNS, now a HORIZONTAL strip at the end of each row ──────────
        They were a vertical stack in the old 683x160 card. In a ${CW}x${CH.toFixed(0)} ROW there is no
@@ -224,12 +370,21 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
                display:flex;flex-direction:row;gap:0}
     .pray-col{width:${PRAY_CELL}px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;
               gap:3px;font:400 10px Georgia,serif;color:#6f6a5c;text-align:center;line-height:1.15}
-    .pray-box{display:inline-block;width:17px;height:17px;border:1.5px solid #b0a993;border-radius:3px;background:#fff;flex:0 0 auto}
-    .pray-col em{font-style:normal}
+    /* A tally cell above its question, as on the worksheet: wide and short, for a few groups of marks. */
+    .pray-box{display:inline-block;width:${PRAY_CELL - 12}px;height:${Math.round(CH - 22)}px;box-sizing:border-box;border:1.5px solid #b0a993;border-radius:5px;background:#fff;flex:0 0 auto}
+    /* The three questions, ONCE per page, over the tally cells' own columns. */
+    .pray-head{position:absolute;inset-inline-end:${M}px;display:grid;grid-template-columns:repeat(${PRAY_COLS.length},${PRAY_CELL}px);
+               height:${PRAY_HEAD_H - 6}px;align-items:end;font:700 15px/1.2 Georgia,serif;color:#6f6a5c;text-align:center}
+    .pray-head span{text-wrap:balance;padding:0 0 5px;border-bottom:2px solid #3b463d}
+    /* Page 1 of the Full detail list: the explanation, then the head row and the rows right under it (listPages). */
+    .fd-first{position:absolute;left:${M}px;top:${M + HEAD}px;width:${CW.toFixed(0)}px}
+    .fd-top{max-height:${FD_TOP_H}px;overflow:hidden}
+    .fd-rows{position:relative}
+    .fd-rows .pray-head{inset-inline-end:0}
     .hd-r{position:absolute;right:${M}px;top:54px;font:400 19px Georgia,serif;color:#8c8170}
     /* ⚠ box-sizing:border-box IS LOAD-BEARING HERE, NOT HOUSEKEEPING. Without it the row's height
        is the CONTENT box and the padding + border are added OUTSIDE it, so the row renders taller
-       than the geometry that positions it — rega measured 81px against a 73.25px model, and because
+       than the geometry that positions it — a rendered row measured 81px against a 73.25px model, and because
        the row's top still advances by CH the rows then overlap their successors by the difference. The stack
        still fitted the sheet (it ended 8px INTO the 60px bottom margin rather than on it), which is
        exactly why this was invisible without a measurement: nothing clipped and nothing overflowed
@@ -249,8 +404,18 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
     .d-fb{font:400 13px Georgia,serif;color:#6d766e;margin-top:2px}
     .mt{font:400 17px Georgia,serif;color:#6d766e}
     /* FINE PRINT — product decision: attribution minimal, fine print small. */
-    .fine{position:absolute;left:0;right:0;bottom:22px;text-align:center;
+    /* ≥ 0.25in above the sheet's bottom edge (44px on letter): at 22px the credit line sat 0.14in from the edge,
+       inside the band a printer cannot ink. */
+    .fine{position:absolute;left:0;right:0;bottom:50px;text-align:center;
           font:400 13px Georgia,serif;color:#a89f8c}
+    /* THE MAP IS MISSING, and this says so where the map would have been.
+       ⚠ Centred in the SAME region the map occupies, not tucked into the fine print: a reader
+       comparing two packets must be able to see at a glance which one lost its illustration.
+       Quiet, not alarming — it is a missing picture in an otherwise complete document, so it reads
+       as a caption rather than an error. No border and no icon for the same reason: on a printed
+       page an error box costs ink and implies the whole packet is suspect. */
+    .map-missing{position:absolute;left:${M}px;right:${M}px;top:50%;transform:translateY(-50%);
+          text-align:center;font:italic 19px Georgia,serif;color:#a89f8c}
     /* PRINT. The sheet is authored at ${W}px wide while @page is physical, so without
        a rescale the browser maps ${W}px -> 15.6in and TILES one sheet over many pages.
 
@@ -315,26 +480,212 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
       .filter(Boolean).join('\n');
   }
 
+  // ── PAGE 1'S MAP: ONE LIFT FOR EVERY CALLER ─────────────────────────────────
+  // ★ THIS EXISTED THREE TIMES. usePosterPrints.js, upg-100-list.vue and packet.mjs each lifted the
+  // poster's <svg> with the same hardcoded wrapper: 250px down, scaled to 0.62. Three copies of a
+  // layout decision is how page 1 drifts between the browser print and the offline packets the first
+  // time one of them is tuned — so the decision lives here, once, and all three call it.
+  //
+  // It places TWO kinds of sheet, told apart by the sheet itself rather than by the caller:
+  //   · a MAP-ONLY sheet (generate.mjs FORMAT=packet, root <svg data-sheet="map-only">): the same
+  //     1500x1941 as this page, with its top band left EMPTY for the title mapPage draws. It covers
+  //     the whole page, scaled only enough that its label columns — which start SHEET_INSET px inside
+  //     the sheet — land on the same M margin every other packet page keeps, so no printer's
+  //     unprintable edge can clip a name.
+  //   · any other sheet (a 3x4 or 3x3 POSTER, the fallback when no map-only sheet was generated):
+  //     THE WHOLE PAGE, aspect preserved, inside the packet's white margin M. A poster carries its own
+  //     kicker and title, so page 1 draws nothing over it (mapPage): it used to fit the poster UNDER a
+  //     second title block, which printed two headers and shrank the map to 663x884 of the page.
+  // Returns '' for input with no <svg>, which mapPage turns into the missing-map notice.
+  // The files a zone's page-1 map may come from, BEST FIRST: the map-only vertical sheet
+  // (generate.mjs FORMAT=packet), then the poster. Every fetcher — the browser composable, the
+  // UPG-100 profile, the offline generator — walks this list, so the preference exists once.
+  const mapSheetFiles = (id) => [`${id}.packet.html`, `${id}.html`];
+  const SHEET_INSET = 34;          // generate.mjs SHEET_EDGE (26) + 8: where a sheet's label columns begin
+  // ── THE MAP'S OWN LABELS, IN THE PACKET'S LANGUAGE ──────────────────────────
+  // A map sheet is generated once, in English. In a translated packet its country names are replaced
+  // on the way in (labelFor: see mapLabels.js), and the map's privacy line, which is word for word this
+  // catalogue's privacy_note, takes this language's version.
+  // ★ A WIDTH GUARD, because the generator placed every label and then removed any that would collide,
+  // measuring the ENGLISH name. A translation is fitted into that same box: estimated wider, it shrinks
+  // in proportion, so it can never reach a neighbour the English name did not. Tracking (0.1em on the
+  // capitals) is dropped for scripts without capitals — it breaks Arabic joining.
+  // Estimates are relative (translation against the English it replaces, same font), which is all a
+  // fit needs; per-script advances are deliberately generous.
+  const advance = (ch, tracked) => {
+    if (/\s/.test(ch)) return 0.3;
+    if (/[\u3000-\u303f\u3400-\u9fff\uff00-\uffef]/.test(ch)) return 1.0;       // CJK
+    if (/[\u0600-\u06ff]/.test(ch)) return 0.55;                                    // Arabic
+    if (/[\u0900-\u097f]/.test(ch)) return 0.65;                                    // Devanagari
+    return 0.64 + (tracked ? 0.1 : 0);                                              // Latin/Cyrillic capitals
+  };
+  const cased = (str) => /[A-ZÀ-ÞА-ЯЁ]/.test(str);
+  const estimate = (str) => [...String(str).replace(/&[a-z#0-9]+;/g, 'x')].reduce((a, ch) => a + advance(ch, cased(str)), 0);
+  // A replacement text never runs wider than the English it replaces: shrink by the width ratio, and
+  // drop the tracking for scripts without case (tracked Arabic breaks its joins).
+  const fit = (en, tr, px) => {
+    const k = Math.min(1, estimate(en) / Math.max(estimate(tr), 1e-6));
+    const style = [];
+    if (k < 1) style.push(`font-size:${(px * k).toFixed(1)}px`);
+    if (!cased(tr)) style.push('letter-spacing:0');
+    return style.join(';');
+  };
+  const withStyle = (attrs, style) => (!style ? attrs
+    : /\sstyle="/.test(attrs) ? attrs.replace(/\sstyle="([^"]*)"/, (q, v) => ` style="${v};${style}"`)
+    : `${attrs} style="${style}"`);
+  function relabelSheet(svg, css, labelFor) {
+    const base = Number((css.match(/\.ctry-name\{[^}]*font-size:([\d.]+)px/) || [])[1]) || 15;
+    let out = svg.replace(/<text([^>]*class="ctry-name(?:-halo|-own)?"[^>]*)>([^<]*)<\/text>/g, (whole, attrs, text) => {
+      const tr = labelFor(text);
+      return tr ? `<text${withStyle(attrs, fit(text, tr, base))}>${tr}</text>` : whole;
+    });
+    const enPrivacy = esc(EN.privacy_note || ''), privacy = esc(t('privacy_note') || '');
+    if (enPrivacy && privacy && privacy !== enPrivacy) {
+      out = out.replace(/<text([^>]*class="attrib(?:-halo)?"[^>]*)>([^<]*)<\/text>/g, (whole, attrs, text) => (text === enPrivacy
+        ? `<text${withStyle(attrs, fit(text, privacy, Number((css.match(/\.attrib\{[^}]*font-size:([\d.]+)px/) || [])[1]) || 11))}>${privacy}</text>` : whole));
+    }
+    return out;
+  }
+
+  function liftMap(posterHtml, { labelFor = null } = {}) {
+    const html = String(posterHtml || '');
+    const m = html.match(/<svg\b[^>]*>[\s\S]*?<\/svg>/);
+    if (!m) return '';
+    const root = m[0].match(/^<svg\b[^>]*>/)[0];
+    const vb = root.match(/viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/);
+    // ⚠ NOT EVERY <svg> IS A MAP SHEET. A host that answers a missing file with 200 and an HTML page
+    // (an SPA fallback) hands back a document whose first <svg> is an icon, and lifting that would
+    // print a 24px logo as the zone map. Every sheet generate.mjs writes is at least 1500x1500, so
+    // anything without a viewBox of map-sheet size is refused and page 1 says the map is missing.
+    if (!vb || Number(vb[1]) < 1000 || Number(vb[2]) < 1000) return '';
+    const sw = Number(vb[1]), sh = Number(vb[2]);
+    const mapOnly = /\bdata-sheet="map-only"/.test(root);
+    let s, x, y;
+    if (mapOnly) {
+      s = Math.min(1, (W / 2 - M) / (sw / 2 - SHEET_INSET), (H / 2 - M) / (sh / 2 - SHEET_INSET));
+      x = (W - sw * s) / 2; y = (H - sh * s) / 2;
+    } else {
+      s = Math.min((W - 2 * M) / sw, (H - 2 * M) / sh);
+      x = (W - sw * s) / 2; y = (H - sh * s) / 2;
+    }
+    // The root's own width/height would pin it at authored size; the wrapper sets the size instead,
+    // and the viewBox (default preserveAspectRatio, meet) scales the drawing to it.
+    const sized = m[0].replace(root, root.replace(/\s(width|height)="[^"]*"/g, '').replace(/^<svg\b/, '<svg width="100%" height="100%"'));
+    // No relabeller (an English packet) leaves the sheet exactly as drawn.
+    // ⚠ dir="ltr" on the wrapper: the artwork is laid out left-to-right, and in an Arabic packet it
+    // inherited the page's rtl — punctuation jumped to line starts, key/value columns collided and
+    // whole blocks were pushed off the sheet. The packet's own title stays rtl; the lifted sheet does not.
+    const svg = typeof labelFor === 'function' ? relabelSheet(sized, html, labelFor) : sized;
+    return `<style>${mapCss(html)}</style>`
+      + `<div class="map-sheet" dir="ltr" data-map-kind="${mapOnly ? 'map-only' : 'poster'}" data-map-scale="${s.toFixed(4)}"`
+      + ` style="position:absolute;left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;`
+      + `width:${(sw * s).toFixed(1)}px;height:${(sh * s).toFixed(1)}px">${svg}</div>`;
+  }
+
+  // A map the HOST drew (a live map's raster, a data: URL or any image URL) placed as page 1 exactly
+  // as a poster sheet is: the whole page inside the white margin, aspect kept. This is the seam for a
+  // map that is GENERATED rather than stored, so a host with no posters/<id>.html still prints page 1.
+  // '' for an empty or non-image source, which mapPage turns into the missing-map notice.
+  function mapFromImage(src) {
+    const s = String(src || '').trim();
+    if (!/^(data:image\/|https?:\/\/|\/|\.{0,2}\/)/.test(s)) return '';
+    return `<div class="map-sheet" dir="ltr" data-map-kind="poster" data-map-scale="1"`
+      + ` style="position:absolute;left:${M}px;top:${M}px;width:${W - 2 * M}px;height:${H - 2 * M}px">`
+      + `<img src="${esc(s)}" alt="" style="width:100%;height:100%;object-fit:contain"></div>`;
+  }
+
   // ── PAGE 1: the map one-pager ───────────────────────────────────────────────
-  // Lightweight by design — the Driver asked for "a lightweight one pager that shows
-  // the geography with all the pins", explicitly NOT the poster. The poster remains
+  // Lightweight by design — a one-page map showing the geography with all the pins,
+  // explicitly NOT the poster. The poster remains
   // its own artefact (generate.mjs); this is the packet's cover.
-  function mapPage(zone, groups, mapSvg) {
+  // ★ IT SAYS WHICH SET IT BELONGS TO. A partner holding one packet must be able to tell it is one of
+  // the UPG 100 lists, not a stand-alone leaflet — hence the series line. The count is READ from
+  // `funnel.listCount` (the caller counts its own catalogue), never typed here, and the line is
+  // omitted when the caller cannot supply it: a page that cannot state a true number leaves it out.
+  // ⚠ THE MAP IS DRAWN FIRST, the title and fine print after. A map-only sheet covers the whole page
+  // and begins with a paper-coloured background rect, so a title drawn BEFORE it was painted over.
+  // A poster names itself in English (its kicker and "Unengaged of <zone>"). In another language the
+  // page's ONLY header is that one, so it is swapped for the packet's own kicker and zone title, fitted
+  // to the English width like every other lifted label. English prints the poster exactly as drawn.
+  function posterHeadInLang(svg, zone) {
+    if (String(lang || 'en').split('-')[0].toLowerCase() === 'en') return svg;
+    const plain = (s) => String(s).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    const kicker = esc(t('map_page_kicker') || ''), title = esc(zone.label || zone.id || '');
+    // The poster's OWN kicker size, read from its stylesheet (lifted with the sheet) — a guessed size larger
+    // than the real one made the fit ENLARGE a translation instead of capping it at the English width.
+    const kickerPx = Number((svg.match(/\.h1over\{[^}]*font-size:([\d.]+)px/) || [])[1]) || 19;
+    let out = svg;
+    if (kicker) {
+      out = out.replace(/<text([^>]*class="h1over"[^>]*)>([^<]*)<\/text>/, (whole, attrs, text) =>
+        `<text${withStyle(attrs, fit(text, kicker, kickerPx))}>${kicker}</text>`);
+    }
+    if (title) {
+      out = out.replace(/<text([^>]*class="h1"[^>]*)>([\s\S]*?)<\/text>/, (whole, attrs, inner) => {
+        const px = Number((attrs.match(/font-size="([\d.]+)"/) || [])[1]) || 56;
+        return `<text${withStyle(attrs, fit(plain(inner), title, px))}>${title}</text>`;
+      });
+    }
+    return out;
+  }
+
+  function mapPage(zone, groups, mapSvg, funnel = null) {
+    // ★ A POSTER IS PAGE 1 BY ITSELF (2026-09-29): the map fills the page inside a white margin,
+    // under its own title only. Drawing the packet's title over it as well printed TWO headers and
+    // shrank the map to fit beneath them. The set it belongs to is the triangle page's job.
+    if (mapSvg && /data-map-kind="poster"/.test(mapSvg)) {
+      return sheet(posterHeadInLang(mapSvg, zone), 'sheet-map sheet-map-poster');
+    }
     const count = groups.length;
+    const k = Number(funnel && funnel.listCount);
+    const series = Number.isFinite(k) && k > 0
+      ? `<div class="map-series" style="font:600 19px Georgia,serif;letter-spacing:1px;color:#8c8170;margin-top:12px">
+          ${esc(fill(t('map_page_series'), { k: num(k) }))}</div>`
+      : '';
     return sheet(`
+      ${mapSvg || missingMapNotice()}
       <div style="position:absolute;left:${M}px;top:${M}px;right:${M}px;text-align:center">
         <div style="font:600 21px Georgia,serif;letter-spacing:3px;color:#8c8170">${esc(t('map_page_kicker'))}</div>
         <div style="font:700 56px Georgia,serif;color:#1b1a17;margin-top:8px">${esc(zone.label || zone.id)}</div>
         <div style="font:italic 24px Georgia,serif;color:#6d766e;margin-top:10px">
           ${esc(fill(t('map_page_sub'), { count: num(count) }))}</div>
+        ${series}
       </div>
-      ${mapSvg}
-      <div class="fine">${esc(t('privacy_note'))}</div>`);
+      <div class="fine">${esc(t('privacy_note'))}</div>`, 'sheet-map');
+  }
+
+  /**
+   * What page 1 shows when the zone map could not be loaded.
+   *
+   * ★ THE POINT IS THAT IT SAYS SOMETHING. `${mapSvg}` interpolated an empty string, so a failed
+   * map fetch and a successful render were BYTE-INDISTINGUISHABLE in the printed PDF: a cover with
+   * a title, a subtitle, a privacy footnote, and 600 bytes of nothing where the map belongs. The
+   * packets read as undeveloped, and this page is why — the packet WAS built, and its first page
+   * silently lost its content.
+   *
+   * ⚠ THE SILENCE IS UPSTREAM AND DELIBERATE, WHICH IS WHY THE FIX BELONGS HERE. The browser path
+   * (usePosterPrints.js) wraps the poster fetch in `catch (_) { /* a cover without the map beats no
+   * packet *\/ }`, and that judgement is RIGHT — a missing map must not cost the reader 20 pages of
+   * people to pray for. But "degrade" and "degrade silently" are different things, and only the
+   * renderer knows the map is absent at the moment it draws the page.
+   *
+   * MEASURED, and it was not a rare edge: until the dx-maps config turned posterSources on, the tree
+   * shipped NO posters/ directory (generate-tree gates it behind posterSources/bundlePosters, both
+   * default false). Over live HTTP against the served tree: previews/sudan.webp 200,
+   * boundaries/world-adm0-web.geojson 200, posters/sudan.html 404, so EVERY packet's page 1 was blank.
+   * The sources ship now (check:poster-print-fallback asserts it); this notice is for any build
+   * that turns them off, and for a fetch that fails anyway.
+   *
+   * Why a notice and not a thrown error: the packet is still worth printing, and a partner holding
+   * it should be able to SEE that one illustration is missing rather than wonder whether the
+   * project ships half-finished documents. This is the fail-loud half of fail-soft.
+   */
+  function missingMapNotice() {
+    return `<div class="map-missing">${esc(t('map_unavailable'))}</div>`;
   }
 
   // ── PAGE 2: the funnel — how this list was narrowed out of every people group ─
   //
-  // WHY THIS PAGE EXISTS. Driver 2026-09-26, via the shepherd: the packets go to ALL partners for
+  // WHY THIS PAGE EXISTS. The packets go to ALL partners for
   // the largest prayer campaign, and a partner holding one list needs to see where their list sits
   // in the whole. The narrowing IS the argument: 12,379 people groups on earth, 7,341 of them
   // unreached, 4,754 frontier, 2,107 on this network's list, and N of those in the reader's hand.
@@ -348,7 +699,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // If a number is wrong, it is wrong in the generator, and it is wrong in the Vision Card too.
   //
   // ⚠ NO STEP IS HARDCODED AND NEITHER IS THE NUMBER OF STEPS. `funnel.steps` is walked as given,
-  // so when the `list` prop lands (exp-shepherd, Tier A: profile-config.list / ?list= /
+  // so when the `list` prop lands (Tier A: profile-config.list / ?list= /
   // window.MAP_LIST, default 'doxa') and the 7k / 4.7k / 700 lists plug in, their own step chains
   // render with no change here. A step whose id has no string falls back to the id itself rather
   // than rendering blank.
@@ -356,11 +707,11 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // ⚠ K AND N ARE READ AT RENDER TIME, NEVER TYPED. Measured 2026-09-26: the brief said "~30 lists
   // of 50-100" and the catalogue says K=27 with counts from 8 to 118 — west-africa 118,
   // asia-india-rajasthan 116, uncovered-scatter 8. Only about half sit inside 50-100, so this page
-  // never claims that band; it states the share the data can defend. Shepherd approved exactly this
-  // (ENDTOKEN-DXS-UPG-KDECIDE), K=27 including the two residual buckets until the Driver rules.
+  // never claims that band; it states the share the data can defend. K=27 includes the two residual
+  // buckets: provisional, pending a product decision.
   //
-  // ⚠ "NUMERALS UNTOUCHED" IS ABOUT DIGITS, NOT GROUPING, and those are two properties. I verified the
-  // digits and assumed the rest. rega measured the rendered hi sheet and found Indian grouping —
+  // ⚠ "NUMERALS UNTOUCHED" IS ABOUT DIGITS, NOT GROUPING, and those are two properties. The digits
+  // were verified and the rest assumed. The rendered hi sheet, measured, showed Indian grouping —
   // "8,28,85,63,969 लोग" (lakh/crore, 2-2-3) rather than Western 3-3-3. That is CORRECT hi-IN
   // formatting, so changing it would be worse than leaving it, and the real risk was never the
   // grouping itself but INCONSISTENCY: the same number printed two ways in one document.
@@ -377,11 +728,8 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   function funnelPage(zone, groups, funnel) {
     if (!funnel || !Array.isArray(funnel.steps) || !funnel.steps.length) return '';
     const steps = funnel.steps;
-    const top = steps[0] && steps[0].groups;
-    // The widest bar is the first step; every bar is drawn proportional to it, with a floor so the
-    // smallest step is still a visible bar rather than a hairline.
-    const BAR_W = W - 2 * M - 300;
-    const width = (n) => Math.max(26, Math.round(BAR_W * (Number(n) / Number(top || 1))));
+    // The Vision Card's type: this page is drawn in that card's look (see THE TRIANGLE below).
+    const SANS = "'Public Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif";
 
     // THIS list, the step the reader is holding. `groups.length` is the packet's own row count, so
     // the page cannot disagree with the pages that follow it.
@@ -390,8 +738,8 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
     // input for that reason. An earlier version fell back to the last funnel step
     // (`funnel.listTotal ?? steps[last].groups`), which is 2,107 — DOXA's list. That is right today
     // because every map shows DOXA, and it becomes WRONG the moment the universal `list` prop lands
-    // (exp-shepherd, library/lists/peopleGroupList.js): under ?list=frontier a Tier A map shows the
-    // DOXA groups that are ALSO frontier, which SPEC-PEOPLE-GROUP-LIST-PROP.md measures at 1,753. The
+    // (library/lists/peopleGroupList.js): under ?list=frontier a Tier A map shows the
+    // DOXA groups that are ALSO frontier, which library/lists/README.md records at 1,753. The
     // page would have printed "N of the 2,107" with total confidence while the map showed a different
     // set — a faithful proxy that silently changes meaning when a new path appears, which is the same
     // family as inferring "did it work" from a field that only answers "did it isolate".
@@ -416,7 +764,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
     // version suppressed the whole line whenever listCount was absent, which threw away a true
     // statement to avoid an unprovable one — the same over-correction as defaulting the unassigned
     // count to 0, in the opposite direction.
-    const share = !total ? '' : `<div class="funnel-share" style="font:700 26px Georgia,serif;color:#7a3b2e;margin-top:10px">
+    const share = !total ? '' : `<div class="funnel-share" style="font:700 19px/1.35 ${SANS};color:#3b463d;margin-top:10px">
            ${esc(funnel.listCount
              ? fill(t('funnel_share'), { k: num(funnel.listCount), pct: pctStr, total: num(total) })
              : fill(t('funnel_share_pct'), { pct: pctStr, total: num(total) }))}</div>`;
@@ -445,17 +793,9 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
           }),
     );
 
-    // ★ THE READER'S OWN STEP IS THE LAST ROW OF THE FUNNEL, NOT A FOOTER. rega measured the first
-    // version in print (2026-09-26): the four global steps ended at y≈330 of 1056 while "43 · are in
-    // THIS packet" sat alone at y≈965, leaving the middle ~60% of the sheet empty and making the
-    // reader's own step read as a detached footnote. Worse, it had NO BAR, so the funnel never
-    // visibly narrowed to "yours" — a funnel whose final term is not drawn as part of the funnel
-    // fails at the one thing it is for.
-    // So the five steps are ONE list, the reader's included, and the row rhythm is derived from the
-    // space actually available rather than a fixed 22px gap: measured, four rows filled 451 of the
-    // 1605px between the intro and the footer, i.e. 28% of the page.
-    const ROWS_TOP = M + 110;
-    const FOOT_RESERVE = 210;              // share line + source footnote
+    // ★ THE READER'S OWN STEP IS PART OF THE FUNNEL, NOT A FOOTER — it is the triangle's TIP below.
+    // (Measured in print on the first version: a detached "43 · are in THIS packet" line sat alone
+    // at the foot of the sheet with no shape of its own, so the funnel never visibly narrowed to it.)
     // ★ A NON-DEFAULT LIST GETS ITS OWN STEP, so the narrowing does not jump from one list's total to
     // another list's packet. The four IMB steps stay true under every list — they are global counts,
     // unaffected by which list the reader holds — but the LAST one is DOXA's 2,107, and going straight
@@ -469,8 +809,8 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
     // all 71, so the page rendered "71 -> 71", two identical bars reading as a funnel that narrows to
     // nothing. A step that repeats its neighbour is not a step.
     const lastImb = (steps[steps.length - 1] || {}).groups;
-    // ⚠ THE LIST'S LABEL IS TRANSLATED HERE, NOT TAKEN FROM THE DATA. rega measured the rendered hi
-    // packet (2026-09-26): "Project 4700: frontier people groups" sat among Devanagari labels in a
+    // ⚠ THE LIST'S LABEL IS TRANSLATED HERE, NOT TAKEN FROM THE DATA. The rendered hi packet,
+    // measured 2026-09-26: "Project 4700: frontier people groups" sat among Devanagari labels in a
     // Latin serif face, because it comes verbatim from library/lists/lists.json, which carries ONE
     // label per list and has no locale dimension at all. The same would happen in all ten non-English
     // locales, and the gate passed because it counts rows, not the row's language.
@@ -487,6 +827,8 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
       : [];
     const allRows = [
       ...steps.map((s, i) => ({
+        id: s.id,
+        frontier: s.frontier,
         groups: s.groups,
         population: s.population,
         label: t(`funnel_${s.id}`) !== undefined ? t(`funnel_${s.id}`) : s.id,
@@ -498,157 +840,232 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
       ...ownStep,
       { groups: mine, population: null, label: t('funnel_this'), tint: true, mine: true },
     ];
-    // ⚠ THE GAP IS DERIVED FROM THE MEASURED ROW HEIGHTS, NOT FROM A GUESS AT THEM. A first version
-    // subtracted a magic 118 as "about one row" and left 418px of dead space at the foot — the same
-    // emptiness rega reported, just redistributed. Summing the real heights closes it.
+    // ── THE TRIANGLE ─────────────────────────────────────────────────────────
+    // ★ ONE INVERTED TRIANGLE, IN THE VISION CARD'S LOOK. The page used to stack a serif number, a
+    // label and a proportional bar per row, centred into a loose funnel. It now reads as the Vision
+    // Card continued downward: the card's steps are the TOP of the triangle (every people group,
+    // the unreached, the frontier, this network's list), and it narrows to the UPG 100 packets that
+    // divide that list and, at the tip, the groups in THIS packet. The card's palette (#dfe7df
+    // darkening to #3b463d as it narrows), its sans type and its 800-weight numbers carry over.
     //
-    // ⚠ AND IT DELIBERATELY KEEPS SLACK, because two runtime facts are unknowable here: whether a
-    // step carries a population line, and how many LINES its translated label wraps to. Arabic and
-    // Hindi labels are longer than the English ("مجموعات حدودية — 0.1% أو أقل، ولا يكاد أحد يذهب
-    // إليها" against "are frontier"), so a label that wraps on two rows must not push the footnote
-    // off the sheet. LINE_SLACK is that room: one extra wrapped line per row. Tight-packing this
-    // page would trade rega's "60% empty" for an overflow in exactly the locales I cannot eyeball.
-    const LINE_SLACK = 30;
-    const rowHeight = (r) => (r.mine ? 46 : 40) + 3 + (r.mine ? 22 : 20)
-      + (Number.isFinite(Number(r.population)) ? 19 : 0) + 8 + 16 + LINE_SLACK;
-    const rowsHeight = allRows.reduce((sum, r) => sum + rowHeight(r), 0);
-    const GAP = Math.max(18, Math.floor((H - ROWS_TOP - FOOT_RESERVE - rowsHeight) / (allRows.length - 1)));
+    // ⚠ TIER WIDTHS ARE GEOMETRIC, NOT PROPORTIONAL. Proportional width is the Vision Card's "true
+    // funnel", and it cannot hold here: the last counts are 2,107, 28 and ~100 against 12,379, so
+    // proportional tiers would be hairlines no number fits in. The SHAPE says "narrowing to one
+    // packet"; the NUMBERS say how much, and where two sets genuinely nest the caption states the
+    // step removed, so the proportion is never implied by the drawing.
+    //
+    // ⚠ A STEP IS SUBTRACTED ONLY WHERE THE SETS NEST. all ⊃ unreached ⊃ frontier; the network's
+    // list does NOT sit inside frontier (most of its groups are frontier, not all), so it gets the
+    // Vision Card's own note — how many of its groups are frontier — instead of a false "− N".
+    //
+    // ⚠ THE PACKETS TIER COUNTS PACKETS, NOT PEOPLE GROUPS, and its caption says so. It appears only
+    // when the caller supplies listCount: a list the zone catalogue does not describe has no packet
+    // count to state, and the page omits a number it cannot prove rather than print a plausible one.
+    const NESTS = { unreached: 'all', frontier: 'unreached' };
+    const k = Number(funnel.listCount);
+    const packetsTier = Number.isFinite(k) && k > 0
+      ? [{ groups: k, population: null, packets: true,
+          label: fill(t('funnel_packets'), { total: num(total || lastImb) }) }]
+      : [];
+    const tiers = [...allRows.filter((r) => !r.mine), ...packetsTier, ...allRows.filter((r) => r.mine)];
+    const n = tiers.length;
 
-    const rows = allRows.map((r) => {
-      // ⚠ `Number.isFinite(Number(x))` IS THE WRONG TEST and it printed "0 people" on the reader's row
-      // of every packet (rega, rendered layer, 2026-09-26). Number(null) is 0 — only Number(undefined)
-      // is NaN — so the deliberate `population: null` marker on the reader's row passed the guard and
-      // rendered as the number zero. I asked "is this a finite number?" when the question was "did
-      // anyone give me a population?". Presence and value are different properties; this is the same
-      // confusion as inferring "did it work" from a field that answers "did it isolate".
-      // AND ZERO IS ALSO SUPPRESSED: a people group with no people is not a fact, so a genuine 0 is
-      // missing data wearing a number's clothes.
+    // Geometry. The triangle keeps to the start side and its captions take the other; in a
+    // right-to-left language the whole page mirrors (X) and the captions anchor on the right.
+    const rtl = RTL.has(lang);
+    const X = (x) => (rtl ? W - x : x);
+    const T_TOP = 262, T_BOT = 1540, TW = 900, T_LEFT = M + 20, CX = T_LEFT + TW / 2, GAP_T = 10;
+    const th = (T_BOT - T_TOP - GAP_T * (n - 1)) / n;
+    const half = (y) => (TW / 2) * (T_BOT - y) / (T_BOT - T_TOP);
+    // ★ THE VISION CARD'S OWN STOPS, walked piecewise. Its first three steps are exactly #dfe7df /
+    // #c3d5c4 / #a8c3aa and its last is #3b463d; the two between are continued in the same greens. A
+    // straight blend from the lightest to the darkest was tried first and ran through desaturated
+    // greys — measured on the rasterised tiers, the middle of the triangle read as grey, not green.
+    const STOPS = [[0xdf, 0xe7, 0xdf], [0xc3, 0xd5, 0xc4], [0xa8, 0xc3, 0xaa], [0x7f, 0xa1, 0x84], [0x56, 0x73, 0x5b], [0x3b, 0x46, 0x3d]];
+    const tone = (i) => {
+      const f = (n === 1 ? 1 : i / (n - 1)) * (STOPS.length - 1);
+      const lo = Math.min(STOPS.length - 2, Math.floor(f)), u = f - lo;
+      return STOPS[lo].map((c, j) => Math.round(c + (STOPS[lo + 1][j] - c) * u));
+    };
+    const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+    // ★ THE NUMERAL'S INK IS WHICHEVER CONTRASTS MORE — white or the card's #3b463d — by the WCAG
+    // ratio, not a fixed luminance cut. The cut left the 2,107 tier's dark numerals on a mid-green
+    // at barely 2:1; picking by ratio cannot fall into the middle band where neither was chosen well.
+    const lum = (c) => {
+      const [r, g, b] = c.map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    const ink = (c) => (ratio(c, [255, 255, 255]) >= ratio(c, [0x3b, 0x46, 0x3d]) ? '#ffffff' : '#3b463d');
+
+    let shapes = '';
+    let caps = '';
+    tiers.forEach((r, i) => {
+      const ya = T_TOP + i * (th + GAP_T), yb = ya + th;
+      const ha = half(ya), hb = half(yb);
+      const c = tone(i);
+      const pts = [[CX - ha, ya], [CX + ha, ya], [CX + hb, yb], [CX - hb, yb]]
+        .map(([x, y]) => `${X(x).toFixed(1)},${y.toFixed(1)}`).join(' ');
+      shapes += `<polygon class="funnel-tier${r.mine ? ' funnel-tier-mine' : ''}" points="${pts}" fill="${hex(c)}"/>`;
+
+      // The number sits INSIDE its tier when it fits there at a readable size, and leads the caption
+      // when it does not — at the tip the tier narrows to a point, so the reader's own count is always
+      // set beside it, large, rather than squeezed into the apex.
+      const numStr = num(r.groups);
+      const yNum = ya + th * 0.46;
+      const room = 2 * half(yNum) - 28;
+      const fs = Math.min(r.mine ? 64 : 58, room / (0.6 * numStr.length));
+      const inside = fs >= 30;
+      const numCls = `funnel-n${r.mine ? ' funnel-mine' : ''}`;
+      if (inside) {
+        shapes += `<text class="${numCls}" x="${X(CX).toFixed(1)}" y="${yNum.toFixed(1)}" text-anchor="middle"`
+          + ` dominant-baseline="middle" font-family="${SANS}" font-weight="800" font-size="${fs.toFixed(0)}"`
+          + ` fill="${ink(c)}">${numStr}</text>`;
+      }
+
+      // Presence, not finiteness: Number(null) is 0, and a deliberate "no population" marker must not
+      // print as "0 people". A zero is suppressed too — a people group with no people is not a fact.
       const popN = (r.population === null || r.population === undefined || r.population === '')
         ? null : Number(r.population);
       const pop = (popN !== null && Number.isFinite(popN) && popN > 0)
-        ? `<div style="font:400 17px Georgia,serif;color:#a89f8c;margin-top:2px">${num(popN)} ${esc(t('funnel_people'))}</div>`
+        ? `<div style="font:400 16px ${SANS};color:#6d766e;margin-top:3px">${num(popN)} ${esc(t('funnel_people'))}</div>`
         : '';
-      // ⚠ THE LAST ROW DOES NOT KEEP THE FULL GAP. Measured in print (rega): the share line sat a full
-      // 218px below the reader's row but only 42px above the footnote, so it read as part of the
-      // FOOTNOTE rather than as the conclusion of the "43" row. The gap belongs BETWEEN rows; the share
-      // is that last row's conclusion and should sit close under it. Proximity is the only thing
-      // grouping them, so an even gap everywhere groups the share with the wrong element.
-      // ★ CENTRED, so the bars form an UPSIDE-DOWN TRIANGLE narrowing to a point — the Driver's
-      // "upside down triangle ... the bottom of the triangle shows the tip". margin-inline:auto on
-      // the bar and text-align:center on the row is the whole geometry: each bar is already drawn
-      // proportional to the first step, so centring them IS the triangle. No new maths, and the
-      // careful population/grouping logic below is untouched.
-      return `<div style="margin-bottom:${r.mine ? 14 : GAP}px;text-align:center"${r.mine ? ' class="funnel-mine-row"' : ''}>
-        <div${r.mine ? ' class="funnel-mine"' : ''} style="font:700 ${r.mine ? 46 : 40}px Georgia,serif;color:${r.tint ? '#7a3b2e' : '#1b1a17'};line-height:1">${num(r.groups)}</div>
-        <div style="font:400 ${r.mine ? 22 : 20}px Georgia,serif;color:#3b3226;margin-top:3px">${esc(r.label)}</div>
-        ${pop}
-        <div style="height:16px;width:${width(r.groups)}px;background:${r.tint ? '#7a3b2e' : '#cdbf9e'};margin-top:8px;border-radius:2px;margin-inline:auto"></div>
-      </div>`;
-    }).join('');
-
-    // ── THE EQUATION SIDEBAR ────────────────────────────────────────────────
-    // Driver, 2026-09-27: "a map equation with a side bar for the equations". Every number on this
-    // page is DERIVED, and the derivation is the argument — a reader who cannot see how 12,379
-    // becomes 2,107 has to take the funnel on faith. So each step states the filter that produced it,
-    // read from vision-funnel.json's own step ids rather than written out here, and the provenance
-    // line names the file and capture date.
-    // ⚠ NOT A RESTATEMENT OF THE BARS. The bars show HOW MANY; the sidebar shows WHY THAT MANY. A
-    // sidebar repeating the counts would add width and no information.
-    const SIDEBAR_W = 300;
-    const eqRows = allRows.filter((r) => !r.mine).map((r, idx, arr) => {
-      const prev = idx > 0 ? arr[idx - 1] : null;
-      const delta = prev ? Number(prev.groups) - Number(r.groups) : null;
-      return `<div style="margin-bottom:16px">
-        <div style="font:700 16px Georgia,serif;color:#3b3226">${num(r.groups)}</div>
-        <div style="font:400 12px/1.45 Georgia,serif;color:#6f6a5c">${esc(r.equation || r.label)}</div>
-        ${delta !== null ? `<div style="font:400 11px Georgia,serif;color:#a89f8c;margin-top:2px">\u2212 ${num(delta)}</div>` : ''}
-      </div>`;
-    }).join('');
-    const sidebar = `<div class="funnel-eq" style="position:absolute;top:${ROWS_TOP}px;inset-inline-end:${M}px;width:${SIDEBAR_W}px">
-      <div style="font:700 13px Georgia,serif;letter-spacing:.1em;text-transform:uppercase;color:#8a8577;margin-bottom:12px">${esc(t('funnel_eq_title'))}</div>
-      ${eqRows}</div>`;
-
-    // ★ THE TIP OF THE TRIANGLE: this packet is one of N. The Driver's "the tip ... the smaller UPG
-    // 100 list is a subset, 1 of 30 or n exact UPG 100 lists". N is READ from the catalogue
-    // (funnel.listCount), never typed — it is 28 today and was 27 before the deaf zone became
-    // reachable, so a literal would already be wrong.
-    const tip = !funnel.listCount ? '' : `<div class="funnel-tip" style="text-align:center;margin-top:18px">
-      <div style="font:700 15px Georgia,serif;letter-spacing:.08em;text-transform:uppercase;color:#7a3b2e">${esc(fill(t('funnel_tip'), { n: num(funnel.listCount) }))}</div>
-    </div>`;
+      const prev = i > 0 ? tiers[i - 1] : null;
+      const step = prev && r.id && NESTS[r.id] === prev.id && Number(prev.groups) > Number(r.groups)
+        ? `<div class="funnel-eq" style="font:400 15px ${SANS};color:#8a938b;margin-top:3px">− ${num(Number(prev.groups) - Number(r.groups))}</div>`
+        : '';
+      const note = r.id === 'doxa' && Number.isFinite(Number(r.frontier)) && Number(r.frontier) > 0
+        ? `<div style="font:400 15px ${SANS};color:#8a938b;margin-top:3px">${esc(fill(t('funnel_doxa_note'), { frontier: num(r.frontier) }))}</div>`
+        : '';
+      const capX = CX + ha + 30;               // just outside the tier's widest (top) edge
+      caps += `<div class="funnel-cap${r.mine ? ' funnel-mine-row' : ''}" style="position:absolute;top:${ya.toFixed(0)}px;`
+        + `height:${th.toFixed(0)}px;${rtl ? 'right' : 'left'}:${capX.toFixed(0)}px;width:${(W - M - capX).toFixed(0)}px;`
+        + `display:flex;flex-direction:column;justify-content:center;text-align:start">`
+        + (inside ? '' : `<div class="${numCls}" style="font:800 ${r.mine ? 58 : 44}px ${SANS};color:#3b463d;line-height:1">${numStr}</div>`)
+        + `<div style="font:700 ${r.mine ? 24 : 21}px/1.25 ${SANS};color:#3b463d${inside ? '' : ';margin-top:4px'}">${esc(r.label)}</div>`
+        + pop + step + note + (r.mine ? share : '')
+        + `</div>`;
+    });
 
     return sheet(`
-      <div style="position:absolute;left:${M}px;top:44px;right:${M}px">
-        <div class="funnel-title" style="font:700 40px Georgia,serif;color:#1b1a17">${esc(t('funnel_title'))}</div>
-        <div style="font:italic 18px Georgia,serif;color:#6d766e;margin-top:6px">${esc(t('funnel_intro'))}</div>
+      <div style="position:absolute;left:${M}px;top:56px;right:${M}px;text-align:start">
+        <div style="font:700 14px ${SANS};letter-spacing:.08em;text-transform:uppercase;color:#6d766e">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#92b195;margin-inline-end:9px;vertical-align:1px"></span>${esc(t('funnel_kicker'))}</div>
+        <div class="funnel-title" style="font:800 44px/1.15 ${SANS};color:#3b463d;margin-top:12px">${esc(t('funnel_title'))}</div>
+        <div style="font:400 19px/1.5 ${SANS};color:#6d766e;margin-top:8px;max-width:1100px">${esc(t('funnel_intro'))}</div>
       </div>
-      <div style="position:absolute;left:${M}px;top:${ROWS_TOP}px;right:${SIDEBAR_W + M + 24}px">${rows}${share}${tip}</div>
-      ${sidebar}
+      <svg class="funnel-triangle" width="${W}" height="${H}" style="position:absolute;left:0;top:0" xmlns="http://www.w3.org/2000/svg">${shapes}</svg>
+      ${caps}
       <div class="fine">${foot}</div>`);
   }
 
   // ── LIFE CALENDAR: 100 years x 52 weeks = 5200 boxes ────────────────────────
   //
-  // Driver, 2026-09-27: page 2 is "a life calendar of the years of a human life in weeks", and page 3
-  // is "the same life cal used for percentage of Christian on average for dx people groups". ONE grid,
+  // Page 2 is a life calendar: the years of a human life, in weeks. Page 3 is the same calendar used
+  // for the average percentage of Christians in the DOXA people groups. ONE grid,
   // TWO readings — which is the whole point. A percentage drawn as a bar is an abstraction a reader
   // has to translate; drawn on the grid they have just understood as their OWN LIFE, it is the same
   // 5200 boxes they were looking at a page earlier.
   //
-  // ★ 5,200 IS NOT ROUNDED OR CHOSEN FOR LAYOUT: 100 years x 52 weeks, the Driver's own numbers
-  // ("a 100 year life in weeks"). Everything else here is derived from it, so the two pages cannot
+  // ★ 5,200 IS NOT ROUNDED OR CHOSEN FOR LAYOUT: 100 years x 52 weeks, a 100-year life in weeks.
+  // Everything else here is derived from it, so the two pages cannot
   // drift apart into two grids that merely look alike.
-  function lifeGrid({ shaded = 0, shadeClass = 'lc-on', seed = '' } = {}) {
+  // ★ LAID OUT LIKE THE PRINTED LIFE CALENDAR (the Module 1 "Life Calendar in Weeks" sheet, which this
+  // page is asked to imitate): square boxes, week numbers across the top, the year down the
+  // side, a thin rule between decades, the whole grid framed and centred on the page. The earlier grid
+  // stretched 52 columns across the full width, so its boxes were flattened rectangles with no axes.
+  //
+  // ★ SHADED FROM THE TOP, IN READING ORDER (2026-09-29: the highlighted boxes start from
+  // the top). This grid used to SCATTER the shaded boxes, a choice made from a contact sheet in which a
+  // contiguous run looked like a bar; the opposite has now been asked for, and the grid is the
+  // product's picture. Filling from the top also makes the two pages read the same way: Jesus' 33 years
+  // are the first rows of a life, and the evangelical share is the first boxes of the same life.
+  // ★ people:true DRAWS THE SAME BOXES WITH NO WEEK OR YEAR NUMBERS, for a page where a box is a share
+  // of PEOPLE rather than a week of a life (the knows-Christ page): an axis numbered in weeks and years
+  // there would describe a unit the page is not using. Its side labels state each 10-row block's share.
+  // ★ ONE PICTURE, NOT 5,200 BOXES (2026-10-02). The grid was 5,200 bordered HTML boxes in a CSS grid, twice
+  // in the full packet: heavy to lay out and to hold in a phone's memory. It is now ONE inline SVG per page whose
+  // boxes are two <path>s (the empty weeks and the shaded ones, a square subpath each): the same 100 x 52 boxes,
+  // vector on paper, a handful of nodes in the page. Both pages use the SAME geometry (LC), so the people grid
+  // has exactly the life grid's shape; it simply prints no week or year numbers, since its box is a share of
+  // people. data-* attributes state what is drawn, and the gates read the subpaths back, box by box.
+  // ★ FULL WIDTH, ONE PAGE (2026-10-02). The calendar now spans the page's printable width: each week is a box
+  // twice as wide as it is tall (22 x 11px, ~3.2 x 1.6mm on letter). It could not be a bigger SQUARE: 100 rows
+  // are what limit a box, and 26px squares would need ~2,650px of grid on a ~1,550px page. Read at a glance:
+  // bold year numbers every 5 years (larger every 10), week numbers 1 / 13 / 26 / 39 / 52 across the top,
+  // a clear rule every 10 years and light rules at the quarters. Labels are 18-20px (7.3-8.2pt on letter,
+  // 7.1-8pt on A4, which prints the letter sheet at 97%).
+  // ONE PATH, TWO PAGES: the reached chart is this grid with the same boxes, rules and shape; its box is a share
+  // of the list's PEOPLE, so it has no week numbers and labels each 10-row block with its share: 10% ... 100%.
+  // cw x ch is a box, px / py the pitch, x0 the label column, y0 the week-number row, dec the extra gap per decade;
+  // pr / pb keep the last column's week number and the last row's label inside the picture.
+  const LC = { cw: 22, ch: 11, px: 25, py: 14, x0: 66, y0: 30, dec: 8, pr: 8, pb: 8 };
+  function lifeGrid({ shaded = 0, shadeClass = 'lc-on', people = false } = {}) {
     const YEARS = 100, WEEKS = 52, TOTAL = YEARS * WEEKS;
     const n = Math.max(0, Math.min(TOTAL, Math.round(Number(shaded) || 0)));
-
-    // ⚠ SCATTERED, NOT STACKED — and the comment that used to sit here said the opposite. It read:
-    // "Row-major, so the shaded run reads as a contiguous block from the top — a scattered shading of the
-    // same COUNT would be honest arithmetic and an unreadable picture." That was reasoning about a picture
-    // I had never looked at, and it was exactly backwards.
-    // ★ WHAT THE RENDER ACTUALLY SHOWED (rega's contact sheet, 2026-09-28): 32 contiguous cells fill most
-    // of row 1 of 52, so the page reads as ONE SOLID GREEN BAR across the header — the ordinary chart the
-    // whole life-grid idea exists to avoid. The Driver's intent is "32 boxes lost in 5,200"; rarity is the
-    // message, and a bar cannot say it. Scattering makes the eye hunt for them, which IS the point.
-    // ⚠ AND NO GATE COULD SEE IT. check-packet-render asserts the shaded COUNT is strictly between 0 and
-    // 5,200 — true of a scatter and equally true of a bar. A count cannot distinguish a distribution.
-    //
-    // DETERMINISTIC, NEVER Math.random(): the same packet must print identically every time, or two copies
-    // of one zone disagree and neither is reproducible. A 32-bit FNV-1a hash of the seed (the zone id) feeds
-    // a mulberry32 PRNG, so the pattern is stable per zone and DIFFERENT between zones — which also avoids
-    // every packet in a print run carrying the same constellation.
-    // ★ ONE IMPLEMENTATION, shared with the library chart components. The algorithm and both
-    // comments above were written here first; scatterCells() in components/charts/packetCharts.js
-    // now holds them, so the printed packet and the reusable chart cannot drift apart — and the
-    // distribution is finally under a gate (check:packet-charts asserts the SPREAD, which the
-    // count-based check here structurally cannot see).
-    const picked = scatterCells(TOTAL, n, seed);
-
-    const cells = [];
-    for (let i = 0; i < TOTAL; i++) {
-      cells.push(`<i class="lc-c${picked.has(i) ? ' ' + shadeClass : ''}"></i>`);
+    // The people grid has no week-number row: its top and bottom margins are evened out, so it sits centred in the same frame.
+    const x0 = LC.x0, y0 = people ? (LC.y0 + LC.pb) / 2 : LC.y0;
+    const at = (i) => { const r = Math.floor(i / WEEKS), c = i % WEEKS; return [x0 + c * LC.px, y0 + r * LC.py + Math.floor(r / 10) * LC.dec]; };
+    const sq = (i) => { const [x, y] = at(i); return `M${x + 0.5} ${y + 0.5}h${LC.cw - 1}v${LC.ch - 1}h${1 - LC.cw}z`; };
+    let on = '', off = '';
+    for (let i = 0; i < TOTAL; i++) { if (i < n) on += sq(i); else off += sq(i); }
+    const gx = LC.px - LC.cw, gy = LC.py - LC.ch;
+    const gridW = WEEKS * LC.px - gx, gridH = YEARS * LC.py + (YEARS / 10 - 1) * LC.dec - gy;
+    const W = LC.x0 + gridW + LC.pr, H = LC.y0 + gridH + LC.pb;
+    // A side label sits beside its row, vertically centred on the box.
+    const side = (row, text, cls) => { const [, top] = at(row * WEEKS); return `<text class="lc-t ${cls}" x="${x0 - 6}" y="${top + LC.ch / 2}" dominant-baseline="central" text-anchor="end">${text}</text>`; };
+    let marks = '';
+    if (!people) {
+      for (const w of [1, 13, 26, 39, 52]) marks += `<text class="lc-t lc-tw" x="${x0 + (w - 1) * LC.px + LC.cw / 2}" y="${y0 - 10}" text-anchor="middle">${num(w)}</text>`;
+      for (let y = 1; y <= YEARS; y++) if (y === 1 || y % 5 === 0) marks += side(y - 1, num(y), y % 10 ? 'lc-ty' : 'lc-ty lc-big');
+    } else {
+      // lc-tp, not lc-ty: a share of the people, never a year (check:evangelical-share tells the two apart).
+      // 18px like the 5-year labels: "100%" at 20px overran the label column in a fallback serif.
+      for (let d = 1; d <= YEARS / 10; d++) marks += side(d * 10 - 1, `${num(d * 10)}%`, 'lc-tp');
     }
-    return { TOTAL, YEARS, WEEKS, shadedCount: n, html: `<div class="lc-grid">${cells.join('')}</div>` };
+    // A clear rule between decades, in the extra gap, so ten years read as one block; light rules at the quarters.
+    let rules = '';
+    for (const w of [13, 26, 39]) {
+      const x = x0 + w * LC.px - gx / 2;
+      rules += `<line class="lc-rule-q" x1="${x}" x2="${x}" y1="${y0 - 4}" y2="${y0 + gridH + 4}"/>`;
+    }
+    for (let d = 1; d < YEARS / 10; d++) {
+      const [, top] = at(d * 10 * WEEKS);
+      const y = top - LC.dec / 2 - gy / 2;
+      rules += `<line class="lc-rule" x1="${x0 - 4}" x2="${x0 + gridW + 4}" y1="${y}" y2="${y}"/>`;
+    }
+    // data-geom: x0,y0,px,dec,py. The gates decode every box back to its index from it.
+    const svg = `<svg class="lc-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" data-total="${TOTAL}" data-shaded="${n}" data-weeks="${WEEKS}" data-geom="${x0},${y0},${LC.px},${LC.dec},${LC.py}">`
+      + `${rules}${marks}<path class="lc-off" d="${off}"/>${on ? `<path class="${shadeClass}" d="${on}"/>` : ''}</svg>`;
+    return { TOTAL, YEARS, WEEKS, shadedCount: n, html: `<div class="lc-frame${people ? ' lc-plain' : ''}">${svg}</div>` };
   }
 
   // Page 2 — a human life, unshaded except for the weeks already lived if the caller supplies an age.
   // No age is supplied today: the packet is printed for a reader we do not know, so shading their life
   // would be a guess presented as a fact. The empty grid is the honest version and still lands the
   // point — 5,200 boxes is a whole life on one page.
+  // ★ THE FIRST 33 YEARS ARE JESUS' LIFE (2026-09-29: the highlighted boxes show the 33
+  // years of Jesus' life). Still no reader's age: shading the reader's own weeks would be a
+  // guess presented as a fact, while 33 x 52 is the same for every reader.
+  const JESUS_YEARS = 33;
   function lifePage(zone) {
-    const g = lifeGrid();
+    const g = lifeGrid({ shaded: JESUS_YEARS * 52, shadeClass: 'lc-on' });
     return sheet(`
-      <div class="pg-head"><div class="pg-kicker">${esc(t('life_kicker'))}</div>
+      <div class="pg-head pg-head-c"><div class="pg-kicker">${esc(t('life_kicker'))}</div>
         <h1 class="pg-h1">${esc(t('life_title'))}</h1></div>
-      <p class="pg-lede">${esc(t('life_lede'))}</p>
+      <p class="pg-lede pg-lede-c">${esc(t('life_lede'))}</p>
       ${g.html}
-      <p class="lc-foot">${esc(t('life_foot'))}</p>
-    `, 'sheet-life');
+      <div class="lc-legend">
+        <span><i class="lc-c lc-on"></i> ${esc(t('life_jesus'))} — ${num(g.shadedCount)} ${esc(t('life_weeks'))}</span>
+        <span><i class="lc-c"></i> ${esc(t('life_full'))} — ${num(g.TOTAL)} ${esc(t('life_weeks'))}</span>
+      </div>
+    `, 'sheet-life sheet-flow');
   }
 
   // Page 3 — the SAME grid, shaded by the share of the DX population that is evangelical.
   //
-  // ⚠ THE NUMBER IS POPULATION-WEIGHTED, NOT A GROUP COUNT, because the Driver asked for
-  // "% of Christian population vs lost". Those differ sharply: 69.1% of the 2,091 matched DX GROUPS
+  // ⚠ THE NUMBER IS POPULATION-WEIGHTED, NOT A GROUP COUNT, because the page shows the Christian
+  // share of the POPULATION against the lost. Those differ sharply: 69.1% of the 2,091 matched DX GROUPS
   // have no known evangelicals, but weighted by POPULATION the evangelical share is 0.61% of
   // 209,079,159 people — 32 boxes of 5,200. A group-count version would have shown a different,
   // milder picture of the same data.
@@ -657,26 +1074,60 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // percentage requires choosing a value inside each band. The builder uses the band's midpoint and
   // 0 for "No Known Evangelicals"; the footnote says so, because a computed figure whose method is
   // invisible reads as a measurement.
+  // ★ THIS LIST'S OWN SHARE. The lede says each box is a share of the people in this list, so the
+  // number must be this packet's: the caller sums its own groups (evangelicalShare.js). A DOXA-wide
+  // figure used to print here in every packet, true of no single list.
+  // ⚠ PRESENCE, NOT FINITENESS. `Number.isFinite(Number(x))` passes null as 0 (Number(null) is 0), so a
+  // list with no published levels would have printed "0% evangelical" — a confident falsehood. A list
+  // that lacks the data prints a dash and no number, and its grid stays unshaded.
   function christianPage(zone, christian) {
-    if (!christian || !Number.isFinite(Number(christian.pctEvangelical))) return '';
-    const pct = Number(christian.pctEvangelical);
-    const g = lifeGrid({ shaded: (pct / 100) * 5200, shadeClass: 'lc-reached', seed: zone.id || zone.zoneKey || 'upg-100' });
-    const lostPct = 100 - pct;
-    // ⚠ TWO DECIMALS ON BOTH SIDES, not rounded above 10. The reached share is 0.61% and rounding the
-      // other side to "99%" loses the asymmetry that is the whole point: 99.39 and 0.61 sum to 100, while
-      // 99 and 0.61 do not, and a reader checking the arithmetic finds the page wrong.
-      const fmtPct = (x) => x.toFixed(2).replace(/\.?0+$/, '');
+    if (!christian || typeof christian !== 'object') return '';
+    const raw = christian.pctEvangelical;
+    const known = raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw));
+    // ★ PEOPLE, NOT WEEKS. The grid is the life calendar's 5,200 boxes, but on this page a box is an
+    // equal share of the list's PEOPLE, so it is drawn with no week or year axis and the legend states
+    // the totals in people: how many follow Jesus and how many do not yet, with each share as a
+    // percentage. Weeks were the previous page's unit and meant nothing here.
+    // ⚠ TWO DECIMALS, and the second share is 100 minus the ROUNDED first, so the two always sum to 100
+    // as printed: 99.39 and 0.61, never 99.4 and 0.61. Formatted in the reader's locale.
+    // ⚠ THE TOTALS COME FROM THE UNROUNDED SHARE; only the printed percentage rounds. Computing people
+    // from the rounded figure would print 0 followers for a large list at 0.004% (tens of thousands of
+    // people), and drift every other total. A real share below the last printed digit reads "<0.01%".
+    const share = known ? Number(raw) : null;
+    const pct = known ? Math.round(share * 100) / 100 : null;
+    const g = lifeGrid({ shaded: known ? (share / 100) * 5200 : 0, shadeClass: 'lc-reached', people: true });
+    const fmtPct = (x) => `${Number(x).toLocaleString(lang, { maximumFractionDigits: 2 })}%`;
+    const tiny = known && share > 0 && pct === 0;
+    const pop = known && Number(christian.population) > 0 ? Number(christian.population) : null;
+    const followers = pop !== null ? Math.round(pop * share / 100) : null;
+    const people = (n) => `${num(n)} ${esc(t('christian_people'))}`;
+    const reachedPct = tiny ? `<${fmtPct(0.01)}` : fmtPct(pct);
+    const lostPct = tiny ? `>${fmtPct(99.99)}` : fmtPct(Math.round((100 - pct) * 100) / 100);
+    const reached = known ? `${pop !== null ? `${people(followers)} · ` : ''}<span class="ev-pct">${esc(reachedPct)}</span>`
+      : '<span class="ev-pct">—</span>';
+    const lost = known ? `${pop !== null ? `${people(pop - followers)} · ` : ''}${esc(lostPct)}` : '—';
+    // Stated only when it is partial: how many of this list's groups the figure is computed over.
+    const inList = Number(christian.groupsInList), matched = Number(christian.groupsMatched);
+    const coverage = Number.isFinite(inList) && Number.isFinite(matched) && matched < inList
+      ? ` · ${esc(fill(t('christian_coverage'), { matched: num(matched), total: num(inList) }))}` : '';
+    // Below 10 people a box, one decimal — a list of 1,300 people is 0.3 a box, and rounding printed "≈ 0".
+    const perBoxNum = (x) => (x >= 10 ? num(Math.round(x)) : Number(x).toLocaleString(lang, { maximumFractionDigits: 1 }));
+    // The page states how many people ONE box stands for (the screen chart's own peoplePerCell, so paper
+    // and screen divide the same way). Only when the population is known.
+    const perBox = pop !== null
+      ? `<p class="lc-per">${esc(fill(t('christian_per_cell'), { n: perBoxNum(peoplePerCell(pop, g.YEARS, g.WEEKS)) }))}</p>` : '';
     return sheet(`
-      <div class="pg-head"><div class="pg-kicker">${esc(t('christian_kicker'))}</div>
+      <div class="pg-head pg-head-c"><div class="pg-kicker">${esc(t('christian_kicker'))}</div>
         <h1 class="pg-h1">${esc(t('christian_title'))}</h1></div>
-      <p class="pg-lede">${esc(t('christian_lede'))}</p>
+      <p class="pg-lede pg-lede-c">${esc(t('christian_lede'))}</p>
       ${g.html}
       <div class="lc-legend">
-        <span><i class="lc-c lc-reached"></i> ${esc(t('christian_reached'))} — ${esc(fmtPct(pct))}% · ${num(g.shadedCount)} ${esc(t('life_weeks'))}</span>
-        <span><i class="lc-c"></i> ${esc(t('christian_lost'))} — ${esc(fmtPct(lostPct))}% · ${num(g.TOTAL - g.shadedCount)} ${esc(t('life_weeks'))}</span>
+        <span><i class="lc-c lc-reached"></i> ${esc(t('christian_reached'))} — ${reached}</span>
+        <span><i class="lc-c"></i> ${esc(t('christian_lost'))} — ${lost}</span>
       </div>
-      <p class="lc-foot">${esc(t('christian_foot'))}${christian.population ? ` · ${num(christian.population)} ${esc(t('christian_people'))}` : ''}</p>
-    `, 'sheet-christian');
+      ${perBox}
+      <p class="lc-foot">${esc(t('christian_foot'))}${coverage}</p>
+    `, 'sheet-christian sheet-flow');
   }
 
   // ── THE DESCRIPTION CELL: FIT BEFORE CLAMP ───────────────────────────────────────────────────
@@ -687,7 +1138,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // than by an overflow onto a second page. Measuring in a browser would make the browser path and
   // the Node path disagree, which is worse than a slightly conservative estimate in both.
   //
-  // WHY FIT BEFORE CLAMP (dx-shepherd's ruling, and it is the right one): on paper a cut prayer
+  // WHY FIT BEFORE CLAMP: on paper a cut prayer
   // description loses meaning and a reader cannot scroll to recover it. So shrink the type first —
   // 17px, then 15px, then 14px — and truncate only as the last resort.
   const DESC_SIZES = [17, 15, 14];
@@ -722,7 +1173,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // Vite-only alias and imports JSON without an attribute — importing it here would make every
   // `node internal/check-*.mjs` unrunnable. So it may be ABSENT, and it may also RETURN EMPTY for a
   // group whose fields cannot form a sentence. Both degrade to the metadata line.
-  // Per dx-shepherd's ruling the metadata line is a FALLBACK ONLY: the normal render has no metadata
+  // The metadata line is a FALLBACK ONLY: the normal render has no metadata
   // line, because describeGroup already puts the country and language INTO the sentence and printing
   // them again would say the country twice.
   function descCell(g) {
@@ -735,83 +1186,402 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
     return `<div class="d-tx" style="font-size:${f.px}px">${esc(f.text)}</div>`;
   }
 
+  // The first profile page carries the explanation (the same block as the worksheet's) and FD_FIRST rows;
+  // every later page carries PER_PAGE. The question heads stand ONCE over each page's tally column.
+  const FD_FIRST = Math.floor((H - M - FD_ROWS_TOP + GUT) / (CH + GUT));
   function listPages(zone, groups, photos) {
     const pages = [];
-    for (let start = 0; start < groups.length; start += PER_PAGE) {
-      const slice = groups.slice(start, start + PER_PAGE);
+    const prayHead = (top) => `<div class="pray-head" style="top:${Math.round(top)}px">${
+      PRAY_COLS.map((key) => `<span>${esc(t(key))}</span>`).join('')}</div>`;
+    for (let start = 0, page = 0; start < groups.length; page += 1) {
+      const per = page === 0 ? FD_FIRST : PER_PAGE;
+      // ★ PAGE 1'S ROWS FOLLOW THE EXPLANATION (2026-10-03). The explanation reserved a fixed FD_TOP_H and the
+      // rows sat below the reserve, so every language shorter than the tallest left a gap above the head row
+      // (0.36-1.30 in, measured in all 11). Now the explanation (at most FD_TOP_H) and the rows share one
+      // column (.fd-first), and the rows are placed inside .fd-rows, right under it. The page still holds
+      // FD_FIRST rows, sized for the full reserve, so a shorter explanation leaves the room at the page's foot.
+      // The rows stay absolutely placed (see below), only their origin moves: no row can reflow to a page.
+      const rowsTop = page === 0 ? PRAY_HEAD_H : M + HEAD;
+      const left = page === 0 ? 0 : M;
+      const slice = groups.slice(start, start + per);
       // ★ ONE FULL-WIDTH ROW PER GROUP. The column index is gone: `top` advances by the row, and the
       // three cells sit inside it. Absolute positioning is kept rather than switching to flow layout
       // because the print frame must not reflow — a row that moves between the browser preview and
       // the printed sheet is how a 20-row page becomes a 21-row page.
       const cards = slice.map((g, k) => {
         const i = start + k;
-        const top = M + HEAD + k * (CH + GUT);
+        const top = rowsTop + k * (CH + GUT);
         const src = photos.get(g.slug);
+        // esc() on the URL too, not just on the name below it. src is photos.get(slug), and
+        // usePosterPrints builds that Map straight from the API's image_url — so a quote in a
+        // photo URL would close the attribute and inject the rest as markup, in a document the
+        // reader is about to print. Same omission this file makes nowhere else.
         const img = src
-          ? `<img src="${src}" alt="">`
+          ? `<img src="${esc(src)}" alt="">`
           : `<div class="nophoto">${esc(t('no_photo'))}</div>`;
-        return `<div class="card" style="left:${M}px;top:${top.toFixed(0)}px;
+        return `<div class="card" style="left:${left}px;top:${top.toFixed(0)}px;
           width:${CW.toFixed(0)}px;height:${CH.toFixed(0)}px">${img}
           <div class="d-cell">
             <div class="nm">${i + 1}. ${esc(g.name)}</div>
             ${descCell(g)}
           </div>
-          <div class="pray-cols">${PRAY_COLS.map((key) => `<span class="pray-col"
-            ><i class="pray-box"></i><em>${esc(t(key))}</em></span>`).join('')}</div>
+          <div class="pray-cols">${PRAY_COLS.map(() => '<span class="pray-col"><i class="pray-box"></i></span>').join('')}</div>
           </div>`;
       }).join('');
+      const rowsH = PRAY_HEAD_H + slice.length * (CH + GUT) - GUT;
+      const body = page === 0
+        ? `<div class="fd-first"><div class="fd-top">${explainTop()}${explainBand(groups.length,
+            { w: PRAY_COLS.length * PRAY_CELL, cols: `repeat(${PRAY_COLS.length},${PRAY_CELL}px)`, gap: 0, cell: 'xb-cell xb-cell-fd' })}</div>`
+          + `<div class="fd-rows" style="height:${rowsH.toFixed(0)}px">${prayHead(0)}${cards}</div></div>`
+        : `${prayHead(rowsTop - PRAY_HEAD_H)}${cards}`;
       pages.push(sheet(`
         <div class="hd">${esc(zone.label || zone.id)}</div>
         <div class="hd-r">${esc(fill(t('list_header'),
-          { from: num(start + 1), to: num(Math.min(start + PER_PAGE, groups.length)), count: num(groups.length) }))}</div>
-        ${cards}`));
+          { from: num(start + 1), to: num(Math.min(start + per, groups.length)), count: num(groups.length) }))}</div>
+        ${body}`));
+      start += per;
     }
     return pages;
   }
 
+  // ── THE LIGHTWEIGHT LIST: a worksheet, not a profile book ───────────────────
+  // 2026-09-29: the lightweight packet is less about fitting information in and more a
+  // printable, instructive sheet — every people group, less text, a kind rather than commanding
+  // voice, and type and spacing sized for paper. Modelled on the Module 1 list-of-100 worksheet: a
+  // short note on the first page, one column header per page, numbered rows with room to tick.
+  // ★ EVERY ROW ALSO SHOWS THE GROUP'S PHOTO AND SHORT DESCRIPTION (2026-09-30): both packets show people,
+  // not just names. The worksheet keeps its shape; each row gains the photo and a two-line description
+  // (the same describeGroup sentence the full packet prints, cut at a word), so rows grow 70 → 92px.
+  // Without a describer (the Node gates) the row keeps its country · population line.
+  // ⚠ STILL EVERY GROUP. A variant may change HOW people are listed, never WHETHER they are.
+  // Sizes in sheet px (1500px = 8.5in, so 1px ~ 0.41pt): names 26px ~ 10.6pt, rows 92px ~ 0.52in.
+  // ★ THE FIRST PAGE EXPLAINS THE LIST BEFORE IT LISTS ANYONE (2026-10-02): the blessing, then the band (the
+  // pace table, what the three columns ask, an example row). That costs six rows of the first page (16 → 10);
+  // later pages keep 18. Measured in all 11 locales with a 100-group list: the tallest first page (ru) keeps
+  // 67px under its tenth row; an eleventh would not fit.
+  const WS_ROW = 92, WS_FIRST = 10, WS_REST = 18, WS_PHOTO = 76, WS_DESC_PX = 17;
+  // A tally column is wide enough for a heading of two short lines ("What do you / want me to know?") and
+  // for a few groups of tally marks in its cell.
+  const WS_TALLY_W = 160;
+  // The description cell's width: the sheet less its padding, the number, photo and tick columns, and
+  // the five column gaps (the .ws-row grid below). Budgeted like the full packet's (budgetFor), and the
+  // CSS clamps it to two lines too, for the scripts whose glyphs run wider than the estimate.
+  const WS_DESC_W = W - 2 * M - 58 - WS_PHOTO - PRAY_COLS.length * WS_TALLY_W - (PRAY_COLS.length + 2) * 8;
+  const WS_DESC_BUDGET = Math.floor(WS_DESC_W / (WS_DESC_PX * AVG_ADVANCE)) * 2;
+  function worksheetLine(g) {
+    const sentence = describe ? String(describe(g) || '') : '';
+    if (sentence) return `<small class="ws-desc">${esc(cutAtWord(sentence, WS_DESC_BUDGET))}</small>`;
+    const where = [flat(g.country_code_label) || flat(g.country) || flat(g.country_code),   // the name, not the ISO3
+      Number(g.population) > 0 ? `${num(g.population)} ${t('people_suffix')}` : ''].filter(Boolean).join(' · ');
+    return `<small>${esc(where)}</small>`;
+  }
+  // ── THE FIRST PAGE'S DESCRIPTION: how to use the list, and at what pace ─────
+  // Plain words, not instructions to fill in a form: the three columns are three things to DO in prayer,
+  // so each is explained by what it asks. The first carries the blessing to pray (Numbers 6:24-26, a
+  // public-domain text per locale, credited) and ONE line of further blessing references, so a reader who
+  // wants more has them without the page turning into a lectionary.
+  // ⚠ ONE LINE OF REFERENCES, by layout as well as by count: white-space:nowrap, and the fit probe fails a
+  // line wider than its box rather than letting it wrap into a second.
+  // The refs are canonical English addresses whose BOOK is named in the reader's language (refSpan). A
+  // locale whose Bible numbers the Psalms differently (the Synodal follows the Septuagint) carries its own
+  // `bless_refs` with its own numbers, so a reader finds the same verse in the Bible they own.
+  const BLESS_REFS = ['Psalm 134:3', 'Psalm 115:15', 'Psalm 29:11', 'Psalm 121:7', 'Genesis 12:3'];
+  // THE PACE TABLE. How often the reader prays for EVERY group on the list by name, strongest pace first.
+  // Each pace also says what it asks of a day, computed from THIS list's size (never a typed number): a
+  // daily pace prays for all of them every day; slower paces spread the list over the period.
+  const PACES = [
+    { key: 'pace_daily', word: 'pace_strongest', days: 1 },
+    { key: 'pace_weekly', word: 'pace_healthiest', days: 7, best: true },
+    { key: 'pace_fortnight', word: 'pace_healthy', days: 14 },
+    { key: 'pace_monthly', word: 'pace_normal', days: 30 },
+    { key: 'pace_quarter', word: 'pace_slower', days: 90 },
+  ];
+  function paceLoad(n, days) {
+    if (days === 1) return fill(t('pace_all'), { n: num(n) });
+    if (n / days >= 1) return fill(t('pace_day'), { n: num(Math.round(n / days)) });
+    if ((n * 7) / days >= 1) return fill(t('pace_week'), { n: num(Math.round((n * 7) / days)) });
+    return fill(t('pace_month'), { n: num(Math.max(1, Math.round((n * 30) / days))) });
+  }
+  // ── THE LIST'S FIRST PAGE: the blessing, then ONE band that explains the table below it ──────────────
+  // Shared by both packets (one code path): the intro and the blessing at full width, then a band built like
+  // the poster's header band (a rule above, three columns between short rules, a rule below):
+  //   1 the PACE table, strongest to slower, weekly marked, each pace's daily load computed from the list;
+  //   2 what the three columns ask, in plain words;
+  //   3 an EXAMPLE: the table's own question heads over one row of tally cells with marks in them. Its
+  //     column is exactly as wide as the table's tally columns and sits over them, so it reads as a legend.
+  // `tally` describes the table this band sits over: { w } its tally block's width, { cols, gap } the grid
+  // of its cells, { cell } the class that draws a cell the size of the table's own.
+  function explainTop() {
+    const refs = (Array.isArray(L.bless_refs) ? L.bless_refs : BLESS_REFS).map(refSpan).join(' · ');
+    return `<p class="ws-intro">${esc(t('light_intro'))}</p>
+      <div class="xb-bless"><p class="xb-lead">${esc(t('howto_bless'))}</p>
+        <blockquote class="ws-bless">${esc(t('blessing_text'))}<cite>${esc(t('blessing_credit'))}</cite></blockquote>
+        <div class="ws-refs">${esc(t('howto_bless_more'))} ${refs}</div>
+        <p class="ws-wheel">${esc(t('howto_wheel'))}</p></div>`;
+  }
+  // Tally marks the way they are drawn by hand: four strokes, the fifth across them.
+  function tallySvg(n) {
+    const out = [];
+    for (let g = 0, x = 6; g < Math.ceil(n / 5); g += 1, x += 34) {
+      const k = Math.min(5, n - g * 5);
+      for (let i = 0; i < Math.min(k, 4); i += 1) out.push(`<line x1="${x + i * 6}" y1="6" x2="${x + i * 6}" y2="30"/>`);
+      if (k === 5) out.push(`<line x1="${x - 4}" y1="26" x2="${x + 22}" y2="10"/>`);
+    }
+    return `<svg class="xb-marks" viewBox="0 0 ${Math.max(40, Math.ceil(n / 5) * 34 + 8)} 36" aria-hidden="true">${out.join('')}</svg>`;
+  }
+  function explainBand(n, tally) {
+    const pace = PACES.map((p) => `<tr${p.best ? ' class="ws-pace-best"' : ''}><th>${esc(t(p.key))}</th>`
+      + `<td class="xb-word">${esc(t(p.word))}</td><td>${esc(paceLoad(n, p.days))}</td></tr>`).join('');
+    const item = (key, body) => `<li><b>${esc(t(key))}</b> ${esc(t(body))}</li>`;
+    const grid = `grid-template-columns:${tally.cols};column-gap:${tally.gap}px`;
+    return `<section class="xb" style="grid-template-columns:1.4fr 0.9fr ${tally.w}px">
+      <div class="xb-col xb-pace"><div class="ws-sec">${esc(t('pace_title'))}</div>
+        <p class="xb-p">${esc(t('pace_lead'))}</p><table class="ws-pace-t">${pace}</table>
+        <p class="ws-pace-note">${esc(t('pace_note'))}</p></div>
+      <div class="xb-col xb-how"><div class="ws-sec">${esc(t('howto_title'))}</div>
+        <ol class="ws-cols">${item('pray_blessed', 'howto_bless_col')}${item('pray_know', 'howto_know')}${item('pray_do', 'howto_do')}</ol></div>
+      <div class="xb-col xb-ex"><div class="ws-sec">${esc(t('example_title'))}</div>
+        <div class="xb-ex-head" style="${grid}">${PRAY_COLS.map((k) => `<span>${esc(t(k))}</span>`).join('')}</div>
+        <div class="xb-ex-row" style="${grid}">${[7, 3, 2].map((m) => `<span class="${tally.cell}">${tallySvg(m)}</span>`).join('')}</div>
+        <p class="xb-p xb-ex-note">${esc(t('example_note'))}</p></div>
+    </section>`;
+  }
+  function worksheetPages(zone, groups, photos = new Map()) {
+    const pages = [];
+    const head = `<div class="ws-head"><span></span><span></span><span>${esc(t('light_col_group'))}</span>${
+      PRAY_COLS.map((key) => `<span>${esc(t(key))}</span>`).join('')}</div>`;
+    for (let start = 0, page = 0; start < groups.length; page += 1) {
+      const per = page === 0 ? WS_FIRST : WS_REST;
+      const slice = groups.slice(start, start + per);
+      const rows = slice.map((g, k) => {
+        const src = photos.get(g.slug);
+        // esc() on the URL, as the profile cards do: a quote in an API image_url must not become markup.
+        const photo = src
+          ? `<img class="ws-ph" src="${esc(src)}" alt="">`
+          : `<span class="ws-ph nophoto">${esc(t('no_photo'))}</span>`;
+        return `<div class="ws-row"><span class="ws-n">${num(start + k + 1)}</span>${photo}`
+          + `<span class="ws-name"><b>${esc(g.name)}</b>${worksheetLine(g)}</span>`
+          + PRAY_COLS.map(() => '<i class="ws-box"></i>').join('') + '</div>';
+      }).join('');
+      const top = page === 0
+        ? `<div class="pg-head"><div class="pg-kicker">${esc(zone.label || zone.id)}</div>
+             <h1 class="pg-h1 ws-h1">${esc(fill(t('map_page_sub'), { count: num(groups.length) }))}</h1></div>
+           ${explainTop()}${explainBand(groups.length, { w: PRAY_COLS.length * WS_TALLY_W + (PRAY_COLS.length - 1) * 8,
+             cols: `repeat(${PRAY_COLS.length},${WS_TALLY_W}px)`, gap: 8, cell: 'xb-cell xb-cell-ws' })}`
+        : `<div class="ws-top"><span>${esc(zone.label || zone.id)}</span><span>${esc(fill(t('list_header'),
+            { from: num(start + 1), to: num(Math.min(start + per, groups.length)), count: num(groups.length) }))}</span></div>`;
+      pages.push(sheet(`${top}${head}${rows}<div class="ws-foot">${esc(t('privacy_note'))}</div>`, 'sheet-worksheet sheet-flow'));
+      start += per;
+    }
+    return pages;
+  }
+  // Which list a variant prints. Keyed like VARIANTS; an unknown variant gets the profile pages.
+  const LIST_STYLE = { lightweight: worksheetPages };
+
   // ── PAGE n+1: the 12 prayer points ──────────────────────────────────────────
-  function pointsPage() {
-    const rows = POINTS.map((p) => {
-      // ⚠ ISOLATE EACH REFERENCE FOR BIDI. Scripture references stay in English
-      // (a reader looks them up in their own Bible), so on an RTL page they are
-      // LTR runs inside an RTL paragraph. Without isolation the Unicode bidi
-      // algorithm reorders a run that STARTS WITH A DIGIT: measured on the Arabic
-      // page, "1 Peter 5:6–11" rendered as "Peter 5:6-11 1". dir="ltr" on each
-      // reference pins its internal order without affecting the line's direction.
-      const refs = (p.refs || [])
-        .map((r) => `<span dir="ltr" style="unicode-bidi:isolate">${esc(r)}</span>`)
-        .join(' · ');
-      const sub = p.sub ? ` <span style="font:italic 17px Georgia,serif;color:#8c8170">— ${esc(p.sub)}</span>` : '';
-      const passage = p.print_passage
-        // Point 4 prints Mark 5:1-20 IN FULL. Driver: "it actually lists out the full
-        // scripture, because prayer point number four is actually read the word."
-        // class="p4-passage" is a TEST HOOK, not styling — the block is styled inline.
-        // Without it the only way to assert the passage rendered was to search for the
-        // English word "Gadarenes", which would go red the moment this key is translated.
-        ? `<div class="p4-passage" style="font:400 14px Georgia,serif;color:#4a4a45;line-height:1.5;margin-top:5px;
-               padding-left:10px;border-left:2px solid #d9d3c4">${esc(t('point4_passage'))}
-             <div class="p4-credit" style="font:italic 12px Georgia,serif;color:#a89f8c;margin-top:3px">
-               ${esc(t('point4_passage_credit'))}</div></div>`
-        : '';
-      return `<div style="margin-bottom:${p.print_passage ? 10 : 13}px">
-        <div style="font:700 19px Georgia,serif;color:#1b1a17">
-          ${p.n}. ${esc(tr(p.rhythm))}${sub}</div>
-        <div style="font:400 17px Georgia,serif;color:#3b3226;line-height:1.35;margin-top:2px">${esc(p.text)}</div>
-        <div style="font:600 14px Georgia,serif;color:#7a3b2e;margin-top:2px">${refs}</div>
-        ${passage}
+  // ★ LARGER TYPE, ONE PAGE (2026-09-30). The sheet prints at 0.544 (1500px → 8.5in), so the old 17px body
+  // was about 7pt on paper; the body is now 20px (about 8pt), the heading 22px. All twelve points, point 4's
+  // Mark 5:18-20 and the Father's-heart list share this ONE sheet, in every locale: the sizes below are the
+  // largest that fit the longest locale. class="points-body" is a TEST HOOK: the page must fit ONE sheet in
+  // every locale (its scrollHeight within its clientHeight).
+  // ★ ONE SHEET AGAIN (2026-10-02): the twelve points and the themes fit ONE page, as large as one page allows:
+  // the point text 18.5px (~7.5pt on letter), the themes 19px, 5px between points, the Mark 5 passage 16px; the
+  // credit line stays 0.28in above the edge. Measured in all 11 locales: the tightest (fr 75px, hi 79px) keep
+  // that much under the last point; check:packet-render fails overflow (pointsOver).
+  // ★ THE PAGE FITS ITSELF (2026-10-03). In its own language the page takes the LARGEST sizes that still fit
+  // ONE sheet: from PT_MIN (the one-sheet sizes above, measured to fit all 11 locales) up to PT_MAX (the
+  // two-sheet sizes before them, the cap), in PT_TIERS even steps, so shorter words print larger by
+  // themselves. The credits keep their size. th / thb / scr are the themes' text, titles and scene refs.
+  // ★ ESTIMATED, NEVER MEASURED, like the description cell (FIT BEFORE CLAMP): this module also runs under
+  // Node. pointsHeight() lays the page out by character count, each block's lines from a greedy word wrap at
+  // its own width, with per-script advances measured on this page in the packet's fonts and rounded UP; a
+  // tier is taken only when the estimate fits with PT_SAFE to spare. check:packet-render measures the real
+  // page in all 11 locales behind it (pointsOver).
+  const PT_MIN = { head: 22, sub: 19, text: 18.5, refs: 16, gap: 5, passage: 16, th: 19, thb: 20, scr: 18 };
+  const PT_MAX = { head: 25, sub: 21, text: 22.5, refs: 18.5, gap: 18, passage: 20, th: 21, thb: 22, scr: 19 };
+  const PT_TOP = 82, PT_TIERS = 10, PT_SAFE = 0.97;
+  const PT_BODY_H = H - (M + PT_TOP) - 80;          // the .points-body box: 1719px
+  const ptTier = (k) => {
+    const o = {};
+    for (const n of Object.keys(PT_MIN)) o[n] = Math.round((PT_MIN[n] + (PT_MAX[n] - PT_MIN[n]) * k / PT_TIERS) * 4) / 4;
+    return o;
+  };
+  // em per character by script, measured on this page (2026-10-03: Latin text 0.50-0.53, Cyrillic 0.58,
+  // Arabic 0.44, Devanagari 0.54, Chinese 1.03) and rounded up; bold and semibold run wider.
+  const CJK = /[\u2E80-\u9FFF\u3000-\u303F\uF900-\uFAFF\uFF00-\uFFEF]/;
+  const ptAdv = (ch) => {
+    const c = ch.codePointAt(0);
+    if (CJK.test(ch)) return 1.05;
+    if (c >= 0x0400 && c <= 0x052F) return 0.6;
+    if ((c >= 0x0600 && c <= 0x06FF) || (c >= 0xFB50 && c <= 0xFEFF)) return 0.47;
+    if (c >= 0x0900 && c <= 0x097F) return 0.56;
+    return 0.54;
+  };
+  const PT_BOLD = 1.2, PT_SEMI = 1.12;
+  const ptW = (str, fs, wt) => [...str].reduce((a, ch) => a + ptAdv(ch), 0) * fs * wt;
+  // Lines a run of segments ([text, px, weight]) takes at `width`: words wrap at spaces, and a word with Chinese
+  // in it breaks between any two characters, as the browser breaks it.
+  function ptLines(segs, width) {
+    let lines = 0, x = 0;
+    const put = (w) => { if (!lines) lines = 1; if (x > 0 && x + w > width) { lines++; x = 0; } x += w; };
+    for (const [str, fs, wt] of segs) {
+      const words = String(str || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+      for (const word of words) {
+        if (CJK.test(word)) for (const ch of word) put(ptW(ch, fs, wt));
+        else put(ptW(word, fs, wt));
+        x += ptW(' ', fs, wt);
+      }
+    }
+    return lines;
+  }
+  // The flex rows a wrapping list takes: items of the given widths, 20px apart.
+  const ptRows = (widths, width) => {
+    let rows = 1, x = 0;
+    for (const w of widths) { if (x > 0 && x + 20 + w > width) { rows++; x = 0; } x += (x > 0 ? 20 : 0) + w; }
+    return rows;
+  };
+  // A line's "normal" height, measured: 1.18-1.19 x its size in the serif faces, 1.31-1.32 where it is Chinese.
+  const ptNormal = (str) => (CJK.test(String(str || '')) ? 1.33 : 1.19);
+  function pointsHeight(sz) {
+    const BW = W - 2 * M;                              // the body's width
+    const themes = Array.isArray(L.themes) && L.themes.length === 7 ? L.themes : EN.themes || [];
+    const scenes = Array.isArray(L.scenes) && L.scenes.length === 3 ? L.scenes : EN.scenes || [];
+    const sref = EN.scene_refs || [];
+    let h = 0;
+    if (themes.length) {
+      const row = sz.th * 1.3, numW = 1.3 * sz.th + ptW(' ', sz.th, 1);
+      h += ptLines([[t('themes_title'), sz.thb, PT_BOLD], [t('themes_intro'), sz.th, 1]], BW) * Math.max(row, sz.thb * ptNormal(t('themes_title')));
+      const tRows = ptRows(themes.map((x) => numW + ptW(String(x), sz.th, 1)), BW);
+      const sRows = ptRows([ptW(String(t('scenes_title')), sz.thb, PT_BOLD), ...scenes.map((x, i) => numW + ptW(String(x), sz.th, 1)
+        + ptW(` ${(sref[i] || []).map(refText).join(' · ')}`, sz.scr, PT_SEMI))], BW);
+      h += 2 + tRows * row + (tRows - 1) + 2 + sRows * row + (sRows - 1) + 6 + 1.5 + 10;
+    }
+    for (const p of POINTS) {
+      const refs = (p.refs || []).map(refText).join(' · ');
+      h += ptLines([[`${p.n}. ${tr(p.rhythm)}`, sz.head, PT_BOLD], ...(p.sub ? [[`— ${p.sub}`, sz.sub, 1]] : [])], BW) * sz.head * ptNormal(tr(p.rhythm));
+      h += 2 + ptLines([[p.text, sz.text, 1]], BW) * sz.text * 1.3;
+      h += 2 + ptLines([[refs, sz.refs, PT_SEMI]], BW) * sz.refs * ptNormal(refs);
+      if (p.print_passage) {
+        const IW = BW - 15;                            // the passage and heart blocks' 12px inset and 3px rule
+        const passage = String(t('point4_passage') || ''), bold = String(t('point4_passage_bold') || '');
+        const at = bold ? passage.indexOf(bold) : -1;
+        const segs = at < 0 ? [[passage, sz.passage, 1]]
+          : [[passage.slice(0, at), sz.passage, 1], [bold, sz.passage, PT_BOLD], [passage.slice(at + bold.length), sz.passage, 1]];
+        h += 6 + ptLines(segs, IW) * sz.passage * 1.4 + 2 + ptLines([[t('point4_passage_credit'), 13, 1]], IW) * 13 * ptNormal(t('point4_passage_credit'));
+        h += 8 + ptLines([[t('point4_heart_title'), sz.refs, PT_BOLD + 0.15]], IW) * sz.refs * ptNormal(t('point4_heart_title'));
+        h += 2 + ptLines([[t('point4_heart_lede'), sz.passage, 1]], IW) * sz.passage * 1.35;
+        h += 6 + ptLines([[t('point4_heart_leadin'), sz.passage - 1, 1]], IW) * (sz.passage - 1) * 1.3;
+        const CWH = (IW - 28 - 40) / 2;                // the heart list's two columns
+        const items = HEART.reduce((a, x) => a + ptLines([[x.who, sz.passage - 1, PT_BOLD], [` · ${refText(x.ref)}`, sz.passage - 1, 1]], CWH), 0);
+        h += 3 + Math.ceil(items / 2) * (sz.passage - 1) * 1.4;
+      }
+      h += sz.gap;
+    }
+    return h;
+  }
+  // The largest tier whose estimate fits; the floor when none does (the gate then reports the overflow).
+  const fitPoints = () => {
+    for (let k = PT_TIERS; k > 0; k--) if (pointsHeight(ptTier(k)) <= PT_BODY_H * PT_SAFE) return { k, sz: ptTier(k) };
+    return { k: 0, sz: ptTier(0) };
+  };
+  // ⚠ ISOLATE EACH REFERENCE FOR BIDI. Scripture references stay in English
+  // (a reader looks them up in their own Bible), so on an RTL page they are
+  // LTR runs inside an RTL paragraph. Without isolation the Unicode bidi
+  // algorithm reorders a run that STARTS WITH A DIGIT: measured on the Arabic
+  // page, "1 Peter 5:6–11" rendered as "Peter 5:6-11 1". dir="ltr" on each
+  // reference pins its internal order without affecting the line's direction.
+  // ★ THE BOOK NAME IS PROSE, THE ADDRESS IS NOT. refs stay canonical English in the data (one
+  // address, checkable against any Bible), and the BOOK is named in the packet's language at print
+  // time from its `books` table: a Chinese packet cited "Matthew 27:27", English in every locale.
+  // A localized name in a right-to-left script is isolated rtl, so the book reads on the right and
+  // the chapter:verse keeps its digit order; a Latin reference stays the ltr isolate described above.
+  const refBook = (r) => {
+    const m = String(r).match(/^(.*?)\s+(\d[\d:–\-,; ]*)$/);
+    const book = m && (L.books || {})[m[1]];
+    return { book, text: book ? `${book} ${m[2]}` : String(r) };
+  };
+  const refText = (r) => refBook(r).text;
+  const refSpan = (r) => {
+    const { book, text } = refBook(r);
+    const dir = book && RTL.has(lang) ? 'rtl' : 'ltr';
+    return `<span dir="${dir}" style="unicode-bidi:isolate">${esc(text)}</span>`;
+  };
+  // ★ PRAYER THEMES AT THE TOP (2026-10-02): seven themes, then three prayer scenes, each scene with two
+  // references (one Old Testament, one New), as a thin numbered list above the twelve points. They are
+  // ideas to weave into the wheel's five-minute blocks, so they sit before the points rather than among them.
+  // The words are the language's own (themes / scenes); the scene addresses are English's (scene_refs),
+  // canonical like every reference here, the book named in the reader's language. class="pt-themes" is a
+  // TEST HOOK: the gates count 7 themes and 3 scenes with 2 references each.
+  function themesBlock() {
+    const themes = Array.isArray(L.themes) && L.themes.length === 7 ? L.themes : EN.themes || [];
+    const scenes = Array.isArray(L.scenes) && L.scenes.length === 3 ? L.scenes : EN.scenes || [];
+    if (!themes.length) return '';
+    const sref = EN.scene_refs || [];
+    const item = (n, body) => `<li><span class="pt-n">${num(n)}</span> ${body}</li>`;
+    return `<div class="pt-themes">
+        <div class="pt-th-h"><b>${esc(t('themes_title'))}</b> <span class="pt-th-i">${esc(t('themes_intro'))}</span></div>
+        <ol class="pt-th-list">${themes.map((x, i) => item(i + 1, esc(x))).join('')}</ol>
+        <ol class="pt-th-list pt-sc-list"><li class="pt-sc-h"><b>${esc(t('scenes_title'))}</b></li>${scenes.map((x, i) => item(themes.length + i + 1,
+          `${esc(x)} <span class="pt-sc-r">${(sref[i] || []).map(refSpan).join(' · ')}</span>`)).join('')}</ol>
       </div>`;
-    }).join('');
+  }
+  // `tier` forces a size tier (0..PT_TIERS); probes and gates only. data-pt-tier states the tier chosen and
+  // data-pt-est its estimated height, so check:packet-render can hold the estimate to the real page.
+  function pointsPage(tier) {
+    const k = Number.isInteger(tier) ? Math.max(0, Math.min(PT_TIERS, tier)) : fitPoints().k;
+    const PT = ptTier(k);
+    const rows = POINTS.map((p) => {
+      const refs = (p.refs || []).map(refSpan).join(' · ');
+      const sub = p.sub ? ` <span style="font:italic ${PT.sub}px Georgia,serif;color:#8c8170">— ${esc(p.sub)}</span>` : '';
+      return `<div style="margin-bottom:${PT.gap}px">
+        <div class="pt-h" style="font:700 ${PT.head}px Georgia,serif;color:#1b1a17">
+          ${p.n}. ${esc(tr(p.rhythm))}${sub}</div>
+        <div style="font:400 ${PT.text}px Georgia,serif;color:#3b3226;line-height:1.3;margin-top:2px">${esc(p.text)}</div>
+        <div style="font:600 ${PT.refs}px Georgia,serif;color:#7a3b2e;margin-top:2px">${refs}</div>
+        ${p.print_passage ? passageBlock(PT) + heartBlock(PT) : ''}
+      </div>`;
+    });
     return sheet(`
       <div style="position:absolute;left:${M}px;top:44px;right:${M}px">
         <div class="points-title" style="font:700 40px Georgia,serif;color:#1b1a17">${esc(t('points_title'))}</div>
         <div style="font:italic 18px Georgia,serif;color:#6d766e;margin-top:6px">${esc(t('points_intro'))}</div>
       </div>
-      <div style="position:absolute;left:${M}px;top:${M + 96}px;right:${M}px;bottom:52px">${rows}</div>
-      <div class="fine">${esc(t('points_attrib'))}</div>`);
+      <div class="points-body" data-pt-tier="${k}" data-pt-est="${Math.round(pointsHeight(PT))}" style="position:absolute;left:${M}px;top:${M + PT_TOP}px;right:${M}px;bottom:80px;--pt-th:${PT.th}px;--pt-thb:${PT.thb}px;--pt-scr:${PT.scr}px">${themesBlock()}${rows.join('')}</div>
+      <div class="fine">${esc(t('points_attrib'))}</div>`, 'sheet-points');
+  }
+
+  // ★ THE HEAVENLY FATHER'S HEART (2026-09-30): a plain statement of what they need to know (point4_heart_lede,
+  // the exact product copy), a simple lead-in, then seven short readings, each a household the Father saved
+  // through one person. The person is named in the packet's language; the passage is addressed in the
+  // reader's own Bible (refs stay canonical English in the data and the book is localized, like the point
+  // refs). class="p4-heart" is a TEST HOOK: the gates count its seven items.
+  const heartBlock = (PT) => `<div class="p4-heart" style="margin-top:8px;padding-inline-start:12px;border-inline-start:3px solid #d9d3c4">
+      <div class="p4-heart-h" style="font:700 ${PT.refs}px Georgia,serif;letter-spacing:.08em;color:#7a3b2e">${esc(t('point4_heart_title'))}</div>
+      <div class="p4-heart-lede" style="font:400 ${PT.passage}px/1.35 Georgia,serif;color:#2f2a22;margin-top:2px">${esc(t('point4_heart_lede'))}</div>
+      <div class="p4-heart-leadin" style="font:italic ${PT.passage - 1}px/1.3 Georgia,serif;color:#4a4a45;margin-top:6px">${esc(t('point4_heart_leadin'))}</div>
+      <ol class="p4-heart-list" style="margin:3px 0 0;padding-inline-start:28px;columns:2;column-gap:40px;font:400 ${PT.passage - 1}px/1.4 Georgia,serif;color:#3b3226">${
+        HEART.map((h) => `<li><b>${esc(h.who)}</b> · ${refSpan(h.ref)}</li>`).join('')}</ol></div>`;
+  // ── POINT 4's READING: Mark 5:18-20, on the points page ────────────────────────
+  // ★ POINT 4 IS READING THE WORD (2026-09-30, the second revision): Mark 5:18-20 only, the man who begged to
+  // stay, sent home to tell "how much the Lord has done for you", and the Decapolis. Short enough that point 4
+  // carries it under its own text and ALL TWELVE POINTS FIT ONE PAGE again (it had its own sheet for 1-20).
+  // The packet's public-domain texts, trimmed to those verses (point4_passage, with its credit; the English
+  // WEB text where a language has none on file, as the packet always did). Verse 19 in bold:
+  // point4_passage_bold holds it verbatim from the same text, so the bold is a substring match and never a
+  // second rendering of scripture. class="p4-passage" / "p4-v19" are TEST HOOKS.
+  function passageBlock(PT) {
+    const passage = String(t('point4_passage') || '');
+    const bold = String(t('point4_passage_bold') || '');
+    const at = bold ? passage.indexOf(bold) : -1;
+    const body = at < 0 ? esc(passage)
+      : `${esc(passage.slice(0, at))}<strong class="p4-v19" style="font-weight:700;color:#1b1a17">${esc(bold)}</strong>${esc(passage.slice(at + bold.length))}`;
+    return `<div class="p4-passage" style="font:400 ${PT.passage}px/1.4 Georgia,serif;color:#2f2a22;margin-top:6px;
+        padding-inline-start:12px;border-inline-start:3px solid #d9d3c4">${body}
+        <div class="p4-credit" style="font:italic 13px Georgia,serif;color:#a89f8c;margin-top:2px">${esc(t('point4_passage_credit'))}</div></div>`;
   }
 
   // ── PAGE n+1: the BOUNDED and CENTERED sets ─────────────────────────────────
-  // Brief A1 BACK MATTER: after the profiles, before the wheel. FULL DETAIL ONLY — the lightweight
+  // BACK MATTER: after the profiles, before the wheel. FULL DETAIL ONLY — the lightweight
   // packet is map · triangle · profiles · wheel · points, and these two figures are the part a
   // reader sits with rather than carries.
   //
@@ -855,79 +1625,132 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // per-ring counts, so the legend states what this zone actually contains, in ring order.
   function ringLegend(tally) {
     const counts = tally && tally.counts;
-    if (!counts || typeof counts.get !== 'function') return '';
+    const get = (n) => (counts && typeof counts.get === 'function' ? Number(counts.get(n) || 0) : 0);
     const rows = [];
     for (let n = 1; n <= RING_MAX; n++) {
-      const c = Number(counts.get(n) || 0);
-      if (!c) continue;
       const name = ringName(n);
       if (!name) continue;
-      rows.push(`<li><b>${num(c)}</b> ${esc(name)}</li>`);
+      const c = get(n);
+      // Ring 10 is not a ring of the target: it is everything past ring 9 (nearby, no shared tongue).
+      rows.push(`<li><span class="ring-n">${n === RING_MAX ? '+' : n}</span> ${esc(name)}`
+        + ` <span class="ring-c">${c ? num(c) : '—'}</span></li>`);
     }
-    return rows.length ? `<ul class="set-rings">${rows.join('')}</ul>` : '';
+    return rows.length ? `<ol class="set-rings">${rows.join('')}</ol>` : '';
   }
 
-  function setsPage(zone, sets) {
+  // A cross, centred on (cx, cy), `h` tall: the centre of both figures is Christ.
+  function cross(cx, cy, h) {
+    const bar = h * 0.2, arm = h * 0.66;
+    return `<g class="set-cross"><rect x="${(cx - bar / 2).toFixed(1)}" y="${(cy - h / 2).toFixed(1)}" width="${bar.toFixed(1)}" height="${h.toFixed(1)}" rx="1.5"/>`
+      + `<rect x="${(cx - arm / 2).toFixed(1)}" y="${(cy - h / 2 + h * 0.24).toFixed(1)}" width="${arm.toFixed(1)}" height="${bar.toFixed(1)}" rx="1.5"/></g>`;
+  }
+
+  function setsPage(zone, sets, listSize) {
     // '' WITHOUT DATA, exactly like funnelPage and christianPage — a page that cannot state true
     // figures must not appear at all. This is what keeps FULL valid before a host supplies sets.
     if (!sets || (!Array.isArray(sets.bounded) && !Array.isArray(sets.centered))) return '';
     const bounded = Array.isArray(sets.bounded) ? sets.bounded : [];
     const centered = Array.isArray(sets.centered) ? sets.centered : [];
     if (!bounded.length && !centered.length) return '';
-
-    const usableW = W - 2 * M, colW = (usableW - 60) / 2;
-    const parts = [];
+    // ★ EVERY GROUP OF THE LIST IS COUNTED (2026-10-03). A group with no record in a figure's data (no
+    // near-neighbour data, say) is in none of its figures, so a caption used to add up to less than the
+    // list: Laos printed "88 placed · 0 at the centre · 6 unplaced", 94 of its 95. The groups missing from
+    // a figure's data are now named in its caption ("1 without data"), so its parts add up to the list.
+    const noData = (n) => (Number.isFinite(listSize) && listSize > n ? ` · ${fill(t('sets_no_data'), { n: num(listSize - n) })}` : '');
+    const panels = [];
+    let legend = '';
 
     if (bounded.length) {
       const L = layoutBoundedSet(bounded, { r: 100, spread: 220 });
       const T = boundedSetTally(L);
-      // The viewBox is sized from the layout's own extent so the figure scales to the column
-      // without any coordinate being touched — the gap survives by construction.
-      // ⚠ UNKNOWN POINTS CARRY NO x/y, AND THAT IS THE MODULE BEING CORRECT. `reached` undefined
-      // means we do not know which side of the boundary a people belongs on, so there is no honest
-      // place to draw it — plotting it anywhere would assert the very thing that is unknown. My
-      // first version mapped over L.unknown with the same dot() helper and crashed on
-      // `p.x.toFixed`, which is a better outcome than silently drawing them at (0,0) inside the
-      // circle. They are STATED in the tally instead (regions: an un-inked category on a printed
-      // page, where there is no hover, reads as zero).
-      const plotted = [...L.inside, ...L.outside];
-      const ext = Math.max(...plotted.map((p) => Math.hypot(p.x - L.cx, p.y - L.cy)), L.r * 1.2) * 1.08;
-      const dot = (p, cls) => `<circle class="${cls}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5"/>`;
-      parts.push(`<div class="set-col">
-        <h2 class="set-h">${esc(t('sets_bounded_title'))}</h2>
-        <svg class="set-svg" viewBox="${(L.cx - ext).toFixed(1)} ${(L.cy - ext).toFixed(1)} ${(ext * 2).toFixed(1)} ${(ext * 2).toFixed(1)}">
-          <circle class="set-ring" cx="${L.cx}" cy="${L.cy}" r="${L.r}"/>
-          ${L.inside.map((p) => dot(p, 'set-in')).join('')}
+      // ⚠ UNKNOWN POINTS CARRY NO x/y, AND THAT IS THE MODULE BEING CORRECT: we do not know which side of
+      // the boundary they belong on, so there is no honest place to draw them. They are STATED in the
+      // tally instead (an un-inked category on a printed page reads as zero).
+      // A square view with PADDING: the outermost dot is spread*1 from the centre, so 250 leaves room.
+      const S = 250;
+      const dot = (p, cls) => `<circle class="${cls}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"/>`;
+      panels.push({ kind: 'bounded', html: `<div class="set-panel">
+        <h2 class="set-h">${esc(t('sets_head_bounded'))}</h2>
+        <div class="set-sub">${esc(t('sets_bounded_title'))}</div>
+        <svg class="set-svg" viewBox="${L.cx - S} ${L.cy - S} ${2 * S} ${2 * S}">
           ${L.outside.map((p) => dot(p, 'set-out')).join('')}
+          ${L.inside.map((p) => dot(p, 'set-in')).join('')}
+          <circle class="set-ring" cx="${L.cx}" cy="${L.cy}" r="${L.r}"/>
+          ${cross(L.cx, L.cy, 44)}
         </svg>
         <p class="set-cap">${esc(fill(t('sets_bounded_tally'),
-          { inside: num(T.inside), outside: num(T.outside), unknown: num(T.unknown) }))}</p>
-      </div>`);
+          { inside: num(T.inside), outside: num(T.outside), unknown: num(T.unknown) }) + noData(bounded.length))}</p>
+      </div>` });
     }
 
     if (centered.length) {
       const L = layoutCenteredSet(centered, {});
       const T = ringTally(L);
-      const ext = (L.innerR + RING_MAX * L.ringGap) * 1.12;
-      parts.push(`<div class="set-col">
-        <h2 class="set-h">${esc(t('sets_centered_title'))}</h2>
-        <svg class="set-svg" viewBox="${(L.cx - ext).toFixed(1)} ${(L.cy - ext).toFixed(1)} ${(ext * 2).toFixed(1)} ${(ext * 2).toFixed(1)}">
-          ${(L.radii || []).map((r) => `<circle class="set-ring-faint" cx="${L.cx}" cy="${L.cy}" r="${r.r}"/>`).join('')}
-          ${L.placed.map((p) => `<circle class="set-in" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5"/>`).join('')}
-          <circle class="set-centre" cx="${L.cx}" cy="${L.cy}" r="${(L.innerR * 0.6).toFixed(1)}"/>
+      // ★ A TARGET, NOT RINGS OF DOTS. The layout places every group ON its ring's line, so one ring's
+      // groups printed as a circle of overlapping dots and the figure read as rings of people rather than
+      // as a target. Here each ring is a BAND, numbered, and each group sits somewhere inside its band:
+      // the layout's own angle (stable per group), and a radius inside the band from the group's id.
+      const R0 = 34, BW = 25, RINGS = RING_MAX - 1;          // 9 numbered bands; ring 10 lies past them
+      const outer = R0 + RINGS * BW, far = outer + BW;
+      const S = far + 14, DOT = 5.5;
+      const bands = [];
+      bands.push(`<circle class="set-band-out" cx="0" cy="0" r="${far}"/>`);
+      for (let n = RINGS; n >= 1; n--) {
+        bands.push(`<circle class="${n % 2 ? 'set-band-a' : 'set-band-b'}" cx="0" cy="0" r="${R0 + n * BW}"/>`);
+      }
+      bands.push(`<circle class="set-core" cx="0" cy="0" r="${R0}"/>`);
+      // ★ READ UPWARD TO THE CROSS (2026-10-02): the numbers ride the vertical axis BELOW the centre, 9 at the
+      // bottom, so the eye climbs 9 → 1 to the cross. The dots keep clear of that lane: bandFill leaves the
+      // lane straight up clear, and every dot is turned half a circle (x, y → -x, -y) to put it below.
+      const nums = [];
+      for (let n = 1; n <= RINGS; n++) {
+        const y = R0 + (n - 0.5) * BW;
+        nums.push(`<circle class="set-num" cx="0" cy="${y}" r="9"/><text class="set-num-t" x="0" y="${y}">${n}</text>`);
+      }
+      // THE SHARED BAND GEOMETRY (charts/ringBands.js bandFill, the same module the screen set charts
+      // use): even spread through each band, no two dots overlapping, none in the number lane straight
+      // up. Bands are centred on ringRadii, so innerR is the middle of band 1. 'fit' mode, the one meant
+      // for print: a ring too full to separate reports its remainder instead of overlapping it.
+      const radii = ringRadii({ innerR: R0 + BW / 2, ringGap: BW });
+      // The number lane, per ring: the arc a badge (radius 9) plus a dot (DOT) plus a gap subtends at THAT
+      // ring's radius. A fixed angle was too narrow at ring 1 (r ≈ 46), where a dot could sit under the badge.
+      const laneFor = (r) => { const half = Math.asin(Math.min(1, (9 + DOT + 2) / r)); return { start: -Math.PI / 2 - half, span: 2 * half }; };
+      // The caption states what is DRAWN: 'fit' keeps every dot separable on paper, so a ring too full to
+      // hold its groups reports the remainder (bf.unplaced), which joins the unplaced count rather than
+      // vanishing while the caption still counted it. The ring legend keeps each ring's true total.
+      const bf = bandFill(L.placed, radii, {
+        ringGap: BW, minSep: 2 * DOT + 2, pinRadius: DOT, minPinFloor: 3,
+        labels: radii.map((x) => ({ ring: x.ring, keepOut: laneFor(x.r) })),
+      });
+      const dots = bf.placed.map((p) =>
+        `<circle class="set-in" cx="${(-p.x).toFixed(1)}" cy="${(-p.y).toFixed(1)}" r="${(p.pin || DOT).toFixed(1)}"/>`).join('');
+      panels.push({ kind: 'centered', html: `<div class="set-panel">
+        <h2 class="set-h">${esc(t('sets_head_centered'))}</h2>
+        <div class="set-sub">${esc(t('sets_centered_title'))}</div>
+        <svg class="set-svg" viewBox="${-S} ${-S} ${2 * S} ${2 * S}">
+          ${bands.join('')}${dots}${nums.join('')}${cross(0, 0, 40)}
         </svg>
         <p class="set-cap">${esc(fill(t('sets_centered_tally'),
-          { placed: num(T.placed), centre: num(T.centre), unplaced: num(T.unplaced) }))}</p>
-        ${ringLegend(T)}
-      </div>`);
+          { placed: num(bf.placed.length), centre: num(T.centre), unplaced: num(T.unplaced + bf.unplaced.length) }) + noData(centered.length))}</p>
+      </div>` });
+      const rows = ringLegend(T);
+      // The legend first says what a ring IS, in plain words, then lists the rings that hold someone.
+      if (rows) legend = `<div class="set-legend"><div class="set-legend-h">${esc(t('sets_rings_head'))}</div>`
+        + `<p class="set-legend-p">${esc(t('sets_rings_lede'))}</p>${rows}</div>`;
     }
 
-    return sheet(`
-      <div class="pg-head"><div class="pg-kicker">${esc(t('sets_kicker'))}</div>
+    // ★ ONE CHART PER PAGE (2026-09-29, second look: the bounded set on one page and the centered set on
+    // another), each a large square panel centred on its page with its heading — the Module 1 panel,
+    // at a size a printed page can carry. The centered set's page carries the ring legend beneath it.
+    // Both pages share the pair's heading so they read as one spread; the first carries the lede.
+    // The page key stays 'sets', so the lightweight variant still drops both together.
+    return panels.map((p, i) => sheet(`
+      <div class="pg-head pg-head-c"><div class="pg-kicker">${esc(t('sets_kicker'))}</div>
         <h1 class="pg-h1">${esc(t('sets_title'))}</h1></div>
-      <p class="pg-lede">${esc(t('sets_lede'))}</p>
-      <div class="set-row" style="--set-col:${colW.toFixed(0)}px">${parts.join('')}</div>
-    `, 'sheet-sets');
+      ${i === 0 ? `<p class="pg-lede pg-lede-c">${esc(t('sets_lede'))}</p>` : ''}
+      <div class="set-row set-row-solo set-solo-${p.kind}">${p.html}</div>
+      ${p.kind === 'centered' ? legend : ''}
+    `, `sheet-sets sheet-flow sheet-sets-${p.kind}`)).join('');
   }
 
   // ── PAGE n+2: the prayer wheel ──────────────────────────────────────────────
@@ -935,42 +1758,82 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // be translated, and this packet must generate in any language. Twelve equal
   // segments, the rhythm name set along each, 5 minutes each = one hour.
   function wheelPage() {
-    const cx = W / 2, cy = 1090, R = 470;
+    const cx = W / 2, cy = 1075, R = 500;
+    const SANS = "'Public Sans','Helvetica Neue',Arial,-apple-system,'Segoe UI',system-ui,sans-serif";
     const order = ['praise', 'wait', 'confess', 'read', 'ask', 'intercede',
       'pray_word', 'thank', 'sing', 'meditate', 'listen', 'praise_end'];
-    // Hues sweep the wheel so neighbouring rhythms stay distinguishable in print.
+    // ★ THE SOURCE WHEEL'S OWN COLOURS. Sampled from the fill operators in the content stream of the
+    // Metacamp Module 1 prayer wheel's PDF, in rhythm order — not eyeballed
+    // from a rendering. They run warm to cool around the hour, which is what makes the source wheel
+    // read at a glance; a generated hue sweep had the right idea and none of its colours.
+    const HUES = ['#fe936a', '#febb64', '#fed164', '#fffa83', '#e6f37d', '#a3d979',
+      '#47ccfc', '#6293fe', '#722cfd', '#c632fd', '#e6578d', '#ff766f'];
+    // ★ PRAISE AT THE TOP (2026-09-30, turned 90° clockwise from the source's nine o'clock). Like a peace sign:
+    // the opening PRAISE runs from twelve to one and the closing PRAISE from eleven to twelve, so the two meet
+    // at the top and the hour starts and ends with praise. SVG angles: 0 is three o'clock and they increase
+    // clockwise, so twelve o'clock is 270. The "Start here" marker sits on the opening, top-RIGHT praise.
+    const START = 270;
+    const rad = (d) => d * Math.PI / 180;
     const seg = order.map((key, i) => {
-      const a0 = (i * 30 - 90) * Math.PI / 180, a1 = ((i + 1) * 30 - 90) * Math.PI / 180;
+      const a0 = rad(START + i * 30), a1 = rad(START + (i + 1) * 30), mid = (a0 + a1) / 2;
       const x0 = cx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0);
       const x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
-      const hue = Math.round(i * 30);
-      const mid = (a0 + a1) / 2;
-      const tx = cx + R * 0.62 * Math.cos(mid), ty = cy + R * 0.62 * Math.sin(mid);
+      const tx = cx + R * 0.6 * Math.cos(mid), ty = cy + R * 0.6 * Math.sin(mid);
       let deg = mid * 180 / Math.PI;
-      if (deg > 90 || deg < -90) deg += 180;            // keep every label upright
-      return `<path d="M ${cx} ${cy} L ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)} Z"
-                fill="hsl(${hue} 70% 72%)" stroke="#fff" stroke-width="3"/>
-              <text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" transform="rotate(${deg.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)})"
-                text-anchor="middle" dominant-baseline="middle"
-                font-family="Georgia,serif" font-weight="700" font-size="21" fill="#2b2a26">${esc(tr(key))}</text>`;
+      deg = ((deg + 180) % 360 + 360) % 360 - 180;      // normalise to -180..180
+      if (deg > 90 || deg < -90) deg += 180;              // keep every label upright
+      return `<path d="M ${cx} ${cy} L ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)} Z" fill="${HUES[i]}"/>
+              <text class="wheel-label" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" transform="rotate(${deg.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)})"
+                text-anchor="middle" dominant-baseline="middle" filter="url(#pw-label)"
+                font-family="${SANS}" font-weight="800" font-size="26" letter-spacing="0.5" fill="#ffffff"
+                stroke="#000000" stroke-opacity="0.28" stroke-width="2.5" paint-order="stroke fill">${esc(tr(key))}</text>`;
     }).join('');
-    const pips = order.map((_, i) => {
-      const a = ((i + 0.5) * 30 - 90) * Math.PI / 180;
-      const x = cx + (R + 46) * Math.cos(a), y = cy + (R + 46) * Math.sin(a);
-      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="21" fill="#26251f"/>
+    // The source's "5 / minutes" badge on the rim: a black disc for the number, a dark tag under it.
+    const badges = order.map((_, i) => {
+      const a = rad(START + (i + 0.5) * 30);
+      const x = cx + (R + 44) * Math.cos(a), y = cy + (R + 44) * Math.sin(a);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="23" fill="#000000"/>
               <text x="${x.toFixed(1)}" y="${(y + 1).toFixed(1)}" text-anchor="middle" dominant-baseline="middle"
-                font-family="Georgia,serif" font-weight="700" font-size="20" fill="#fff">5</text>`;
+                font-family="${SANS}" font-weight="700" font-size="24" fill="#ffffff">5</text>
+              <rect x="${(x - 40).toFixed(1)}" y="${(y + 19).toFixed(1)}" width="80" height="22" rx="2" fill="#5b5b5b"/>
+              <text x="${x.toFixed(1)}" y="${(y + 31).toFixed(1)}" text-anchor="middle" dominant-baseline="middle"
+                font-family="${SANS}" font-size="14" fill="#ffffff">${esc(t('wheel_minutes'))}</text>`;
     }).join('');
+    // "Start here": a pill beyond the rim at one o'clock, with an arrow to the opening praise segment's edge
+    // (clockwise from there, back round to praise). class="wheel-start" is a TEST HOOK.
+    const sa = rad(START + 45), px = cx + (R + 150) * Math.cos(sa), py = cy + (R + 150) * Math.sin(sa);
+    const ea = rad(START + 20), ex = cx + (R + 8) * Math.cos(ea), ey = cy + (R + 8) * Math.sin(ea);
+    const startMark = `<g class="wheel-start">
+        <rect x="${(px - 110).toFixed(1)}" y="${(py - 26).toFixed(1)}" width="220" height="52" rx="26" fill="#009c57"/>
+        <text x="${px.toFixed(1)}" y="${(py + 1).toFixed(1)}" text-anchor="middle" dominant-baseline="middle"
+          font-family="${SANS}" font-weight="800" font-size="24" fill="#ffffff">${esc(t('wheel_start'))}</text>
+        <path d="M ${(px - 70).toFixed(1)} ${(py + 26).toFixed(1)} Q ${(px - 90).toFixed(1)} ${(ey - 10).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}"
+          fill="none" stroke="#009c57" stroke-width="5" stroke-linecap="round" marker-end="url(#pw-arrow)"/>
+      </g>`;
     return sheet(`
       <div style="position:absolute;left:${M}px;top:48px;right:${M}px;text-align:center">
-        <div class="wheel-title" style="font:700 42px Georgia,serif;color:#1b1a17">${esc(t('wheel_title'))}</div>
-        <div style="font:italic 19px Georgia,serif;color:#6d766e;margin-top:10px;
-                    max-width:1000px;margin-left:auto;margin-right:auto">${esc(t('wheel_intro'))}</div>
+        <div class="wheel-title" style="font:800 46px ${SANS};color:#009c57;text-transform:uppercase;letter-spacing:.5px">${esc(t('wheel_title'))}</div>
+        <div style="font:400 21px/1.5 ${SANS};color:#2b2a26;margin-top:12px;
+                    max-width:1060px;margin-left:auto;margin-right:auto">${esc(t('wheel_intro'))}</div>
       </div>
       <svg width="${W}" height="${H}" style="position:absolute;left:0;top:0" xmlns="http://www.w3.org/2000/svg">
-        ${seg}${pips}
-        <text x="${cx}" y="${cy + R + 130}" text-anchor="middle"
-          font-family="Georgia,serif" font-size="20" fill="#8c8170">5 ${esc(t('wheel_minutes'))} × 12</text>
+        <defs>
+          <!-- the source wheel's soft shadow, and the shadow that keeps white labels legible on its
+               palest segments (READ THE WORD sits on #fffa83). The labels ALSO carry a faint dark
+               outline painted under the fill: a print path that drops SVG filters would otherwise
+               leave white text on pale yellow, near-invisible. -->
+          <filter id="pw-wheel" x="${cx - R - 60}" y="${cy - R - 60}" width="${2 * R + 120}" height="${2 * R + 120}" filterUnits="userSpaceOnUse">
+            <feDropShadow dx="4" dy="6" stdDeviation="7" flood-color="#000000" flood-opacity="0.22"/>
+          </filter>
+          <marker id="pw-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#009c57"/>
+          </marker>
+          <filter id="pw-label" x="-20%" y="-60%" width="140%" height="220%">
+            <feDropShadow dx="1.5" dy="1.5" stdDeviation="1.2" flood-color="#000000" flood-opacity="0.55"/>
+          </filter>
+        </defs>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="#ffffff" filter="url(#pw-wheel)"/>
+        ${seg}${badges}${startMark}
       </svg>
       <div class="fine">${esc(t('wheel_attrib'))}</div>`);
   }
@@ -982,7 +1845,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
   // working unchanged and a host with no funnel data still gets a complete, correct packet. A page
   // that cannot state true numbers must not appear at all — better a 4-section packet than one
   // asserting figures it could not read.
-  // ★ TWO PACKETS, ONE RENDERER — the Driver's §A, 2026-09-28: the Prayer List print gains a caret
+  // ★ TWO PACKETS, ONE RENDERER: the Prayer List print gains a caret
   // with "Full detail" and "Lightweight". They are NOT two code paths. Every page below already
   // exists and is already exported; a variant is a FILTER over the page array, so the two packets
   // cannot drift apart in layout, i18n, RTL or print scale — there is only ever one implementation
@@ -1021,20 +1884,21 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
     // sees the same 5,200 boxes answer "how many of these people know Christ".
     // ⚠ KEYED, NOT INDEXED. The omit-set names pages; it never carries positions. An index-based
     // filter reads identically today and silently drops the WRONG page the first time this order
-    // changes — and the order above is the Driver's, so it is expected to change again.
+    // changes — and the order above is a product decision, so it is expected to change again.
     // An unknown variant falls back to the full packet: a typo must not silently print a shorter
     // packet, because a packet missing two pages still looks like a packet.
     const omit = VARIANTS[variant] || VARIANTS.full;
     const keep = (key) => !(omit && omit.has(key));
     const pages = [
-      keep('map') && mapPage(zone, groups, mapSvg),
+      keep('map') && mapPage(zone, groups, mapSvg, funnel),
       keep('funnel') && funnelPage(zone, groups, funnel),
       keep('life') && lifePage(zone),
       keep('christian') && christianPage(zone, christian),
-      // NOT behind keep() — see the VARIANTS comment: dropping list pages drops people.
-      ...listPages(zone, groups, photos),
+      // NOT behind keep() — see the VARIANTS comment: dropping list pages drops people. The lightweight
+      // packet lists the SAME groups as a worksheet (LIST_STYLE); the full packet as profiles.
+      ...(LIST_STYLE[variant] ? LIST_STYLE[variant](zone, groups, photos) : listPages(zone, groups, photos)),
       // BACK MATTER: after the profiles (brief A1). Full-detail only.
-      keep('sets') && setsPage(zone, sets),
+      keep('sets') && setsPage(zone, sets, Array.isArray(groups) ? groups.length : NaN),
       keep('wheel') && wheelPage(),
       keep('points') && pointsPage(),
     ].filter(Boolean);
@@ -1050,5 +1914,7 @@ export function createPacketRenderer({ strings, lang = 'en', fontData = null, de
 
   // VARIANTS is exported so the UI enumerates the packets it can print instead of hardcoding two
   // strings in a menu — add a third variant here and the caret gains an entry with no UI change.
-  return { buildPacket, mapPage, lifePage, christianPage, funnelPage, listPages, pointsPage, wheelPage, css, mapCss, PER_PAGE, W, H, VARIANTS };
+  // pointsFit: the points page's estimate per tier, for the gates and probes that check it against the real page.
+  const pointsFit = { tiers: PT_TIERS, bodyH: PT_BODY_H, safe: PT_SAFE, height: (k) => pointsHeight(ptTier(k)), chosen: () => fitPoints().k };
+  return { buildPacket, mapPage, lifePage, christianPage, funnelPage, listPages, pointsPage, pointsFit, wheelPage, css, mapCss, liftMap, mapFromImage, mapSheetFiles, PER_PAGE, FD_FIRST, WS_FIRST, WS_REST, W, H, VARIANTS };
 }

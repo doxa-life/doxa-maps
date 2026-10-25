@@ -7,8 +7,8 @@
 // browse the UPG-100 lists and cannot export a packet or a poster. No error, nothing to click; the
 // failure is invisible rather than broken, which is why it survived.
 //
-// The packet IS the product for this profile. The Driver: "print options at the top right of the
-// legend... that's the only way that map would be usable."
+// The packet IS the product for this profile, so the print options sit at the top right of the
+// legend: without them that map is not usable.
 //
 // ⚠ THE CONTROL IS GATED ON A SELECTION. `v-if="SHOW_EXPORT_BUTTON && exportEnabled && selectedNode"`
 // — so a probe that merely loads the page finds nothing at EITHER width and concludes "no export

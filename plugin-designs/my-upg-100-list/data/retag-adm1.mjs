@@ -21,7 +21,7 @@
 // So we re-tag `listId` and nothing else.
 //
 // R-D2: a feature whose shapeName matches NO cluster must be 0. If any appear we
-// LOG loudly, LEAVE the old tag (do not drop), and flag for the design note — never
+// LOG loudly, LEAVE the old tag (do not drop), and flag for a product decision — never
 // silently mis-tag.
 // R-D3: stable canonical writer — match the existing on-disk style EXACTLY
 // (single-line minified JSON, no trailing newline) so the diff is the listId
@@ -95,7 +95,7 @@ function report(r) {
     }
   }
   if (r.unmatched.length) {
-    console.log(`   *** UNMATCHED (R-D2: should be 0 — LEFT old tag, FLAGGED for design note) ***`);
+    console.log(`   *** UNMATCHED (R-D2: should be 0 — LEFT old tag, FLAGGED for review) ***`);
     for (const u of r.unmatched) {
       console.log(`     !!! ${u.shapeName.padEnd(42)} kept old listId=${u.keptOld}`);
     }

@@ -171,7 +171,7 @@ try {
      the data was right and the feature was dead. */
   /* ⚠ THE NAME, CASE-FOLDED, ANYWHERE IN THE CARD. This asserted `text.includes(slug.split('-')[0])`
      — "abai" against a rendered "Abai Sungai" — and reported a false negative on a card that was
-     rendering correctly, which cost rega a round. A slug fragment is not the name; the roster has
+     rendering correctly, which cost a review round. A slug fragment is not the name; the roster has
      the name, so the roster is what it compares. */
   const anyRow = (JSON.parse(readFileSync(resolve(PUBLIC, TREE_NAME, 'assets/tables/doxa-people-groups.json'), 'utf8')).rows || [])
     .find((r) => r.slug && r.mapped)

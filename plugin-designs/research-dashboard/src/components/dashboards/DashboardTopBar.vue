@@ -8,7 +8,7 @@ const L = (key, en) => tStatic('dashboard.' + key) || en
  * (The inline Breadcrumb that used to sit between title and search is GONE — see the ★ rule below.)
  *
  * ── ★ NO SELECTION STATE IN THIS HEADER, IN ANY FORM ──
- * DRIVER, 2026-09-22 (~the 50th time he had asked): "Based on my selections, it should NOT show up
+ * Asked 2026-09-22, for about the fiftieth time: based on the selections, it should NOT show up
  * in the first header where the search bar is... The only selection data should show up underneath
  * the toggles — people, regions, block, country, language — the filters."
  *
@@ -18,7 +18,7 @@ const L = (key, en) => tStatic('dashboard.' + key) || en
  *   - <DashboardBreadcrumb/> STAYED, and it is ALSO a view over bus.filterSet — it rendered
  *     "World ▸ South Asian Peoples" in bold white, the most prominent selection echo on screen.
  * Every verification after round 1 searched for CHIPS — chip classes, the literal "Clear all" — and
- * came back green while the Driver was plainly still looking at his selection in the top bar. A
+ * came back green while the reader was plainly still looking at their selection in the top bar. A
  * numeric probe for the wrong noun is indistinguishable from a fixed bug. MEASURED 2026-09-22 on
  * BOTH the leaf and the cap-4 composite: chips/Clear-All were already correctly in region 'filters'
  * (1 of each, 0 in topbar) while the topbar read "…World ▸ South Asian Peoples ⤢ Align Dashboard".
@@ -26,7 +26,7 @@ const L = (key, en) => tStatic('dashboard.' + key) || en
  * ★ SO THE TEST FOR A FUTURE EDIT IS NOT "did I add a chip?" — it is: does this render anything
  * DERIVED FROM bus.filterSet / bus.selected / bus.searchTerm? If yes, it belongs in the second
  * header. The search INPUT is the one allowed exception: it is the control that creates the state,
- * not a readout of it, and the Driver's sentence names it as this header's defining occupant.
+ * not a readout of it, and the requirement names it as this header's defining occupant.
  *
  * NOTHING WAS LOST TO THE USER — the second header already carries every affordance the breadcrumb
  * offered, which is why this is de-duplication and not a feature removal:
@@ -39,10 +39,9 @@ const L = (key, en) => tStatic('dashboard.' + key) || en
  *
  * ── (round 1, retained) ACTIVE-FILTER CHIPS ARE NOT HERE (card
  *    BUG-DUPLICATE-FILTER-BADGES-IN-BOTH-DASHBOARD-HEADERS) ──
- * DRIVER, 2026-09-22: "in the header of the Unified Research dashboard it says Africa, Region
- * Africa Clear All... I have two duplicate clear alls, two duplicate banner badges... I want the
- * SECOND header to be the spot to do that. I want to REMOVE that functionality from the TOP header
- * where the search bar is."
+ * The symptom: the Unified Research dashboard showed the same selection twice ("Africa", "Region
+ * Africa", "Clear All"), with two Clear Alls and two sets of badges. The SECOND header is the one
+ * place for them; the TOP header, where the search bar is, carries none.
  *
  * The duplication was ARCHITECTURAL, not a copy-paste: the dashboard mounts TWO headers in this
  * order (research-dashboard.vue:265-266) and each had grown its OWN independent chip implementation
@@ -95,7 +94,11 @@ import SearchBar from '@map/components/search/SearchBar.vue'
 // DashboardBreadcrumb is NOT imported here — it renders bus.filterSet, i.e. selection state, which
 // this header must not show (see the ★ rule at the top). It remains exported from ./index.js.
 import ShareButton from '@map/components/map-controls/ShareButton.vue'
-import { lbl } from '../../composables/useDashboardAggregations.js'
+// The header ⓘ ("What can this map do?"). It reuses the map-control MapInfoButton in its HEADER form
+// (shape="rounded-square"): the same control bridge announces to the tab's MapInfo (trigger:'control'
+// in doxa-maps-spa/src/tabInfo.js), which suppresses the gallery's floating ⓘ — exactly one ⓘ, fail-open.
+import MapInfoButton from '@map/components/map-controls/MapInfoButton.vue'
+import { lbl } from '@map/composables/useFacetAggregation.js'
 
 const dash = inject('dashboardData', null)
 const bus = inject('selectionBus', null)
@@ -119,7 +122,9 @@ function onAlignLayout() { if (bus) bus.emit('resetLayout') }
 // The value the panels honor lives on the bus; this bar reads/writes it via bus.searchTerm /
 // bus.setSearch, so it is the SAME free-text search the whole surface re-derives against.
 const filterSearch = computed(() => bus?.searchTerm?.value || '')
-const filterSearchPlaceholder = computed(() => cfg.researchFilters?.searchPlaceholder || 'Search people groups, place, language, religion…')
+// The config's own wording wins when an instance sets one; otherwise the catalogue, not an English
+// constant — dashboard.search_placeholder is the same sentence, already translated everywhere.
+const filterSearchPlaceholder = computed(() => cfg.researchFilters?.searchPlaceholder || L('search_placeholder', 'Search people groups, place, language, religion…'))
 function onFilterSearch(payload) { bus?.setSearch(payload?.value ?? '') }
 
 // ── live typeahead search over the in-memory row store ──
@@ -184,7 +189,7 @@ useShadowStyles(`
      The bound is DERIVED from --rd-search-w so the two can never drift: the reserved strip is
      --rd-search-w wide, so the left zone ends at 50% - half of it - one gutter (see below).
      nowrap + min-width:0 keeps the 52px bar SINGLE-ROW (before the fix the chips wrapped to h=50
-     at 1024x768) — the Driver has said NEVER add a second header row. */
+     at 1024x768) — it is settled: NEVER add a second header row. */
   .rd-topbar .rd-left{ display:flex; align-items:center; gap:12px; flex:0 1 auto; min-width:0;
     flex-wrap:nowrap; overflow:hidden;
     /* MEASURED RESIDUAL — why this is ONE term and not a 12px gutter plus a 14px padding add-back.
@@ -214,24 +219,26 @@ useShadowStyles(`
   .rd-topbar .rd-ttl{ font-weight:800; font-size:var(--fs-lg,13px); letter-spacing:.2px; color:var(--rd-header-ink,#f3f3f1); }
   .rd-topbar .rd-ttl .dot{ color:var(--rd-accent,#e67e22); }
   .rd-topbar .rd-spacer{ flex:1; }
-  /* SHARE in this bar (Driver 2026-09-28: "too large"). ShareButton is the map toolbar's 40px round button
-     (36px under 768px) + a 2px rainbow ring, so it measured 44px in a 38px bar: taller than the bar itself.
-     Here it takes the bar's own control scale instead: 28px + the ring = 32px, the search box's height, with the
-     icon at the search icon's 15px. Scoped to .rd-topbar, so the map toolbars keep their 40px button. */
-  .rd-topbar .share-wrap .mcb{ width:28px; height:28px; position:relative; }
-  .rd-topbar .share-wrap .mcb svg{ width:15px; height:15px; }
-  /* ★ THE BUTTON GOT SMALLER TO LOOK RIGHT; THE THING A FINGER HAS TO HIT DID NOT HAVE TO. Shrinking the
-     control to 28px (32 with the ring) also shrank the TAP TARGET to 32px, and this repo states its own
-     floor in two places — DataTable.vue:294 "44px is the accessible tap target; anything smaller is a miss
-     on a phone", and LegendDesktop.vue:124 sizing rows to keep it. A transparent box centred on the button
-     restores the target without moving a pixel of the drawing: it is absolutely positioned, so it changes
-     no layout, and it is part of the button, so it takes the same clicks.
-     ★ 44 WIDE, 38 TALL, AND THE SHORTFALL IS DELIBERATE RATHER THAN OVERLOOKED. The bar is 38px
-     (--rd-topbar-h), so 44 vertical cannot fit inside it: the extra 3px each side would hang over the
-     filters row below and start eating taps meant for a filter — trading one miss for another. 44x38 is
-     the largest target that costs nothing. Closing the last 6px needs a taller bar, which is a look
-     decision the Driver already made in the other direction, so it is asked rather than assumed. */
-  .rd-topbar .share-wrap .mcb::after{
+  /* HEADER BUTTONS — the ⓘ + Share, rounded squares at the vertical tabs' radius (design rule, 2026-09-30).
+     The rounded-square SHAPE is not set here: it comes from each button's shape="rounded-square" prop
+     (library MapControlButton → border-radius:var(--vtl-radius)), so the header button and the gallery's
+     tabs share ONE radius variable and can never drift. This bar only sizes them to its own control scale
+     and restores the tap target — the same treatment the Share button already had, now covering both so
+     the ⓘ matches it exactly. Scoped to .rd-topbar, so the map toolbars keep their 40px round buttons.
+     At map size they were too large for this bar: ShareButton is a 40px round map control + a 2px rainbow ring, 44px
+     in a 38px bar. Here both take 28px (+ Share's ring = 32px, the search box's height), icon 16px. */
+  .rd-topbar .rd-header-btns{ display:inline-flex; align-items:center; gap:8px; flex:0 0 auto; }
+  .rd-topbar .rd-header-btns .mcb{ --map-btn-size:28px; position:relative; }
+  .rd-topbar .rd-header-btns .mcb svg{ width:16px; height:16px; }
+  /* ★ THE BUTTONS ARE 28px TO LOOK RIGHT; THE THING A FINGER HAS TO HIT IS NOT. This repo states its own
+     44px floor twice — DataTable.vue:294 ("44px is the accessible tap target; anything smaller is a miss
+     on a phone") and LegendDesktop.vue:124. A transparent box centred on each button restores the target
+     without moving a pixel of the drawing: absolutely positioned, so it changes no layout, and part of the
+     button, so it takes the same clicks.
+     ★ 44 WIDE, 38 TALL, AND THE SHORTFALL IS DELIBERATE. The bar is 38px (--rd-topbar-h), so 44 vertical
+     cannot fit inside it: the extra 3px each side would hang over the filters row below and start eating
+     taps meant for a filter — trading one miss for another. 44x38 is the largest target that costs nothing. */
+  .rd-topbar .rd-header-btns .mcb::after{
     content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
     width:44px; height:var(--rd-topbar-h,38px);
   }
@@ -246,8 +253,7 @@ useShadowStyles(`
   .rd-topbar .rd-filter-search{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
     z-index:2; width:360px; max-width:var(--rd-search-w); min-width:150px; }
   .rd-topbar .rd-filter-search .search-box{ margin:0; color:var(--rd-header-muted,#cbc5b9); }
-  /* ★ FULL PILL, not a bigger number picked by eye (Driver: "I want the search bar in the top
-     header to be more rounded"). The input is a MEASURED 32px tall, so 16px is exactly half its
+  /* ★ FULL PILL, not a bigger number picked by eye: the header's search bar is fully rounded. The input is a MEASURED 32px tall, so 16px is exactly half its
      height — the radius at which the ends become true semicircles. Any larger value renders
      identically (the browser clamps to height/2), so this is the actual maximum, and it stays
      correct if the height changes only in the sense that it is derived from a value stated right
@@ -255,7 +261,7 @@ useShadowStyles(`
      ★ SCOPED TO THE TOP HEADER ONLY. The card's scope field named library/components/search/
      SearchBar.vue, but that component's own 10px is NOT what renders here — this rule overrides it
      (measured: computed border-radius was 6px, not 10px). Changing the library would have altered
-     people-groups-grid and big-picture too, which the Driver did not ask for. Verify what actually
+     people-groups-grid and big-picture too, which was not asked for. Verify what actually
      paints before editing the file a card names. */
   .rd-topbar .rd-filter-search .search-box input{ height:32px; padding:0 10px 0 34px; font-size:var(--fs-md,12px);
     border-radius:16px; border-color:#ffffff3d; }
@@ -304,7 +310,7 @@ useShadowStyles(`
          cfg.title alone would run under it. It costs nothing and it is the guard that fails safe if
          anyone re-adds a variable-width member here. -->
     <div class="rd-left">
-      <span class="rd-brand"><span class="rd-ttl">{{ cfg.title || 'Research Dashboard' }}<span class="dot">.</span></span></span>
+      <span class="rd-brand"><span class="rd-ttl">{{ cfg.title || L('title', 'Research Dashboard') }}<span class="dot">.</span></span></span>
     </div>
     <div class="rd-filter-search" data-filter-search>
       <SearchBar
@@ -338,12 +344,17 @@ useShadowStyles(`
     <!-- CSV export MOVED to the people-groups table header (DashboardDataTable), below the map —
          card BUILD-CSV-EXPORT-MOVE-TO-TABLE-HEADER-ALL-FIELDS. It exports THAT table, so it now
          lives on that table's header bar, which stays docked even when the table is collapsed. -->
-    <!-- SHARE the WHOLE dashboard (Driver 2026-09-20): "if we could actually embed this on a
-         partner site from one share button... they can embed this map on all their partner
-         websites." Reuses the SAME ShareButton the upg-100 MFE ships (no hand-rolled variant); the
-         embed path is THIS profile's tree-relative leaf, which ShareButton joins to the served tree
-         root — so the snippet it hands out works from whatever host the tree was dropped on. It
-         sits where the CSV button used to be, the top-right of the dashboard. -->
-    <ShareButton :embed-path="SHARE_EMBED_PATH" />
+    <!-- HEADER BUTTONS (design rule, 2026-09-30): a rounded-square ⓘ to the LEFT of a rounded-square Share.
+         DOM order [ⓘ, Share] gives ⓘ at the logical START — left in English, and RIGHT of Share in
+         Arabic, because this flex row reverses its main axis under dir=rtl. Both are the SAME reusable
+         header-button form, shape="rounded-square" (radius = the vertical tabs' --vtl-radius).
+         SHARE the WHOLE dashboard: one share button gives the embed for a partner site. Reuses the SAME ShareButton the upg-100 MFE ships (no hand-rolled
+         variant); the embed path is THIS profile's tree-relative leaf, which ShareButton joins to the
+         served tree root. The ⓘ reuses MapInfoButton — it renders ONLY once the tab's MapInfo answers
+         (fail-open: no host, no ⓘ, same as before), so a standalone leaf with no gallery is unchanged. -->
+    <div class="rd-header-btns" data-header-btns>
+      <MapInfoButton shape="rounded-square" />
+      <ShareButton :embed-path="SHARE_EMBED_PATH" shape="rounded-square" />
+    </div>
   </header>
 </template>

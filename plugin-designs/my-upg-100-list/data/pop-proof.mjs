@@ -104,7 +104,11 @@ async function main() {
   // are unchanged (Frontier Asia still parents the 2 remaining uncovered rows). So
   // total = 32 (28 leaves + 4 parents); leaves = 13 region + 1 deaf + 12 asia + 2
   // uncovered = 28.
-  log(flat.length === 32, `node tree has 32 total nodes incl. parents (got ${flat.length})`);
+  // THEN the regional grouping replaced those 4 parents with the poster page's 9 REGION sections (Africa,
+  // Middle East, Central Asia, Southeast Asia + Oceania, Americas, Europe, Deaf, India, China + Mongolia),
+  // and the tree is built from the leaves: total = 28 leaves + 9 region parents = 37. The old 4 parents were
+  // still constructed (and never returned) until they were deleted as dead code.
+  log(flat.length === 37, `node tree has 37 total nodes incl. parents (got ${flat.length})`);
   const leaves = flat.filter((n) => !(n.children && n.children.length));
   log(leaves.length === 28, `28 leaf rows own a zone (got ${leaves.length})`);
 
@@ -127,12 +131,15 @@ async function main() {
 
   // ── (3) parent roll-up (D3) ─────────────────────────────────────────────────
   console.log('\n--- (3) parent roll-up (D3) ---');
-  const india = byId['asia-india'], china = byId['asia-china'], asia = byId['asia'];
-  const indiaSum = (india.children || []).reduce((s, c) => s + (c.pop || 0), 0);
-  const chinaSum = (china.children || []).reduce((s, c) => s + (c.pop || 0), 0);
-  log(india.pop === indiaSum, `India.pop (${india.pop.toLocaleString()}) === Σ children (${indiaSum.toLocaleString()})`);
-  log(china.pop === chinaSum, `China.pop (${china.pop.toLocaleString()}) === Σ children (${chinaSum.toLocaleString()})`);
-  log(asia.pop === india.pop + china.pop, `Asia.pop (${asia.pop.toLocaleString()}) === India + China (${(india.pop + china.pop).toLocaleString()})`);
+  // The PARENTS are the region sections now. This section used to look up 'asia-india' / 'asia-china' /
+  // 'asia' — parents the regional grouping replaced, which were built and never returned — so it threw on
+  // every run while the tree a reader sees went unchecked. It measures the parents the tree actually has.
+  const parents = nodes.filter((n) => Array.isArray(n.children) && n.children.length);
+  log(parents.length > 0, `the tree has region parents to roll up (${parents.length})`);
+  for (const r of parents) {
+    const sum = r.children.reduce((s, c) => s + (c.pop || 0), 0);
+    log(r.pop === sum, `${r.id}.pop (${(r.pop ?? NaN).toLocaleString()}) === Σ children (${sum.toLocaleString()})`);
+  }
 
   console.log('\n========================================================');
   console.log(`POP-PROOF SUMMARY: ${fails === 0 ? 'ALL PASS' : fails + ' FAILED'}`);

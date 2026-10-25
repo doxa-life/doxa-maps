@@ -3,7 +3,7 @@
 //
 // The square map-control variant: is it the ENGINE'S card, and does nothing else move?
 //
-// The Driver asked for square controls as an OPTION beside the round ones. The key fact that shaped
+// Square controls were asked for as an OPTION beside the round ones. The key fact that shaped
 // the implementation is that the square look is not a design of DX-life's at all: their CountryMap.vue
 // adds mapboxgl.NavigationControl + FullscreenControl and overrides NOTHING, so what he admired is the
 // ENGINE'S DEFAULT grouped card. That makes the target published and exact rather than a matter of
@@ -118,7 +118,7 @@ ok(/:only-child[^{]*\{[^}]*border-radius:\s*4px/.test(TOOLBAR), 'and a lone cont
 // ── 2c. NO CHILD BRINGS ITS OWN OUTLINE ──────────────────────────────────────────
 // ShareButton is not a .mcb -- it wraps its button in .share-wrap with border-radius:50% and a
 // conic-gradient ring on ::before -- so the button rules missed it and it kept a round rainbow halo
-// inside the square panel. Found by rega at 390, not by me.
+// inside the square panel. Found by a browser check at 390, not by this gate.
 ok(/\.map-toolbar--square \.share-wrap \{[^}]*border-radius:\s*0/.test(TOOLBAR),
   'the square panel flattens .share-wrap, which is a div and not a .mcb')
 ok(/\.map-toolbar--square \.share-wrap::before \{[^}]*display:\s*none/.test(TOOLBAR),
@@ -157,7 +157,7 @@ for (const [name, path] of CONSUMERS) {
 }
 ok(optedIn === 0, `none of the ${CONSUMERS.length} MapToolbar consumers passes controls=, so every one renders exactly as before (${optedIn} opted in)`)
 
-// ── 6. THE GEOMETRY, for rega to confirm with eyes ──────────────────────────────────────────────
+// ── 6. THE GEOMETRY, for a browser check to confirm ──────────────────────────────────────────────
 // A square toolbar is SHORTER, because the gaps become dividers. That is the one measurable knock-on:
 // MapControlMenu's matchToolbar limits a menu to the toolbar column's height.
 const BTN = 32, GAP_DESKTOP = 8, GAP_MOBILE = 6
@@ -169,7 +169,7 @@ for (const [name, , n] of CONSUMERS) {
 }
 const five = { round: 5 * BTN + 4 * GAP_DESKTOP, square: 5 * BTN + 4 }
 ok(five.square < five.round,
-  `a 5-control toolbar goes ${five.round}px -> ${five.square}px, so a matchToolbar menu gets ${five.round - five.square}px shorter -- rega should confirm the menu still fits its content`)
+  `a 5-control toolbar goes ${five.round}px -> ${five.square}px, so a matchToolbar menu gets ${five.round - five.square}px shorter -- a browser check should confirm the menu still fits its content`)
 console.log(`    at mobile gap ${GAP_MOBILE}px a 5-control toolbar is ${5 * BTN + 4 * GAP_MOBILE}px round vs ${five.square}px square`)
 
 // ── 7. NEG CONTROLS ─────────────────────────────────────────────────────────────────────────────

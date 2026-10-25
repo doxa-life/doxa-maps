@@ -12,11 +12,11 @@
  *   controls consumed by BOTH plugins so there is no duplication:
  *     - `<SearchBar>`        (@map/components/search/SearchBar.vue)     — on top.
  *     - FOUR `<FilterDropdown>` (@map/components/search/FilterDropdown.vue) below it:
- *         Region / Block / People-Group / Religion.  (Country EXCLUDED per Driver.)
+ *         Region / Block / People-Group / Religion.  (Country deliberately EXCLUDED.)
  *   These are the SAME four axes the cap-2 people-groups-grid exposes, so the header
  *   drives the real grid 1:1.
  *
- * THE CAT-1 DRIVER CONTRACT
+ * THE CAT-1 HEADER CONTRACT
  *   - Owns a search box + the four filter dropdowns.
  *   - EMITS `research-filter` on every change — the SAME event name as before, but the
  *     payload is EXTENDED to carry the four dropdown values (the two old {region,status}
@@ -41,6 +41,7 @@ import SearchBar from '@map/components/search/SearchBar.vue'
 import FilterDropdown from '@map/components/search/FilterDropdown.vue'
 import { tStatic } from '@map/i18n/index.js'
 import { applyPeopleGroupList } from '@map/lists/peopleGroupList.js'
+import { hostElement } from '@map/utils/hostElement.js'
 
 // ★ THIS HEADER HAD NO i18n AT ALL, and it is the top of Big Picture. Every label below was an
 // English literal passed as a PROP — FilterDropdown itself translates nothing, it renders what the
@@ -72,7 +73,7 @@ const languageCode = computed(() => props.languageCode || '')
 
 // ── unified filter state ─────────────────────────────────────────────────────
 const query = ref('')
-// the FOUR grid axes (Country excluded per Driver): Region / Block / People-Group / Religion.
+// the FOUR grid axes (Country deliberately excluded): Region / Block / People-Group / Religion.
 const sel = reactive({ wagf_region: '', wagf_block: '', rop1: '', religion: '' })
 
 // option lists (with faceted counts) built from the live list — the SAME shape FilterDropdown wants.
@@ -82,11 +83,7 @@ const hasAny = computed(() => Boolean(query.value || sel.wagf_region || sel.wagf
 
 // ── native + Vue emit of the unified filter ──────────────────────────────────
 const inst = getCurrentInstance()
-function hostEl() {
-  const root = inst?.vnode?.el || inst?.proxy?.$el
-  try { const rn = root && root.getRootNode && root.getRootNode(); if (rn && rn.host) return rn.host } catch (_) {}
-  return root
-}
+const hostEl = () => hostElement(inst)
 function fire() {
   const detail = {
     query: query.value,

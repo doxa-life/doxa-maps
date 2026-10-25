@@ -2,10 +2,9 @@
 /**
  * check-facet-cascade.mjs — A CHILD FACET SELECTION MUST NOT OUTLIVE ITS PARENT.
  *
- * THE DEFECT THIS CATCHES (Driver-reported 2026-09-22): "if you have a language selected and then
- * you deselect the language family, it does not deselect the language of that language family that
- * was selected... because of that I tried to go and select a new language family and it does not
- * show up on the map. And I cannot see the reason why unless I look at the selected section header."
+ * THE DEFECT THIS CATCHES (reported 2026-09-22): with a language selected, deselecting its language
+ * family did not deselect the language. Selecting a new language family then showed nothing on the
+ * map, and the only visible reason was in the selected section header.
  *
  * ★ WHY THIS IS A DATA-TRUST BUG, NOT A NIT. filterSet is AND-stacked — filteredRows keeps a row
  * only when EVERY active key matches. An orphaned child keeps filtering, so after the parent is
@@ -25,7 +24,7 @@
  *      leaving the identical orphan one rung down, so depth is asserted explicitly.
  *   B. NO ORPHANS — for each hierarchy, set every tier, clear the TOP, and assert no descendant
  *      key survives in filterSet.
- *   C. THE DRIVER'S ACTUAL SEQUENCE, asserted on counts (the step that reproduces what he saw):
+ *   C. THE REPORTED SEQUENCE, asserted on counts (the step that reproduces what was seen):
  *        1. select parent P, then child C within P   -> record N1 (must be > 0)
  *        2. clear P                                   -> assert C is gone from filterSet
  *        3. select a DIFFERENT parent Q               -> assert count > 0 AND == Q-alone count
@@ -42,7 +41,7 @@
  * NEGATIVE-TESTED, and the negative test is part of this file: `--self-test` copies the bus, strips
  * the cascade line back out, re-runs every assertion against the reverted copy and requires the
  * gate to FAIL. Measured: 13 assertions fail, including "after switching to Q=… the map is EMPTY
- * (Showing 0)" for all three hierarchies — i.e. it reproduces the Driver's report exactly. A gate
+ * (Showing 0)" for all three hierarchies — i.e. it reproduces the report exactly. A gate
  * nobody has broken is a gate nobody knows works.
  *
  * ── HERMETIC BY CONSTRUCTION (it runs inside build:unlocked) ──────────────────────────────────
@@ -55,7 +54,7 @@
  *
  * A MISSING FIXTURE IS A FAILURE, NOT A SKIP. An earlier draft fetched live rows and skipped the
  * count assertions when offline — so on a fresh clone with no network, C3 (the assertion that
- * reproduces the Driver's empty map) silently did not run and the build still went green. That is
+ * reproduces the reported empty map) silently did not run and the build still went green. That is
  * a gate that cannot fail, which is worse than no gate. Now every assertion runs everywhere.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, cpSync } from 'node:fs'
@@ -166,7 +165,7 @@ const EXPECT = {
 //
 // WHY A FIXTURE AND NOT "fetch, else skip". The earlier version fetched live rows and SKIPPED the
 // count assertions when offline — which meant that on a fresh clone with no network, C3 (the
-// assertion that actually reproduces the Driver's empty map) silently did not run and the build
+// assertion that actually reproduces the reported empty map) silently did not run and the build
 // still went green. That is the "a gate that cannot fail is worse than no gate" shape: decorative
 // in exactly the situation where it matters. With the fixture committed, every assertion runs
 // everywhere, always, in ~1s.
@@ -328,11 +327,11 @@ async function run(busPath) {
     }
   }
 
-  // ── C. the Driver's sequence, asserted on RESULT COUNTS ─────────────────────────────────────
+  // ── C. the reported sequence, asserted on RESULT COUNTS ───────────────────────────────────
   if (!rows) {
     // NOT a skip. The committed fixture is what makes C/D run everywhere, so its absence is a
     // BROKEN GATE, not an excusable environment gap — silently skipping the assertions that
-    // reproduce the Driver's bug is how a gate becomes decorative. Only --offline with LIVE=1
+    // reproduce the reported bug is how a gate becomes decorative. Only --offline with LIVE=1
     // (an explicit opt-in to the live dataset with no cache) is allowed to degrade.
     if (process.env.LIVE && OFFLINE) notes.push('  SKIP C/D — LIVE=1 --offline with no cache (explicitly opted out of the fixture)')
     else bad('C/D count assertions could not run', `missing fixture ${FIXTURE} — regenerate with --refresh-fixture`)

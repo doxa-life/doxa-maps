@@ -2,10 +2,9 @@
 /**
  * SemanticSunburst — D3 sunburst with mouse-wheel zoom + drag pan.
  *
- * Per user 2026-05-02: replaced the original click-to-expand-arc behavior
- * with map-style scroll-wheel zoom + click-and-drag pan. Click-to-expand was
- * "kind of slow" and "I don't like it"; users want the same gesture they get
- * on a Mapbox map.
+ * The original click-to-expand-arc behavior is replaced with map-style
+ * scroll-wheel zoom + click-and-drag pan. Click-to-expand was slow, and readers
+ * expect the same gesture they get on a Mapbox map.
  *
  * Labels are now visibility-tuned: only render labels for arcs that occupy
  * at least `LABEL_MIN_RADIANS` of arc, and font scales up at higher zoom
@@ -22,6 +21,8 @@
  */
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { pplrD3, ensureD3 } from '../utils/pplrData.js'
+import { usePplrT } from '../composables/usePplrT.js'
+import { formatCount } from '@map/utils/formatCount.js'   // counts stay fixed en-US: numerals are held, pending a product decision
 
 const props = defineProps({
   tree:        { type: Object, required: true },
@@ -32,7 +33,9 @@ const props = defineProps({
 })
 
 const container = ref(null)
-const status = ref('')
+// The status is a KEY and its values, translated in the template, so it follows a language change.
+const t = usePplrT()
+const status = ref(null)   // { key, params }
 let svgEl = null
 let resizeObs = null
 
@@ -61,7 +64,7 @@ const LABEL_MIN_RADIANS = 0.10
 function build() {
   const d3 = pplrD3()   // the pinned, scoped d3 (pplrData.js), never the host page's window.d3
   // not loaded yet (a caller that did not await ensureD3): load it, then build; no refresh needed
-  if (!d3) { ensureD3().then(build, () => { status.value = 'D3 could not be loaded' }); return }
+  if (!d3) { ensureD3().then(build, () => { status.value = { key: 'pplr.status.d3Failed' } }); return }
   const el = container.value
   if (!el || !props.tree) return
 
@@ -138,8 +141,8 @@ function build() {
       .style('paint-order', 'stroke').style('stroke', 'rgba(13,17,23,0.65)').style('stroke-width', '2.5px')
       .text(d => (d.data.name || '').replace(' Peoples', '').replace(' People', ''))
 
-  // Hover tooltip only — arc clicks no longer trigger zoom (per user request:
-  // wheel-zoom + drag-pan instead of click-to-expand).
+  // Hover tooltip only — arc clicks no longer trigger zoom (wheel-zoom + drag-pan
+  // instead of click-to-expand).
   path.on('mousemove', (event, d) => {
     const depth = props.depthLabels[d.depth] || ''
     tooltip.style('display', 'block')
@@ -149,7 +152,7 @@ function build() {
   })
   .on('mouseleave', () => tooltip.style('display', 'none'))
 
-  // ── Wheel zoom + drag pan (Mapbox-style gesture, per user 2026-05-02) ──
+  // ── Wheel zoom + drag pan (Mapbox-style gesture) ──
   // wheelDelta: tweak default for smoother small-step zooming.
   const zoomBehavior = d3.zoom()
     .scaleExtent([0.5, 12])
@@ -169,7 +172,7 @@ function build() {
     .on('dblclick.zoom', null)  // disable dblclick-zoom — keep gesture purely wheel/drag
 
   const total = hierarchy.value
-  status.value = `${total.toLocaleString()} entries · scroll to zoom · drag to pan`
+  status.value = { key: 'pplr.status.readyD3', params: { entries: formatCount(total) } }
 }
 
 onMounted(() => {
@@ -197,7 +200,7 @@ watch(() => props.tree, () => build(), { deep: false })
 <template>
   <div class="ssb-frame">
     <div ref="container" class="ssb-canvas" />
-    <div v-if="status" class="ssb-status">{{ status }}</div>
+    <div v-if="status" class="ssb-status">{{ t(status.key, status.params) }}</div>
   </div>
 </template>
 

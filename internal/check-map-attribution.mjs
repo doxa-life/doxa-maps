@@ -2,7 +2,7 @@
 /**
  * check-map-attribution — the credit line names the basemap of the engine that actually drew the map.
  *
- * WHY (licence credit, rega's row 28 at ccc2b1bb): addMapAttribution always credited "Mapbox ·
+ * WHY (licence credit, row 28 at ccc2b1bb): addMapAttribution always credited "Mapbox ·
  * © OpenStreetMap". Under MapLibre the tiles are OpenFreeMap's (OpenMapTiles on OpenStreetMap), so
  * gospel-resources, key-cities and cities-internet credited Mapbox, which served nothing, and omitted
  * the OpenMapTiles credit. Headless: the real module against stand-in map classes and a minimal DOM.

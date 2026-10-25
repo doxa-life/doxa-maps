@@ -8,7 +8,7 @@
  *
  * WHY. The map downloaded and parsed the whole slim file — every column, as one object per row — to
  * draw ten fields. That, plus waiting on the live prayer API before drawing anything, is most of why
- * the Driver found it "not even loading, takes a very long time". This file keeps the same rows and
+ * the map seemed not to load at all, or took a very long time. This file keeps the same rows and
  * values in column order, with the repetitive strings (country, religion, evangelical level,
  * language) stored once in dictionaries and referenced by index, and coordinates at 3 decimals
  * (~100 m, far below a pin's size at any zoom this map shows).

@@ -33,7 +33,7 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STORE = join(HERE, 'zone-colors.json');
 // zone-regions.json moved to data/tables/ (the shared asset pool the tree copies into
-// public/dx-maps/assets/tables/) because gospel's legend renders IN THE BROWSER and needs it at
+// public/dx-maps/assets/tables/) because the gospel legend renders IN THE BROWSER and needs it at
 // runtime. HERE is still this plugin's data dir, so the path walks up to the repo root.
 const REGIONS = join(HERE, '..', '..', '..', 'data', 'tables', 'zone-regions.json');
 const LOCKS = join(HERE, 'color-locks.json'); // optional

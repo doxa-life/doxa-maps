@@ -63,7 +63,7 @@ const readJSON = (f) => JSON.parse(readFileSync(P(f), 'utf8'));
 
 // ── canonical paths ───────────────────────────────────────────────────────────
 // ★ MOVED TO data/tables/. groupings.json is now in the shared asset pool the tree copies into
-// public/dx-maps/assets/tables/, because gospel's legend renders IN THE BROWSER and needs it at
+// public/dx-maps/assets/tables/, because the gospel legend renders IN THE BROWSER and needs it at
 // runtime — a build-time import path would not reach the bundle. The name stays relative so P()
 // still resolves it against this directory; only the prefix changed.
 const GROUPINGS = '../../../data/tables/groupings.json';

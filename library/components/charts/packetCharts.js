@@ -197,6 +197,27 @@ export function fractionFromPercent(percent) {
 }
 
 /**
+ * The FIRST n cells, in reading order — the counterpart to scatterCells.
+ *
+ * ★ WHY BOTH EXIST, because the difference is the whole point of the page. scatterCells answers
+ * "where in a life do these weeks fall" — unknowable, so it spreads them and says so. topCells
+ * answers "how much of the whole is this" — a MAGNITUDE, and a magnitude read off scattered
+ * confetti cannot be compared to another magnitude at a glance. Filling from the top turns the grid
+ * into a bar a reader can measure against its own frame: the same 32 cells that vanish when
+ * scattered are an obvious sliver when stacked.
+ *
+ * Deterministic with no seed, because there is nothing to randomise — index 0..n-1. Takes the same
+ * (total, n) as scatterCells so a caller can swap one for the other without reshaping anything.
+ */
+export function topCells(total, n) {
+  const TOTAL = Math.max(0, Number(total) || 0)
+  const count = Math.max(0, Math.min(TOTAL, Math.round(Number(n) || 0)))
+  const picked = new Set()
+  for (let i = 0; i < count; i++) picked.add(i)
+  return picked
+}
+
+/**
  * ★ WHICH cells are shaded, deterministically — LIFTED VERBATIM from packet-render.js's lifeGrid so
  * there is ONE implementation rather than a component and a renderer that drift.
  *
@@ -246,7 +267,7 @@ export function scatterCells(total, n, seed = '') {
  *
  * `rows` is how many distinct grid rows the shaded cells touch. A contiguous block of 32 in a
  * 52-wide grid touches 1; a scatter of 32 over 5,200 touches close to 32. That single number is the
- * difference between the page the Driver asked for and the one that shipped.
+ * difference between the page that was asked for and the one that shipped.
  */
 export function scatterSpread(picked, columns) {
   const cols = Number(columns) || 1

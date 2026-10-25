@@ -7,7 +7,7 @@
     "gospelResources": "Recursos do Evangelho",
     "languageFamilies": "Famílias linguísticas",
     "prayer": "Progresso da oração",
-    "upg100List": "A minha lista UPG 100",
+    "upg100List": "A minha lista UPG100",
     "batchSelect": "Seleção múltipla"
   },
   "header": {
@@ -58,9 +58,19 @@
     "languages": "Idiomas"
   },
   "tabInfo": {
-    "upg100Region": "Região — ordena as listas UPG-100 por área do mundo (África, Índia, Oriente Médio, Surdos, …). Os totais são os UUPG e a população somados de todas as listas abaixo dela.",
-    "upg100Zone": "Listas UPG-100 — cada uma é uma lista de oração dos grupos étnicos não alcançados de uma área, e é o que o mapa pinta e colore. Cada lista é impressa como seu próprio pacote.",
-    "upg100Group": "Grupo étnico — os grupos não alcançados dentro de uma lista, primeiro os de maior necessidade de oração. Cada ponto do mapa é um deles."
+    "upg100Region": "Região — ordena as listas UPG100 por área do mundo (África, Índia, Oriente Médio, Surdos, …). Os totais são os UUPG e a população somados de todas as listas abaixo dela.",
+    "upg100Zone": "Listas UPG100 — cada uma é uma lista de oração dos grupos étnicos não alcançados de uma área, e é o que o mapa pinta e colore. Cada lista é impressa como seu próprio pacote.",
+    "upg100Group": "Grupo étnico — os grupos não alcançados dentro de uma lista, primeiro os de maior necessidade de oração. Cada ponto do mapa é um deles.",
+    "family": "Família linguística — um conjunto de línguas descendentes de um ancestral comum (p. ex. indo-europeia, afro-asiática).",
+    "language": "Idioma — um sistema de comunicação usado por um povo (p. ex. árabe, bengali, híndi).",
+    "dialect": "Dialeto/Variedade — uma forma regional ou social de uma língua (p. ex. árabe sudanês; língua gestual paquistanesa).",
+    "bloc": "Bloco de afinidade — o agrupamento mais amplo, por parentesco cultural, linguístico e geográfico (p. ex. povos malaios, povos do Sul da Ásia, surdos, mundo árabe).",
+    "cluster": "Agrupamento — um agrupamento mais fino dentro de um bloco (p. ex. Bornéu-Kalimantan entre os povos malaios). As linhas levam «(agrupamento)» para as distinguir dos povos.",
+    "group": "Povo — uma identidade etnolinguística em si mesma, independente do país. As linhas levam «(povo)». Um mesmo povo pode viver em muitos países (os surdos, por exemplo, em mais de cem).",
+    "pgic": "Povo no país — uma linha por cada povo em cada país onde vive (p. ex. «Abai Sungai, Malásia»). As linhas levam «(povo no país)».",
+    "region": "Região WAGF — a macrorregião a que pertence um país (p. ex. Ásia, África). Cada uma tem a sua cor no mapa.",
+    "block": "Bloco WAGF — a subdivisão dentro de uma região (p. ex. Sudeste Asiático, África Ocidental).",
+    "country": "País — os países um a um, ordenados por população não alcançada dentro do seu bloco."
   },
   "a11y": {
     "expandRow": "Expandir {label}",
@@ -70,7 +80,7 @@
   },
   "export": {
     "poster": "Cartaz",
-    "packet": "UPG 100",
+    "packet": "UPG100",
     "packetExplain": "Uma lista de oração de cerca de 50 a 100 povos não alcançados: uma pessoa pode levar uma.",
     "packetAria": "Detalhe do pacote de oração",
     "packetFull": "Detalhe completo",

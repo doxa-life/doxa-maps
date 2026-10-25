@@ -12,7 +12,7 @@
  *
  * Usage from a host page:
  *   <script src=".../demo-map/demo-map.js"></script>
- *   <demo-map profile-config='{"profile":"demo-map","tk":"pk.eyJ..."}'></demo-map>
+ *   <demo-map profile-config='{"profile":"demo-map","tk":"MAPBOX_PUBLIC_TOKEN"}'></demo-map>
  */
 
 import { defineMapElement } from '@map/elements/defineMapElement.js'

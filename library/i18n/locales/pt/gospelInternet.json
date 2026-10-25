@@ -17,7 +17,8 @@
     "failed": "Não foi possível carregar a tabela de vizinhos, por isso este gráfico não é desenhado.",
     "reached": "Já alcançados, por isso no centro:",
     "unmatched": "Não constam da tabela de vizinhos, por isso não são desenhados:",
-    "unplaced": "Nenhuma relação encontrada, por isso não posicionados:"
+    "unplaced": "Nenhuma relação encontrada, por isso não posicionados:",
+    "shown": "Povos nos anéis:"
   },
   "centre": {
     "aria": "Mostrar",
@@ -150,7 +151,7 @@
     "messaging": "App de mensagens principal (país)",
     "messagingNote": "O mais baixado na App Store da Apple do país: só iOS, um ranking de downloads, não de uso.",
     "province": "Índia e China: estado ou província",
-    "provinceNote": "Aproximado: colocado onde um povo vive, não numa cidade.",
+    "provinceNote": "Aproximado: obtido a partir do ponto do grupo no mapa, não de uma cidade.",
     "region": "Região",
     "religion": "Religião",
     "wayIn": "Caminho de entrada quando não há nada na língua deles"
@@ -199,11 +200,11 @@
     "aria": "Mapa dos povos, sombreado pelo quanto cada país usa a internet"
   },
   "notice": {
-    "pin": "O ponto marca onde este povo vive em {country}, não uma cidade.",
-    "pins": "Um ponto marca onde um povo vive no seu país, não uma cidade. {n} grupos dividem um ponto com outro grupo.",
+    "pin": "O ponto representa este povo, não uma cidade.",
+    "pins": "Um ponto representa um povo, não uma cidade. {n} grupos dividem um ponto com outro grupo.",
     "shares": "Divide o ponto com {n} outro(s) grupo(s).",
     "sources": "Fontes:",
-    "standing": "Os pontos são aproximados (onde um povo vive no seu país, não uma cidade). Os números de internet são do país ou do estado indiano, nunca do grupo. “Encontrado” significa encontrado nas fontes verificadas."
+    "standing": "Os pontos são aproximados: um ponto representa um povo, não uma cidade. Os números de internet são do país ou do estado indiano, nunca do grupo. “Encontrado” significa encontrado nas fontes verificadas."
   },
   "panel": {
     "charts": "Gráficos",
@@ -284,7 +285,6 @@
     "posterOmitted": "{n} nomes omitidos onde sobreporiam outro; todo círculo está desenhado.",
     "posterPrint": "Imprimir",
     "posterSizeAria": "Tamanho do pôster",
-    "posterSvg": "Baixar SVG",
     "posterTitle": "Acesso ao evangelho, família linguística por família linguística",
     "sources": "Árvore: Glottolog (CC BY 4.0). Recursos: eBible, Faith Comes By Hearing, Scripture Earth, PNG.Bible, filme JESUS, Global Recordings e outros, por ISO 639-3.",
     "st": {

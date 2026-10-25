@@ -14,11 +14,16 @@
   <script>window.MAP_APP_API_URL = "https://pray.doxa.life";</script>
   <style>
     html, body { margin: 0; padding: 0; height: 100%; background: #f3f3f1; }
-    plugin-studio { display: block; width: 100%; height: 100vh; }
+    /* 100svh, not 100vh: on a phone 100vh is the LARGE viewport, taller than what shows while the address bar is
+       up, so the page scrolls by the bar's height and the app seems to resize as the bar hides and shows. svh is
+       the viewport with the bar shown and never changes; 100% first is the fallback where svh is unknown. The
+       --profile-min-h:0 opts out of ProfileLoader's 100dvh floor, which would otherwise grow the element when
+       the bar hides. */
+    plugin-studio { display: block; width: 100%; height: 100%; height: 100svh; --profile-min-h: 0; }
   </style>
 </head>
 <body>
   <plugin-studio tree-base="."></plugin-studio>
-  <script src="./plugin-studio/plugin-studio.js" integrity="sha384-Fi5bgSgOxiSMlSj/dqY6VRWqS6orLyPRPut8bfiy3/zXHWzA3xDmC4Caz3FyCzdl" crossorigin="anonymous"></script>
+  <script src="./plugin-studio/plugin-studio.js" integrity="sha384-KH5r1cFKUtfzOiE5iRdTbaoHYP27HquWyUNX0gjnVai5MfNzwUiJI2kBaStmGuIY" crossorigin="anonymous"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 /**
  * useTreeLegendColors.js — the STACKED TREE LEGEND's colour resolver (card BUILD-TREE-LEGEND-COLOURS).
  *
- * Driver's ruling: the legend's colours must come from the cap-3 research map's semantic tree, so
+ * The rule: the legend's colours must come from the cap-3 research map's semantic tree, so
  * the legend can NEVER drift from the map. This module therefore declares NO palette of its own —
  * every hex is read from the SAME colour-strategy modules the map's pins paint with:
  *

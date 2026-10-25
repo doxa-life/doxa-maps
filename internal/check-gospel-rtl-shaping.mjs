@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.RTL_SHAPE_PORT || 5393)
 const POISON = process.argv.includes('--poison')
-// ⚠ PARAMETERISED, not forked. dx-shepherd routed this gate to the other RAW-map owners
+// ⚠ PARAMETERISED, not forked. This gate was routed to the other RAW-map owners
 // (cities-internet, key-cities, upg-100-list, RegionCountryMap) — copying it would give each of
 // them their own drifting copy of the pan-first logic and the poison arm, which are the two parts
 // that took corrections to get right. The leaf is the only thing that differs.

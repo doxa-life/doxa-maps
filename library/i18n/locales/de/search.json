@@ -23,5 +23,12 @@
     "dialect": "Dialekt",
     "religionKind": "Religion"
   },
-  "upg100Placeholder": "Volksgruppe, UPG-100-Liste oder Region suchen…"
+  "upg100Placeholder": "Volksgruppe, UPG100-Liste oder Region suchen…",
+  "tabPlaceholder": {
+    "languageFamilies": "Sprachfamilie, Sprache, Dialekt/Varietät suchen",
+    "affinityBlocks": "Affinitätsblock, Cluster, Volksgruppe suchen",
+    "regions": "Region, Land, Volksgruppe suchen",
+    "religion": "Religion, Volksgruppe suchen"
+  },
+  "placeholderRegions": "Region, Land oder Volksgruppe suchen"
 }

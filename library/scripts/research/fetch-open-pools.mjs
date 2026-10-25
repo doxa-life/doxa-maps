@@ -3,9 +3,8 @@
 //   node fetch-open-pools.mjs
 //
 // ═══ WHY THIS EXISTS ════════════════════════════════════════════════════════
-// design note 2026-08-02: "research all available gospel resources on the internet that
-// don't require me to fetch an API key or password, that are accessible now, and
-// map them all into a resource pool."
+// Every gospel resource on the internet that needs no API key or password and is
+// reachable now is researched and mapped into one resource pool.
 //
 // The corpus already carries eBible (scripture) + Arclight (film). This adds every
 // OTHER pool that answered a live request without a credential. Each was probed,

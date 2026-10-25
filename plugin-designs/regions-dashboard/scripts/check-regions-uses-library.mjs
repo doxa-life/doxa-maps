@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 /* check-regions-uses-library.mjs — `bun run check:regions-uses-library`. Source-only, headless.
  *
- * THE DRIVER'S POINT, and the reason this check exists rather than a note: his negotiating position
- * with the DX-life author is that cloning their /regions page into this bundler MADE ITS COMPONENTS
- * REUSABLE for every future map plugin. He named the failure mode himself — "a load bearing assumption
- * that could be proven wrong by going into the private plugin folder for the Regions plugin and seeing
- * that actually the components are not reusable".
+ * THE POINT, and the reason this check exists rather than a note: the negotiating position with the
+ * DX-life author is that cloning their /regions page into this bundler MADE ITS COMPONENTS REUSABLE
+ * for every future map plugin. That is a load-bearing assumption, and it can be proven wrong by opening
+ * the private plugin folder for the Regions plugin and finding the components are not reusable after all.
  *
  * So this asserts the thing that can be checked by opening the folder: the regions plugin must USE the
  * shared components, and must NOT hold its own copy of what it uses. A claim about reusability that
@@ -30,7 +29,7 @@ const EXTRACTED = [
     tag: 'RegionSectionCard',
     owns: ['region-card', 'countries-grid', 'country-link'],
   },
-  // ── REGLIB batch 2: the Driver's "banners/cards that tell you the prayer progress" ─────────────
+  // ── REGLIB batch 2: the banners/cards that report prayer progress ──────────────────────────────
   {
     lib: 'library/components/regions/StatCard.vue',
     consumer: 'plugin-designs/regions-dashboard/region-dashboards.vue',

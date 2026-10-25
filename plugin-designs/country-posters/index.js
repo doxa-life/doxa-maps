@@ -1,3 +1,5 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
+import { registerPosterSectionElement } from '@map/elements/posterSectionElement.js'
 /**
  * plugin-designs/country-posters/index.js
  *
@@ -10,15 +12,16 @@
  *   <script src="/app/country-posters.js"></script>
  *   <country-posters-map profile-config='{"profile":"countries-map","tk":"pk.YOUR_MAPBOX_TOKEN"}'></country-posters-map>
  *   <country-posters-map profile-config='{"profile":"country-poster-wall"}'></country-posters-map>
+ *   <country-posters-map profile-config='{"profile":"country-poster-wall","countries":"IND,PAK,BGD"}'></country-posters-map>
+ *     only those countries (ISO-3, or {code,name,count} records), FLAT, for a host's own region section
+ *     (DX Life's /regions, 2026-09-30); `region: "Asia"` asks for one WAGF region; `columns`, `heading` optional.
  *
  * TWO PROFILES, ONE BUNDLE — the same shape as my-upg-100-list:
  *   countries-map.vue        the map; legend opens on the COUNTRY level
  *   country-poster-wall.vue  the poster grid, grouped by region, collapsible
  *
  * WHY A SEPARATE BUNDLE rather than two more profiles in my-upg-100-list:
- * > design note 2026-08-01: "I don't mind creating multiple application profiles, one
- * > for each application. I do mind that we really need to make sure every
- * > component that we're [re]usable is added to the library."
+ * Several application profiles are fine; every REUSABLE component belongs in the library.
  * PROFILES duplicate; COMPONENTS get promoted to library/ and parameterized. The
  * wall here is @map/components/poster/PosterWall.vue — the same component the
  * 100-list renders — differing only in data, taxonomy and copy.
@@ -28,7 +31,6 @@
  * import.meta.glob('./*.vue') locally and hand the result to the loader via
  * app.provide('profileModules', ...).
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 // ─── Bundle-private profile registry ─────────────────────────────────────────
 const profileModules = import.meta.glob('./*.vue')
@@ -58,5 +60,8 @@ if (typeof customElements !== 'undefined') {
     customElements.define('country-posters-map', CountryPostersElement)
   }
 }
+
+// <dxm-poster-section>: one poster section (any poster type), the reusable element this bundle ships first.
+registerPosterSectionElement()
 
 export default CountryPostersElement

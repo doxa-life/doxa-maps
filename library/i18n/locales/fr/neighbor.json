@@ -8,7 +8,7 @@
     "langCluster": "Groupes linguistiques",
     "flowers": "Fleurs",
     "mobilize": "Mobiliser",
-    "campaigns": "Campagnes"
+    "campaigns": "Mouvements"
   },
   "hints": {
     "cockpit": "centre de filtrage croisé",
@@ -180,6 +180,8 @@
     "title": "Mobiliser les proches voisins",
     "close": "Fermer",
     "why": "Les croyants les mieux placés pour atteindre un peuple non atteint sont généralement les plus proches de lui par la langue et la culture. Cet outil les trouve pour chaque groupe non atteint, à l'aide de l'échelle E et de l'échelle P de Ralph D. Winter, pour planifier qui mobiliser, dans quelle langue et où.",
+    "greenTitle": "Pour les Églises : partez d’un point vert",
+    "green": "Choisissez un groupe atteint (vert), dans la liste Groupes atteints ou par un point vert, pour voir les peuples non atteints que ses croyants sont le mieux placés pour atteindre, un niveau E à la fois, les plus proches d’abord. Ensuite, exportez la liste (CSV), écrivez une lettre à ses croyants ou imprimez un dossier de prière, pour cette Église ou ses partenaires missionnaires.",
     "eTitle": "Échelle E : la distance qu'un témoin doit franchir",
     "pTitle": "Échelle P : la distance entre un peuple et une Église",
     "dataTitle": "Données et limites",
@@ -193,7 +195,7 @@
     "title1": "E-1 · Ils parlent la même langue",
     "title2": "E-2 · Une culture proche",
     "title3": "E-3 · Proches, une autre culture",
-    "long1": "Des croyants qui parlent la langue de ce groupe. Ils peuvent partager l'Évangile sans barrière de langue, et une campagne dans cette langue peut les mobiliser.",
+    "long1": "Des croyants qui parlent la langue de ce groupe. Ils peuvent partager l'Évangile sans barrière de langue, et un mouvement dans cette langue peut les mobiliser.",
     "long2": "Des croyants d'un peuple apparenté : même grappe de peuples, ou même famille de langues dans le même bloc d'affinité. Un pas culturel plus court que de partir de zéro.",
     "long3": "Des croyants vivant à proximité (à moins de 600 km ou dans le même pays) mais d'une autre culture. Ils partagent la région, pas la langue.",
     "rlong1": "Groupes non atteints qui parlent la langue de ce groupe. Ses croyants peuvent les atteindre sans franchir de barrière linguistique.",
@@ -220,6 +222,11 @@
     "legend": "Légende de la carte",
     "legendUnreached": "Groupe non atteint",
     "searchPlaceholder": "Rechercher un groupe non atteint, un pays ou une langue",
+    "kind": "Quels groupes afficher",
+    "listUnreached": "Groupes non atteints",
+    "listReached": "Groupes atteints",
+    "searchReached": "Rechercher un groupe atteint, un pays ou une langue",
+    "introReached": "Choisissez un groupe atteint (ceux qui comptent le plus de croyants d’abord) ou cliquez sur un point vert de la carte pour voir les groupes non atteints les plus proches de ses croyants.",
     "pFilter": "Filtrer par niveau P",
     "pAll": "Tous",
     "loading": "Chargement des peuples…",
@@ -230,7 +237,7 @@
     "believersNear": "Environ {n} croyants parmi les voisins ci-dessous.",
     "resources": "Ressources dans sa langue",
     "export": "Exporter les segments d'audience (CSV)",
-    "openBridge": "Planifier une campagne en {lang}",
+    "openBridge": "Planifier un mouvement de mobilisation en {lang}",
     "samePeople": "même peuple",
     "cardStats": "~{b} croyants · à {km} km",
     "noNeighbors": "Aucun voisin atteint dans ces données.",
@@ -245,10 +252,12 @@
     "showNeighbors": "Voir ses voisins",
     "noUnreachedNeighbors": "Aucun groupe non atteint ne compte ce groupe parmi ses voisins atteints les plus proches.",
     "showAll": "Voir les {n}",
-    "eFilter": "Voir les voisins par niveau E"
+    "eFilter": "Voir les voisins par niveau E",
+    "sheetHide": "Masquer la liste",
+    "sheetShow": "Afficher la liste"
   },
   "camp": {
-    "intro": "Langues-ponts : des langues parlées par des croyants et par des peuples non atteints. Une campagne dans cette langue, diffusée là où vivent les croyants, peut les mobiliser pour atteindre les non-atteints dans leur propre langue.",
+    "intro": "Langues-ponts : des langues parlées par des croyants et par des peuples non atteints. Un mouvement dans cette langue, lancé là où vivent les croyants, peut les mobiliser pour atteindre les non-atteints dans leur propre langue.",
     "searchPlaceholder": "Rechercher une langue ou un pays",
     "minBelievers": "Au moins",
     "exportAll": "Exporter la liste (CSV)",
@@ -258,9 +267,27 @@
     "back": "Toutes les langues",
     "bigBelievers": "croyants à mobiliser ({g} groupes, {c} pays)",
     "bigUnreached": "non-atteints à atteindre ({g} groupes, {c} pays)",
-    "export": "Exporter cette campagne (CSV)",
+    "export": "Exporter ce mouvement (CSV)",
     "whereToRun": "Où la diffuser : croyants par pays",
     "believersInGroups": "~{n} dans {g} groupes",
     "whoTheyReach": "Qui ils peuvent atteindre"
+  },
+  "letter": {
+    "button": "Écrire une lettre",
+    "title": "Une lettre aux croyants de {group}",
+    "greeting": "Chers amis parmi les croyants de {group} ({country}),",
+    "intro": "Ces {n} peuples non atteints vous comptent parmi leurs croyants les plus proches ({level}). Peu de croyants vivent encore parmi eux.",
+    "item": "{name}, {country} : {pop} personnes, de langue {language}, à {km} km.",
+    "pray": "Priez pour eux : {url}",
+    "more": "…et {n} autres. La liste complète se trouve dans l’export CSV.",
+    "close": "Prierez-vous pour eux, et demanderez-vous à Dieu comment votre Église pourrait les bénir ? Chacun de ces peuples est aimé de Dieu.",
+    "sign": "Au nom de Jésus,",
+    "copy": "Copier la lettre",
+    "download": "Télécharger (.txt)"
+  },
+  "packet": {
+    "button": "Dossier de prière",
+    "label": "{group} : ses voisins non atteints ({level})",
+    "labelCapped": "{group} : les {n} plus proches de ses {total} voisins non atteints ({level})"
   }
 }

@@ -2,8 +2,7 @@
 /**
  * QaCorner.vue — the embeddable QA corner widget (bottom-right of any map).
  *
- * Visible shell of the QA-agent bridge (see _qa-cycle/01-ideation-research/
- * qa-loops/qa-embeddable-qa-agent-bridge.md). OIDC-gated onboarding — NEVER a key.
+ * Visible shell of the QA-agent bridge. OIDC-gated onboarding — NEVER a key.
  *
  * AUTH: the widget detects the host's session via a same-origin GET /api/auth/me.
  * That only succeeds when the plugin iframe is SAME-ORIGIN (allow-same-origin). When
@@ -149,6 +148,14 @@ useShadowStyles(`
   .qa-note { margin: 10px 0 0; font-size: 11px; color: #8a94a3; }
   .qa-corner.dark .qa-panel { background: #1b212b; color: #e7ebf0; border-color: #2c3542; }
   .qa-corner.dark .qa-sub, .qa-corner.dark .qa-x { color: #aeb7c2; }
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .qa-corner, .qa-panel { transition: none !important; animation: none !important; }
+}
 `, 'qa-corner')
 </script>
 

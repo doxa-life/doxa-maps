@@ -25,5 +25,22 @@
   "region_southeast_asia_oceania": "东南亚 + 大洋洲",
   "region_china_mongolia": "中国 + 蒙古",
   "region_india": "印度",
-  "region_other": "其他"
+  "region_other": "其他",
+  "region_americas": "美洲",
+  "region_europe": "欧洲",
+  "region_deaf": "聋人",
+  "zone_deaf": "聋人群体",
+  "rendering": "正在生成…",
+  "render_format": "生成 {format}",
+  "progress_elapsed": "已用时 {time}",
+  "progress_tiles": "第 {n}/{total} 块",
+  "hint_up_to_minute": "此尺寸最多可能需要一分钟。",
+  "hint_few_minutes": "大尺寸海报可能需要几分钟。",
+  "error_too_large": "此海报超出了本设备的内存。请选择较小的尺寸或较低的分辨率。",
+  "error_failed": "无法生成海报。请重试或选择较小的尺寸。",
+  "optional": "（可选）",
+  "phoneLimit": "在手机上，最大的尺寸已关闭：手机无法绘制这么大的海报。请使用电脑制作这些尺寸。",
+  "phoneLimitAll": "这需要台式电脑或笔记本电脑。",
+  "glue_here": "在此粘贴",
+  "sectionNone": "{scope} 没有海报。"
 }

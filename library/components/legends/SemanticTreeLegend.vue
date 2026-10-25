@@ -3,7 +3,7 @@
  * SemanticTreeLegend — reusable hierarchical legend for any one-to-many semantic tree.
  *
  * EXACT CLONE of the upstream PPLR module
- * per user directive: "do a direct clone, only shave the API." Only difference vs.
+ * (a direct clone by design; only the API is trimmed). Only difference vs.
  * upstream is the <style scoped> block converted to useShadowStyles() so the CSS
  * lands inside doxa-research-mfe's shadow root.
  *
@@ -48,7 +48,7 @@ const humanizeKey = (k) => String(k).split('.').pop()
 // C4: the guard is library/composables/useOptionalI18n now. humanizeKey stays the fallback -- NOT the
 // catalogue -- so a bare host still reads 'Name' for legend.columns.name, and `te` still answers false
 // so defaultTab and columnLabel keep falling through to their own defaults.
-const { t, te } = useOptionalI18n('', { fallback: (k) => humanizeKey(k) })
+const { t, te, locale: i18nLocale } = useOptionalI18n('', { fallback: (k) => humanizeKey(k) })
 
 // Translate a tab's display name from the `tabs.<key>` catalog, keyed by the
 // tab's stable `i18nKey` (preferred) or `id`. Falls back to the hardcoded
@@ -67,21 +67,25 @@ function tabLabel(tab) {
 // 2026-09-24 on the served upg-100-list leaf: ?lang=es changed 2 of 76 rendered strings
 // ("POPULATION" -> "POBLACIÓN") and left all three legend tabs AND all three info
 // popovers in English — the locale switch works, the strings were simply never in a
-// catalog. The Driver named this affordance specifically ("the tab itself gives you a
-// little information button that will explain what a UPG-100 list is"), which is exactly
-// the sentence a reader who does not read English cannot use.
+// catalog. This affordance was asked for specifically (the tab's own small information
+// button explaining what a UPG-100 list is), which is exactly the sentence a reader who
+// does not read English cannot use.
 //
 // Same shape as tabLabel: `legend.tabInfo.<i18nKey|id>`, te() guard, falling back to the
 // hardcoded English `info` so a tab with no catalog entry renders unchanged rather than
 // blank. PER KEY, so a half-finished translation shows its finished entries.
 function tabInfo(tab) {
   const key = 'legend.tabInfo.' + (tab?.i18nKey || tab?.id)
-  return tab && te(key) ? t(key) : (tab?.info ?? '')
+  if (tab && te(key)) return t(key)
+  // `info` doubles as a FLAG on tabs whose text has moved into the catalogue (`info: true` marks
+  // "this tab has an explanation" for the button's v-if). Only a string is a fallback; anything
+  // else would otherwise render as the word "true" in the popover.
+  return typeof tab?.info === 'string' ? tab.info : ''
 }
 
 const props = defineProps({
   nodes:   { type: Array,  default: () => [] },
-  // APPROXPIN standing note (Driver card BUILD-APPROXIMATE-PIN-NOTICE: every map that shows people-group
+  // APPROXPIN standing note (card BUILD-APPROXIMATE-PIN-NOTICE: every map that shows people-group
   // pins says plainly that a dot is a locality). null = decide from the map's own data: shown when the
   // injected dataStore holds named Point features. true/false overrides, for a leaf that already says it.
   pinNote: { type: Boolean, default: null },
@@ -90,9 +94,7 @@ const props = defineProps({
   // tree) is the default, which is what every existing profile already gets.
   // Added for country-posters, whose legend must open on the COUNTRY level rather
   // than the region level above it:
-  //   design note 2026-08-01: "when you open the map it doesn't open to the regions
-  //   inside of the semantic tree legend, but it opens to the country's semantic
-  //   level in the legend."
+  //   on open, the legend shows the country level, not the regions above it.
   // A profile cannot do this from outside without it: `expandedIds` is internal
   // state that resets on every `nodes` change, and activeTab is a computed over
   // either the shared instance or local state. Clamped to the real tab count below,
@@ -107,6 +109,9 @@ const props = defineProps({
   // unchanged; a profile opts in by passing :export-enabled. Gates the
   // top-right Export affordance (UX scaffold only — no export yet).
   exportEnabled: { type: Boolean, default: false },
+  // Which prayer resources the host can print for the selection. 'cards' (the card deck) is OPT-IN: a
+  // host that does not handle it must not show a menu item that does nothing. Poster and packet stay on.
+  exportCards: { type: Boolean, default: false },
   // Prayer progress payload for the header bar — { covered, total, segments } from
   // useLegendData(...).progress. null → no bar (every non-prayer legend). Falls back
   // to inject('legendProgress') so the mobile sheet's embedded legend (LegendMobile →
@@ -122,7 +127,7 @@ const instance = useInstance()
 // Explicit prop wins, else the provided payload (a ref/computed from the profile).
 const injectedProgress = inject('legendProgress', null)
 const progressData = computed(() => props.progress ?? unref(injectedProgress) ?? null)
-// Driver 2026-09-16: the prayer legend's header says "Progress" (never "Legend") —
+// The prayer legend's header says "Progress" (never "Legend") —
 // on the desktop title bar, the mobile sheet title and the collapsed reopen pill.
 const displayTitle = computed(() => progressData.value ? t('legend.progress.title') : props.title)
 const stlIsDark = computed(() => (instance?.theme.value || 'dark') === 'dark')
@@ -228,7 +233,7 @@ const packetOpen = ref(false)
 const { scrimRef, scrimStyle } = useViewportScrim(exportMenuOpen)
 // Feature flag: show the Export affordance. Gated here in the SHARED legend so
 // one switch covers every bundle. It was false by an earlier coder decision;
-// design note 2026-07-31 asked for the button back on the 100-list legend, and the
+// the button came back on the 100-list legend (2026-07-31), and the
 // export path is functional (the menu emits 'export' with 'poster' | 'packet',
 // and a profile wires @export to a real download).
 // A profile STILL has to opt in with :export-enabled="true" — this flag only
@@ -249,8 +254,8 @@ const sortDir        = ref('desc') // 'desc' | 'asc'
 // ⚠ THE STORE USED TO WIN UNCONDITIONALLY, which made `defaultTab` dead for every profile
 // that shares an instance. instance.activeTab starts at 0 and 0 is indistinguishable from
 // "the user chose tab 0", so a profile passing :default-tab="1" still opened on tab 0.
-// MEASURED 2026-09-24: my-upg-100-list opened on Region at desktop AND mobile, which is the
-// Driver's first complaint about this legend word for word.
+// MEASURED 2026-09-24: my-upg-100-list opened on Region at desktop AND mobile, which is exactly
+// the first reported problem with this legend.
 // Now the store only wins once something has ACTUALLY chosen a tab — a tab click, or a node
 // selection that moves the legend to that node's generation (usePplrInstance sets the flag).
 // Until then the profile's declared landing tab applies, which is what the prop always meant.
@@ -292,10 +297,10 @@ watch(() => props.open, (v) => {
 })
 
 watch(() => safeNodes.value, () => {
-  // ★ A DATA REFRESH IS NOT A DESELECTION (rega, WAGF Regions on Simple Research, 2026-09-28). The
+  // ★ A DATA REFRESH IS NOT A DESELECTION (WAGF Regions on Simple Research, 2026-09-28). The
   // polygon highlight landed 51-85 ms after the click and was wiped 433-667 ms later, leaving no row
-  // marked and every region at full colour — which reads exactly like the Driver's "the legend isn't
-  // connecting with the map", and is worse, because it connected and then undid itself.
+  // marked and every region at full colour — which reads exactly like a legend not connecting with
+  // the map, and is worse, because it connected and then undid itself.
   //
   // This watcher fires on the IDENTITY of the nodes array, and every tree here is a computed that
   // returns a NEW array on each evaluation. So any late async that touches a dependency — pins still
@@ -627,13 +632,27 @@ watch(selectedId, async id => {
 })
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
+// The app's locale (a ref or a string, depending on how the host installed i18n); undefined lets Intl
+// use the browser's, which is what toLocaleString() did before.
+function numLocale() {
+  const l = i18nLocale && (i18nLocale.value ?? i18nLocale)
+  return typeof l === 'string' && l ? l : undefined
+}
+// ★ COMPACT IN THE READER'S NOTATION. This was `toFixed(1) + 'M'` / `+ 'k'`: English abbreviations with
+// an English decimal point on every Population cell in every locale. Intl's compact notation writes each
+// language's own form (ru "1,2 млн", de "1,2 Mio.", ar "1.2 مليون", zh "123.5万").
+// ⚠ SIZED TO THE COLUMN, which is fixed (--stl-num-w: 60px at 10.5px mono, 70px at 13px). The local forms are
+// longer than "12.3M": with one decimal everywhere de reached "123,5 Mio." (10 chars) — past both widths on
+// the region rows, whose sums run to hundreds of millions. So one decimal only below 10 million, where it
+// carries real information; whole units above. Worst case measured over all 11 locales: 8 Latin chars.
 function fmtPop(n) {
   if (!n) return '—'
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
-  if (n >= 1e3) return Math.round(n / 1e3) + 'k'
-  return n.toLocaleString()
+  if (n >= 1e3) {
+    return new Intl.NumberFormat(numLocale(), { notation: 'compact', maximumFractionDigits: n >= 1e6 && n < 1e7 ? 1 : 0 }).format(n)
+  }
+  return n.toLocaleString(numLocale())
 }
-function fmtCount(n) { return n != null ? n.toLocaleString() : '—' }
+function fmtCount(n) { return n != null ? n.toLocaleString(numLocale()) : '—' }
 
 function rowClasses(row) {
   return {
@@ -663,8 +682,8 @@ useShadowStyles(`
   /* --stl-top: the panel's offset from the map's top edge. The 60px default reserves room for a
      search bar ABOVE the legend, which most consumers (research-map's geocoder) still have. A
      profile that has REMOVED its search bar sets --stl-top on the legend's wrapper so the panel
-     rises into the vacated space instead of keeping a dead gap (Driver, 2026-09-23, UPG-100:
-     "the search bar is removed, that means the legend needs to be moved up"). The max-height
+     rises into the vacated space instead of keeping a dead gap (UPG-100 removed its search bar,
+     so its legend moves up). The max-height
      mirrors it so a raised panel gains the same room at the bottom it gained at the top. */
   position: absolute; inset-inline-start: 8px; top: var(--stl-top, 60px); width: var(--map-legend-width, 380px); z-index: 4;
   display: flex; flex-direction: column;
@@ -767,17 +786,18 @@ useShadowStyles(`
   color: #8b949e; font: 600 10px ui-monospace, monospace;
   text-transform: uppercase; letter-spacing: 0.04em;
   padding: 4px 8px; cursor: pointer; white-space: nowrap;
+  min-height: 24px;   /* 24px tap target (WCAG 2.5.8); measured 22px at 390 */
 }
 .stl-tab:hover { color: #c9d1d9; }
 .stl-tab-chip.active .stl-tab { color: #fff; }
 .stl-tab-info {
   background: rgba(110,118,129,0.15); border: none; border-inline-start: 1px solid #30363d;
   color: #6e7681; cursor: pointer;
-  width: 18px; padding: 0; font: 700 9px ui-monospace, monospace;
+  width: 24px; min-height: 24px; padding: 0; font: 700 9px ui-monospace, monospace;   /* was 18x22 */
 }
 .stl-tab-info:hover { background: rgba(59,70,61,0.2); color: #73A17F; }
 .stl-tab-chip.active .stl-tab-info {
-  border-left-color: rgba(0,0,0,0.3); color: #fff;
+  border-inline-start-color: rgba(0,0,0,0.3); color: #fff;
   background: rgba(0,0,0,0.2);
 }
 .stl-info-pop {
@@ -799,8 +819,8 @@ useShadowStyles(`
   font: 700 11px ui-monospace, monospace;
   color: #8b949e; text-transform: uppercase; letter-spacing: 0.04em;
 }
-/* Center-aligned UUPGs/Pop column header (qa: 2026-05-02 — user explicitly
-   requested center over right-align so the header label sits on the same
+/* Center-aligned UUPGs/Pop column header: centred rather than right-aligned,
+   so the header label sits on the same
    x-center as the numeric value below; reduces eye drift across rows). */
 .stl-hdr-num {
   width: var(--stl-num-w); text-align: center; flex-shrink: 0;
@@ -930,6 +950,9 @@ useShadowStyles(`
   color: #6e7681; width: var(--stl-caret-w); height: var(--stl-caret-w); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 3px;
+  /* A 24px tap target that keeps the caret's 14px footprint: the box grows by 10px and a -5px margin
+     on every side gives the space back, so the tree's indentation (also --stl-caret-w) is unchanged. */
+  box-sizing: border-box; width: 24px; height: 24px; margin: -5px;
 }
 .stl-caret svg { transition: transform 0.15s; }
 .stl-caret.open svg { transform: rotate(90deg); }
@@ -1018,7 +1041,7 @@ useShadowStyles(`
         both, so they cannot drift apart again.
 
      MEASURED 2026-09-24 at 390px in a 420px-tall host: the panel ran 38px past the bottom of the
-     map. Driver: "the upg 100 list legend on the map is overflowing beyond the height of the map." */
+     map: the UPG-100 list's legend overflowed the map's height. */
   .stl-panel { width: 92vw; max-width: 380px; --stl-top: 64px; }
   .stl-reopen { top: 64px; }
 }
@@ -1159,8 +1182,8 @@ useShadowStyles(`
 .stl-panel[data-theme="light"] .stl-export-item { color: #57606a; }
 .stl-panel[data-theme="light"] .stl-export-lock { color: #57606a; }
 .stl-panel[data-theme="light"] .stl-export-soon { color: #57606a; background: rgba(208,215,222,0.5); }
-/* ── DESKTOP TYPE SCALE (Driver, 2026-09-16: "the desktop font sizes in the legends need to
-   be increased … larger data to be more readable on desktop"). Desktop panel only — the
+/* ── DESKTOP TYPE SCALE: larger legend type on desktop, so the data reads more easily.
+   Desktop panel only — the
    mobile sheet (.legend-mobile-sheet) keeps its own compact sizes. Size only, never layout;
    the base rules above stay as the mobile/default scale. ── */
 .stl-panel:not(.legend-mobile-sheet *) .stl-tb-title,
@@ -1173,13 +1196,24 @@ useShadowStyles(`
 .stl-panel:not(.legend-mobile-sheet *) .stl-num { font-size: 13px; }
 /* The numeric columns must grow with the type: "POPULATION" at 10px is ~65px, ~76px with
    its sort arrow; "139.0M" at 13.5px is ~49px. A fixed 44px column let the header collide
-   with "UUPGs" and let values spill into the neighbouring column (Driver, 2026-09-16). */
+   with "UUPGs" and let values spill into the neighbouring column. */
 .stl-panel:not(.legend-mobile-sheet *) .stl-inner { --stl-num-w: 70px; }   /* the vars live on .stl-inner */
 .stl-panel:not(.legend-mobile-sheet *) .stl-hdr-num,
 .stl-panel:not(.legend-mobile-sheet *) .stl-num { white-space: nowrap; }
 .stl-panel:not(.legend-mobile-sheet *) .stl-info-pop { font-size: 13px; }
 .stl-panel:not(.legend-mobile-sheet *) .stl-empty,
 .stl-panel:not(.legend-mobile-sheet *) .stl-overflow { font-size: 12.5px; }
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .stl-panel, .stl-collapse-btn svg, .stl-row, .stl-reopen, .stl-chip { transition: none !important; animation: none !important; }
+  /* The spinner MEANS "loading". Stopped dead it is a static ring that says nothing, so it is
+     slowed to a step crawl: still visibly working, no smooth spin. */
+  .stl-spinner { animation: stl-spin 2.4s steps(8, end) infinite !important; }
+}
 `, 'semantic-tree-legend')
 </script>
 
@@ -1270,6 +1304,15 @@ useShadowStyles(`
                   <path d="M4 4.5H8M4 6.5H8M4 8.5H6.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
                 </svg>
                 <span class="stl-export-item-label">{{ t('legend.export.poster') }}</span>
+              </button>
+              <!-- The CARD DECK for the selection: one prayer card per people group (the same deck the
+                   poster walls print). Opt-in per host, see exportCards. -->
+              <button v-if="exportCards" type="button" class="stl-export-item" role="menuitem" @click.stop="emitExport('cards')">
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <rect x="1.5" y="2.5" width="6" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <rect x="4.5" y="1.5" width="6" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+                <span class="stl-export-item-label">{{ t('buttons.cardDeck') }}</span>
               </button>
               <!-- ★ THE PACKET ITEM IS A DISCLOSURE, NOT A PRINT. Clicking it no longer prints
                    immediately, because there are now two packets it could mean. It EXPLAINS what a

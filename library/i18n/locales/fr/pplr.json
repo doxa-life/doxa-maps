@@ -31,7 +31,8 @@
     "readyRosetta": "Prêt · épingles : {pins} · échantillons Rosetta : {samples} (★ or)",
     "readyPins": "Prêt · épingles : {pins} · cliquez sur une épingle",
     "readyLanguage": "Prêt · épingles : {pins} · couverture des familles {coverage} % · top 25 = {top} %",
-    "readyReligion": "Épingles : {pins} · la plus fréquente : {religion} ({count})"
+    "readyReligion": "Épingles : {pins} · la plus fréquente : {religion} ({count})",
+    "d3Failed": "La bibliothèque de graphiques n’a pas pu être chargée."
   },
   "ui": {
     "chooseView": "Choisir une vue",
@@ -56,7 +57,8 @@
     "sunburst": "Hiérarchie ROP · bloc d’affinité → grappe de peuples · faites défiler pour zoomer",
     "pins": "Toutes les épingles peuple-pays · cliquez pour les identifiants des systèmes",
     "coverage": "Couverture de traduction · teinte = moyenne des langues renseignées par pays · cliquez sur une épingle ou un pays",
-    "rosetta": "Rosetta des identifiants · couleur = identifiants présents · ★ = ligne d’exemple"
+    "rosetta": "Rosetta des identifiants · couleur = identifiants présents · ★ = ligne d’exemple",
+    "translations": "Nom du peuple · {n} langues · cliquez sur un point"
   },
   "legendTitle": {
     "avgLocales": "Moyenne des langues / {n}",
@@ -88,5 +90,10 @@
   },
   "card": {
     "nameInLocales": "Nom dans {n} langues"
+  },
+  "title": "Cartes de données PPLR",
+  "index": {
+    "title": "Validation des données PPLR",
+    "help": "Cliquez sur une tuile ou choisissez une vue ci-dessus."
   }
 }

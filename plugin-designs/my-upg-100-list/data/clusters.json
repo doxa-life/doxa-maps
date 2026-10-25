@@ -1626,7 +1626,7 @@
   "uncovered_scatter": {
     "n_a_region_total": 19,
     "null_region_total": 3,
-    "decision_pending": "fold into nearest geographic neighbour OR create a 'Diaspora and Micro-territories' list. design note decides."
+    "decision_pending": "fold into nearest geographic neighbour OR create a 'Diaspora and Micro-territories' list. The product decision is open."
   },
   "asia_solved_validation": "2026-06-06 — pg_slugs predicate exact-count for all 12 Asia lists against live 2106-row source; 0 cross-country leaks",
   "uncovered_lists": [

@@ -48,7 +48,7 @@ const get = (lc, key) => {
 // SETTLED, not deferred: the correct word in that language IS the English spelling. Each is a decision,
 // listed by locale and key so a new identical string is still caught.
 const SAME_ON_PURPOSE = new Set(['fr:res.source', 'fr:res.type', 'ro:tree.dialect', 'fr:facet.religion',
-  'de:facet.region', 'de:facet.religion', 'de:tree.poster', 'it:tree.poster', 'ro:tree.poster', 'de:col.openWiki', 'es:col.openWiki', 'it:col.openWiki', 'ro:col.openWiki'])
+  'de:facet.region', 'de:facet.religion', 'de:tree.poster', 'it:tree.poster', 'ro:tree.poster', 'de:col.openWiki', 'es:col.openWiki', 'it:col.openWiki', 'ro:col.openWiki', 'de:rings.ring'])
 
 let fails = 0
 if (keys.size < 100) { console.log(`NOT MEASURED: read only ${keys.size} keys (expected 100+); the parser is broken, not the bundle`); process.exitCode = 75 }

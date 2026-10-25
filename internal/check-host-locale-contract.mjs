@@ -63,7 +63,7 @@ for (const b of manifest.bundles || []) for (const p of b.profiles || []) {
 if (!leaves.includes(CONTROL)) { console.log(`HOST-LOCALE: NOT MEASURED — the control ${CONTROL} is not in this tree`); process.exit(75) }
 
 const port = await new Promise((ok) => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)) }) })
-const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR], { stdio: 'ignore' })
+const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR, '--exit-with-parent'], { stdio: 'ignore' })
 const stop = () => { try { srv.kill() } catch { /* already gone */ } }
 let up = false
 for (let i = 0; i < 40 && !up; i++) { await new Promise((r) => setTimeout(r, 150)); up = await fetch(`http://127.0.0.1:${port}/${TREE_NAME}/manifest.json`).then((r) => r.ok).catch(() => false) }

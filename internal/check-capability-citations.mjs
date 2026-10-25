@@ -54,7 +54,7 @@ const MANIFEST = join(ROOT, 'public', TREE_NAME, 'manifest.json')
 // defect recur unnoticed in a second place.
 //
 // NOT COVERED, and it cannot be: the /plugin-designer SKILL carries the same stale citation and
-// lives outside this repo, so no gate here can reach it. That is why the fix is a Driver edit; the
+// lives outside this repo, so no gate here can reach it. That is why the fix is an edit outside this repo; the
 // repo's job is to hold the checkable half (see BUILD-PLUGIN-DESIGNER-SKILL-MEANS-REAL-WORK).
 const DOC_DIR = join(ROOT, 'documentation')
 const DOC_FILES = existsSync(DOC_DIR)

@@ -1,8 +1,8 @@
 /**
  * formatCount — the ONE place the fleet decides how a COUNT is punctuated.
  *
- * ★ IT HOLDS en-US ON PURPOSE. Whether numerals follow the reader's locale is a DRIVER decision and
- * it is currently held, so this file changes nothing about what anyone sees: every caller renders
+ * ★ IT HOLDS en-US ON PURPOSE. Whether numerals follow the reader's locale is provisional, pending a
+ * product decision, so this file changes nothing about what anyone sees: every caller renders
  * exactly the digits and separators it rendered before. What it changes is the number of places that
  * decision is written down — from thirteen call sites across four bundles to one.
  *

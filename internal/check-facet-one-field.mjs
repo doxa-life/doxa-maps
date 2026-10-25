@@ -8,8 +8,8 @@
  * controls for one axis — a "People" dropdown beside an "Affinity Bloc" tree tier — which could
  * never recognise each other, because filteredRows byte-matches each key against its OWN accessor.
  * The tree stored affinity_bloc='A012' while the dropdown stored rop1='South Asian Peoples', and
- * neither ever saw the other's selection. Driver, from behaviour alone: "there are duplicate
- * affinity blocks, one called People, one called Affinity Bloc... they are the same thing."
+ * neither ever saw the other's selection. Seen from behaviour alone: there were duplicate
+ * affinity blocks, one called People and one called Affinity Bloc, and they are the same thing.
  *
  * ★ WHY THIS GATE ASSERTS ON OUTPUT VALUES AND NOT ON FIELD READS — THE MEASUREMENT THAT DECIDED IT.
  * The obvious gate is "no two facets may read the same r.<field>". THAT GATE WOULD FAIL CORRECT

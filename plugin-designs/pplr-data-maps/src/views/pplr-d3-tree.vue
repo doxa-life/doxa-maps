@@ -4,7 +4,7 @@ import { usePplrT } from '../composables/usePplrT.js'
 /**
  * pplr-d3-tree.vue — ROP People-Affinity-Cluster sunburst.
  *
- * Per user 2026-05-02: capped at depth-2 (Affinity Bloc + Cluster) instead
+ * Capped at depth-2 (Affinity Bloc + Cluster) instead
  * of including the 13k+ People Group leaves at depth 3. SVG sunbursts top
  * out around 1k arcs before scroll-zoom gets unresponsive; depth 2 is ~309
  * arcs, which keeps wheel-zoom snappy. The PG-level data is still surfaced

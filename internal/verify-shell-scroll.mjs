@@ -5,14 +5,14 @@
  * ★ WHAT IT ASSERTS, and why each assertion exists rather than the obvious one.
  *
  *   The obvious assertion — `scrollHeight > innerHeight` — is a FALSE PASS and was used twice to
- *   close this bug while the Driver could still not scroll. In the cap-5 shell the document measures
+ *   close this bug while the page could still not be scrolled. In the cap-5 shell the document measures
  *   scrollHeight 900 === clientHeight 900 while the composite element measures 3380/769: the
  *   overflow is real, but it belongs to an element with `overflow:visible` that no scroller owns.
  *   Geometry said "tall"; the user's wheel moved nothing.
  *
- *   So this gate asserts the ONLY thing the Driver actually cares about: that a REAL WHEEL GESTURE
+ *   So this gate asserts the ONLY thing that actually matters: that a REAL WHEEL GESTURE
  *   over the map area moves the grid up the screen and brings it into view. It measures the grid's
- *   position before and after, in the SHELL, which is the surface he uses — not the standalone leaf,
+ *   position before and after, in the SHELL, which is the surface in use — not the standalone leaf,
  *   which passed all along and is why the two previous fixes looked green.
  *
  * ★ NEGATIVE-TESTED. Reverting the fix (restoring `.ps-pane`/`.vtl-host` to `position:absolute;
@@ -117,15 +117,15 @@ const run = async () => {
   if (!before) { await browser.close(); fail('.pgg-root is NOT MOUNTED in the shell — different bug, not a scroll bug') }
   if (before.h < 400) { await browser.close(); fail('.pgg-root mounted but collapsed (h=' + before.h + ') — not a scroll bug') }
 
-  // 2. THE DRIVER'S RULING, asserted as stated (2026-09-23, recorded in
+  // 2. THE RULING, asserted as stated (2026-09-23, recorded in
   //    plugin-designs/research-dashboard/src/components/dashboards/DashboardMapPanel.vue:~1188):
-  //    "I can't zoom in and out on the map. The scrolling is causing that to change." →
+  //    the map could not be zoomed because the wheel scrolled the page instead. So now
   //    a wheel OVER the map ZOOMS and moves the page 0 px; a wheel BELOW the map SCROLLS the page.
   //    ★ THIS STEP USED TO ASSERT THE OPPOSITE — that a wheel over the map must scroll the page —
   //    written before the ruling, when the map row filled the whole pane. Once the ruling made the
   //    map a bounded region with zoom always on, that assertion failed on the correct behaviour and
   //    kept this gate red on a product that was right (re-measured 2026-09-25: over-map 0 px, below
-  //    the map 2502 px, grid on screen). dx-shepherd ruled the gate stale; this is the ruling.
+  //    the map 2502 px, grid on screen). The gate was ruled stale; this is the ruling.
   //    Negative control: SHELL_SCROLL_NEGATIVE=1 disables scrollZoom on the map before the gestures
   //    (the pre-ruling behaviour), and the gate must FAIL.
   const MAP = `(() => { ${WALK}
@@ -169,8 +169,8 @@ const run = async () => {
   console.log('  wheel BELOW map (y=' + belowY + ')  : page moved ' + movedBelow + 'px   (ruling: scrolls)')
   console.log('  grid on screen            : ' + onScreen)
 
-  if (Math.abs(movedByMap) > 4) fail('a wheel OVER the map scrolled the page ' + movedByMap + 'px. The Driver ruled (2026-09-23) that a wheel over the map ZOOMS and must not move the page — is scrollZoom disabled on this map?')
-  if (!(zAfter > zBefore + 0.05)) fail('a zoom-in wheel OVER the map left the zoom at ' + zAfter.toFixed(2) + ' (was ' + zBefore.toFixed(2) + '). The Driver ruled that a wheel over the map zooms it.')
+  if (Math.abs(movedByMap) > 4) fail('a wheel OVER the map scrolled the page ' + movedByMap + 'px. The ruling (2026-09-23): a wheel over the map ZOOMS and must not move the page — is scrollZoom disabled on this map?')
+  if (!(zAfter > zBefore + 0.05)) fail('a zoom-in wheel OVER the map left the zoom at ' + zAfter.toFixed(2) + ' (was ' + zBefore.toFixed(2) + '). The ruling: a wheel over the map zooms it.')
   if (movedBelow < 200) fail('a wheel BELOW the map scrolled the page only ' + movedBelow + 'px. The grid is mounted at h=' + before.h + 'px and is UNREACHABLE.')
   if (!onScreen) fail('the page scrolled ' + movedBelow + 'px but the grid top is still at ' + afterLow.top + ' (below the 900px fold) — still not reachable.')
 

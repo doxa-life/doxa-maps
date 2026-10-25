@@ -2,7 +2,7 @@
  "meta": {
   "title": "Gospel access by province — India and China",
   "why": "These two countries hold 47.9% of Doxa's roster (855 + 154 of 2,107). No other country is close; the third is Sudan at 105. A national fill cannot answer \"where would a team go\" for half the map.",
-  "generated": "2026-09-27",
+  "generated": "2026-10-02",
   "provinces_with_groups": 46,
   "provinces_available": 48,
   "groups_assigned": 1009,
@@ -13,7 +13,7 @@
   "near_border_note": "NONE unassigned now, and two rows say why. Jing and Pana fell in no province: measured 8.7 km outside Guangxi and 5.4 km outside Yunnan — across the border, not outside the file, which is what an earlier version of this note wrongly said (both provinces are in it). Sourcing China's complete 34-unit ADM1 moved neither distance: same source geometry, 22 more provinces, none of them theirs — so better data is not the answer and nobody need repeat it. A point within 15 km of exactly ONE province now joins it and carries near_border_km; two provinces within the tolerance leave it unassigned, because a hint between two answers is not one. A single coordinate for a whole people is not precise to 9 km, which is why this is a correction and not a guess.",
   "china_note": "China's ADM1 file carries 12 provinces, not 31+. Measured rather than assumed: 152 of 154 Chinese groups fall inside them and all twelve are used, so the file is cut to the provinces where the unreached peoples are.",
   "ways_in": "Chosen FOR THE PROVINCE where the province can answer: the languages of groups standing in it that already have Scripture AND film, ranked by the people here who already hold them. The column says which basis was used. This replaces a country-level answer that produced a measured absurdity — Arunachal Pradesh, in the far north-east, was offered TELUGU, because the curated bridge table is keyed by country and a curated bridge outranks a computed one. A province with no tier-2 language of its own still falls back to the country answer, and ways_in_basis says so rather than hiding it. It is a NEIGHBOUR, not a recommendation: whether a group actually speaks it is a question for someone on the ground.",
-  "approximate": "A province is assigned by point-in-polygon on the group's coordinate, and that coordinate marks where a PEOPLE is found, not a settlement — 108 groups across the roster even share a coordinate with another group. Near a border the point can fall on the wrong side. Every row is flagged approximate and the unassigned are counted, never dropped. No surface may present a province as a fact about a group."
+  "approximate": "A province is assigned by point-in-polygon on the group's coordinate, and that coordinate marks a PEOPLE group, not a settlement; its position is approximate, and 108 groups across the roster even share a coordinate with another group. Near a border the point can fall on the wrong side. Every row is flagged approximate and the unassigned are counted, never dropped. No surface may present a province as a fact about a group."
  },
  "columns": [
   {

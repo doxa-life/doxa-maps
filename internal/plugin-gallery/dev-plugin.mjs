@@ -84,9 +84,9 @@ export function galleryModel(reg) {
   // THIS USED TO BE `'/#/' + parts.join('/')` — a hash route into the gallery PAGE. That was
   // coherent while `/` WAS the gallery, but the studio nests map profiles in a lazy iframe pointed
   // at exactly this URL (plugin-studio.vue:25, mode 'iframe'), so every map tab was iframing the
-  // gallery. The Driver saw the staging blurb — "One shared core, one build, many paste-anywhere
-  // maps..." — rendered INSIDE each plugin pane, and reported that the studio "is still loading
-  // HTMLs for each plugin with this text." It was: the gallery, recursively, once per map tab.
+  // gallery. The staging blurb — "One shared core, one build, many paste-anywhere maps..." —
+  // rendered INSIDE each plugin pane, and the studio was reported as still loading an HTML page
+  // with that text for each plugin. It was: the gallery, recursively, once per map tab.
   //
   // `/__leaf/<bundle>/<profile>[/<instance>]` instead serves a minimal page that mounts ONE element
   // and nothing else — the dev equivalent of the built tree's <bundle>/<profile>/index.html, which
@@ -134,7 +134,7 @@ export function galleryModel(reg) {
     })
     // COMPOSITION EDGES, the same source and shape generate-tree publishes: the union of every
     // profile's <profile>.meta.json `composes`, at bundle level, omitted when none. This model used
-    // to drop them, so under the dev server — which is what the Driver's laptop runs — the studio's
+    // to drop them, so under the dev server — which is what a laptop runs — the studio's
     // Composed-of panel and composition trees were silently empty for every composite.
     const composes = [...new Set([...presets.keys()].flatMap((profile) => readComposes(b.bundle, profile)))]
     return { bundle: b.bundle, scriptUrl, integrity: '', elements: [b.tag], stage: bundleStage(profiles), ...(bundleVisibility(profiles) === 'public' ? { visibility: 'public' } : {}), ...(composes.length ? { composes } : {}), profiles }
@@ -145,15 +145,27 @@ export function galleryModel(reg) {
   }
 }
 
+// ── ONE PART OF A LEAF URL ───────────────────────────────────────────────────────────────────
+// /__leaf/<bundle>/<profile>[/<instance>] parts are written INTO the leaf page: its <title> and the
+// element's profile-config='…' attribute. Refusing only `..` and `/` let a quote or a tag through, so a
+// crafted link broke out of the attribute on a publicly reachable dev server. Every bundle folder,
+// profile id and instance id in the tree has this shape (the address keys' own pattern,
+// library/composables/useViewAddress.js), so anything else is refused before it reaches either sink;
+// it also rules out `..` and `/`. check:dev-leaf-escape proves both directions.
+export const LEAF_PART = /^[A-Za-z0-9][\w-]{0,63}$/
+
+// For an HTML text node or a quoted attribute value.
+export const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+
 // ── THE PRODUCTION EMBED URL, ANSWERED BY THE DEV SERVER ─────────────────────────────────────
 // The manifest advertises, and a person copies, tree-relative embed URLs of the shape
 // `<bundle>/<profile>/index.html` and `<bundle>/<profile>/<instance>/index.html` — served in
 // production out of public/<treeName>/. The dev server had NO route for that shape; it served its
 // leaf stand-in at `/__leaf/<bundle>/<profile>[/<instance>]` only.
 //
-// DRIVER-REPORTED 2026-09-23: he copied an embed URL and opened it against his dev server —
+// REPORTED 2026-09-23: an embed URL, copied and opened against a dev server —
 //     http://localhost:5174/doxa-simple-map/doxa-simple-map/prayer/index.html
-// — and it "did not work". The leaf is real (that exact path serves 200 from the built tree) and
+// — did not work. The leaf is real (that exact path serves 200 from the built tree) and
 // the embed is healthy (it mounts at 700px in a real iframe). The dev server simply had no route.
 //
 // ★ AND IT FAILED SILENTLY, which is the part that costs hours. With no route, Vite's SPA fallback
@@ -171,7 +183,7 @@ export function galleryModel(reg) {
 //   /doxa-simple-map/doxa-simple-map/prayer/index.html              bare, tree-relative — what the
 //                                                                   manifest's `./<b>/<p>/…` snippet
 //                                                                   becomes when pasted at the root
-//                                                                   (this is the URL the Driver used)
+//                                                                   (this is the URL that was used)
 //   /doxa-maps/doxa-simple-map/doxa-simple-map/prayer/index.html    prefixed — the built tree's own
 //                                                                   path under public/<treeName>/
 // `treeName` comes from the build config (`name`, default 'doxa-maps'), never hardcoded, so renaming
@@ -195,6 +207,16 @@ export function leafRewrite(path, treeName = TREE_NAME) {
     if (!d || d === '.' || d === '..' || d.includes('/') || d.includes('\\')) return ''
   }
   return '/__leaf/' + segs.join('/')
+}
+
+// urlOwner 'app' (library/composables/useViewAddress.js) for a dev page that is OURS, the rule generate-tree bakes
+// into the built leaf: its shell writes ?tab=, so a clicked tab survives a reload and a copied link opens it. A
+// FRAMED page drops it: a partner page may iframe a leaf (the iframe embed), and a history push from an iframe
+// lands in the top page's Back stack. (Plugin Studio mounts its rows directly; its panes are unowned by paneConfig.) Write the element unowned and put this classic script right after it; it runs
+// before the deferred module script upgrades the element. `<` is escaped: profile/instance come from the URL.
+export function ownIfTopScript(cfg = {}) {
+  const owned = JSON.stringify(JSON.stringify({ ...cfg, urlOwner: 'app' })).replace(/</g, '\\u003c')
+  return `<script>try{if(window.self===window.top)document.currentScript.previousElementSibling.setAttribute('profile-config',${owned})}catch(e){}</script>`
 }
 
 export function autoSpaDevPlugin(token = '') {
@@ -337,14 +359,23 @@ export function autoSpaDevPlugin(token = '') {
             try { return decodeURIComponent(s) } catch { return '' }
           })
           const [bundle, profile, instance] = parts
-          // Path traversal guard: these land in a filesystem-ish URL below.
-          if (!bundle || !profile || parts.some(s => !s || s.includes('..') || s.includes('/'))) {
+          // These land in a filesystem-ish URL and in the page's HTML below: LEAF_PART shapes only.
+          if (!bundle || !profile || parts.some(s => !LEAF_PART.test(s))) {
             res.statusCode = 400; return res.end('bad leaf path')
           }
           let reg
           try { reg = discoverSpaRegistry() } catch (e) { return json(res, { error: String(e) }, 500) }
           const entry = reg.find(b => b.bundle === bundle)
-          if (!entry) return json(res, { error: 'unknown bundle', bundle }, 404)
+          if (!entry) {
+            // A plugin folder's own /plugin-designs/<x>/index.html arrives here as bundle 'plugin-designs'
+            // (leafRewrite reads any <a>/<b>/index.html as <bundle>/<profile>). A fresh reader followed the
+            // README's "an index.html for previewing it" to exactly that URL, so name the page that exists.
+            const named = reg.find(b => b.bundle === profile)
+            const hint = named
+              ? `this plugin's own page is /__leaf/${named.bundle}/${named.items?.[0]?.profile || named.bundle}`
+              : "a plugin's own page is /__leaf/<plugin>/<profile>; every plugin is listed at /__plugin-gallery/manifest.json"
+            return json(res, { error: 'unknown bundle', bundle, hint }, 404)
+          }
           const tag = entry.tag
           // One config read for BOTH globals, so the token and the API base can never disagree about
           // which config they came from.
@@ -356,7 +387,8 @@ export function autoSpaDevPlugin(token = '') {
           // renders the SAME view here as in production rather than the bundle's default.
           // assetsBase too, as the built leaf's BASE_CONFIG carries it ("../../assets" there; root-absolute
           // here, because a /__leaf/ URL's depth differs from the tree's and the pool is served at /assets).
-          const pc = JSON.stringify(instance ? { profile, instanceId: instance, assetsBase: '/assets' } : { profile, assetsBase: '/assets' })
+          const leafPc = instance ? { profile, instanceId: instance, assetsBase: '/assets' } : { profile, assetsBase: '/assets' }
+          const pc = JSON.stringify(leafPc)
           // The composition tier of THIS profile, read from the same discovery the gallery uses.
           // `nested-elements-mfe` (cap-4) is the StackLayout scroll-stack tier — see the style note
           // below. An unknown profile falls through to the fixed-viewport leaf, the safe default.
@@ -367,7 +399,7 @@ export function autoSpaDevPlugin(token = '') {
           res.setHeader('Cache-Control', 'no-cache')
           return res.end([
             '<!DOCTYPE html>',
-            `<html lang="en"><head><meta charset="UTF-8" /><title>${bundle} · ${profile}</title>`,
+            `<html lang="en"><head><meta charset="UTF-8" /><title>${escHtml(bundle)} · ${escHtml(profile)}</title>`,
             '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
             '<link rel="icon" href="data:,">',
             leafTok ? `<script>window.MAP_TOKEN=${JSON.stringify(leafTok)};</script>` : '',
@@ -385,8 +417,8 @@ export function autoSpaDevPlugin(token = '') {
             // The BUILT tree makes exactly this distinction (internal/generate-tree.mjs, `scrollPage`)
             // and this dev leaf did NOT — it served the fixed-viewport style to EVERY bundle. That is
             // the whole of BUG-CANNOT-SCROLL-DOWN-TO-THE-GRID-UNDER-THE-DASHBOARD: the three-file fix
-            // for BUG-DASHBOARD-CANT-SCROLL-DOWN landed in the built tree only, so the dev URL the
-            // Driver actually tests on was never covered and still traps the composite.
+            // for BUG-DASHBOARD-CANT-SCROLL-DOWN landed in the built tree only, so the dev URL that
+            // actually gets tested was never covered and still traps the composite.
             //
             // WHY `height:100%` ON BODY IS THE TRAP, and why scrollHeight LIES about it. A definite
             // height + `overflow:visible` lets content SPILL (so scrollHeight inflates — measured 3531
@@ -408,7 +440,10 @@ export function autoSpaDevPlugin(token = '') {
                 // depends on no ancestor and stays a floor, so the page can still grow past it.
                 `${tag}{display:block;width:100%;min-height:100dvh;}</style>`
               : '<style>html,body{margin:0;padding:0;height:100%;background:#f3f3f1;}' +
-                `${tag}{display:block;width:100%;height:100vh;}</style>`,
+                // 100svh (100% as the fallback), not 100vh: a phone's 100vh is taller than the view while the address
+                // bar shows, so the page scrolls by the bar and the app seems to resize; --profile-min-h:0 opts out of
+                // ProfileLoader's 100dvh floor. The same rule as generate-tree's fixed-viewport leaf.
+                `${tag}{display:block;width:100%;height:100%;height:100svh;--profile-min-h:0;}</style>`,
             '</head><body>',
             // tree-base ON THE LEAF TOO — cap-5 shells nested here fetch a manifest of their own.
             // doxa-maps-spa (like plugin-studio) discovers its tabs from the tree's manifest.json and
@@ -418,20 +453,20 @@ export function autoSpaDevPlugin(token = '') {
             // live 19-bundle tree. Passing the base makes a nested shell see exactly what the top
             // level sees. Elements that ignore tree-base simply drop an unknown attribute.
             `<${tag} tree-base="/__plugin-gallery" profile-config='${pc}'></${tag}>`,
+            ownIfTopScript(leafPc),
             `<script type="module" src="/plugin-designs/${bundle}/index.js"></script>`,
             '</body></html>',
           ].filter(Boolean).join('\n'))
         }
         // ── `/` MOUNTS THE PLUGIN STUDIO, NOT THE STAGING GALLERY ────────────────────────────
-        // DRIVER DIRECTION 2026-09-22: "when I run dev server on the dx maps it should just open up
-        // a plugin studio that gives you access to all the plugins in one place, without a lot of
-        // text garb that takes up so much space" — and, separately, "we do not need the extra
-        // generated staging environment because the plugin studio is replacing these index html."
+        // THE DIRECTION (2026-09-22): the dev server opens a Plugin Studio that gives access to all
+        // the plugins in one place, without text that takes up space; and the generated staging
+        // pages are no longer needed, because the Plugin Studio replaces those index.html files.
         //
         // WHY THIS ROUTE HAD TO EXIST AT ALL. The dev server previously served ONLY the gallery at
         // `/`, and had no route for a bundle leaf — so `bun run dev` could not show the cap-5 studio
-        // by any URL. The Driver opened `/`, saw plugins wrapped in per-bundle frames behind a wall
-        // of explanatory prose, and reasonably concluded "none of the elements are working". They
+        // by any URL. Opening `/` showed plugins wrapped in per-bundle frames behind a wall of
+        // explanatory prose, which reasonably read as none of the elements working. They
         // were working; the page was a CHOOSER presenting itself as the product.
         //
         // WHY MOUNT THE TAG RATHER THAN REDIRECT TO A LEAF: plugin-studio is a real cap-5
@@ -475,7 +510,7 @@ export function autoSpaDevPlugin(token = '') {
             // that takes up so much space" is a layout requirement, so the host page contributes
             // ZERO text — every pixel belongs to the studio element.
             '<style>html,body{margin:0;padding:0;height:100%;background:#f3f3f1;}',
-            'plugin-studio{display:block;width:100%;height:100vh;}</style>',
+            'plugin-studio{display:block;width:100%;height:100%;height:100svh;--profile-min-h:0;}</style>',
             '</head><body>',
             // tree-base IS REQUIRED IN DEV — without it the studio mounts EMPTY.
             // The studio builds its tab list at runtime by fetching `<base>manifest.json`, and with
@@ -488,6 +523,7 @@ export function autoSpaDevPlugin(token = '') {
             // manifest-shaped model the built tree bakes (19 bundles / 30 profiles), so pointing the
             // studio at it gives dev the same tab list production has.
             '<plugin-studio tree-base="/__plugin-gallery"></plugin-studio>',
+            ownIfTopScript(),
             '<script type="module" src="/plugin-designs/plugin-studio/index.js"></script>',
             '</body></html>',
           ].filter(Boolean).join('\n'))

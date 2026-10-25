@@ -23,5 +23,12 @@
     "dialect": "बोली",
     "religionKind": "धर्म"
   },
-  "upg100Placeholder": "जनसमूह, UPG-100 सूची या क्षेत्र खोजें…"
+  "upg100Placeholder": "जनसमूह, UPG100 सूची या क्षेत्र खोजें…",
+  "tabPlaceholder": {
+    "languageFamilies": "भाषा परिवार, भाषा, बोली/रूप खोजें",
+    "affinityBlocks": "समानता समूह, क्लस्टर, जनसमूह खोजें",
+    "regions": "क्षेत्र, देश, जनसमूह खोजें",
+    "religion": "धर्म, जनसमूह खोजें"
+  },
+  "placeholderRegions": "क्षेत्र, देश या जनसमूह खोजें"
 }

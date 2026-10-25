@@ -34,6 +34,7 @@
 import { ref, readonly } from 'vue';
 import { equalHeightLatBands } from '../../maps/mercator-slice.js';
 import { computeLayout } from './usePosterLayout.js';
+import { attributionTextFromMap } from '../../maps/map-attribution.js';
 import { engineFor } from '../useMapProvider.js';
 
 const MAX_SINGLE_CANVAS = 4096;       // WebGL safe ceiling for most hardware
@@ -108,7 +109,7 @@ export function useMapPoster(getSourceMap) {
       const renderPath = decidePath(spec.renderPath || 'auto', px);
 
       if (renderPath === 'single' && (px.width > MAX_SINGLE_CANVAS || px.height > MAX_SINGLE_CANVAS)) {
-        // user explicitly requested single but exceeded WebGL ceiling — auto-switch
+        // the caller asked for single but it exceeds the WebGL ceiling — auto-switch
         // eslint-disable-next-line no-console
         console.warn(
           `[useMapPoster] requested single-canvas ${px.width}×${px.height}px > ${MAX_SINGLE_CANVAS}; ` +
@@ -121,12 +122,52 @@ export function useMapPoster(getSourceMap) {
         ? 'stitch'
         : renderPath;
 
+      // ★ THE POSTER LAYOUT IS OPT-IN, AND THAT IS A RULING, NOT A PREFERENCE.
+      // usePosterLayout has always computed a real layout — map narrowed by the legend column, inset
+      // by the margins, the title strip and the footer strip — and nothing here ever used it. The map
+      // was rastered at FULL PAGE size and the title, legend and footer were composited ON TOP, so the
+      // legend lay over the map it describes and there were no bands. PosterPreview.vue honours
+      // layout.map, which is why the on-screen preview looked right and only the exported file was
+      // wrong; a preview is not evidence for an export.
+      //
+      // WHY OPT-IN RATHER THAN SIMPLY FIXED (decided after the UPG-100 check): country-posters
+      // embeds THIS renderer's output as a full-sheet <img> inside its own packet page, under the
+      // packet's own title. Turning the chrome on by default would print a second header and footer
+      // inside their page. UPG-100's packet does not call this renderer at all, so it is unaffected.
+      // So a caller asks for the composed sheet with spec.layout === 'poster'; every existing caller,
+      // which sets no layout, keeps today's full-bleed behaviour BYTE FOR BYTE.
+      const posterLayout = spec.layout === 'poster';
+      const layout = posterLayout ? computeLayout(spec, px) : null;
+      // A page too small for its own margins, bands and legend column cannot hold a map. Falling back
+      // to full-bleed is a poster rather than nothing, but silence here would be the original bug.
+      const fits = !!layout && layout.map.w > 0 && layout.map.h > 0;
+      if (posterLayout && !fits) {
+        // eslint-disable-next-line no-console
+        console.warn('[useMapPoster] layout:"poster" asked for a map box of ' +
+          (layout ? layout.map.w + '×' + layout.map.h : '0×0') + 'px; the margins, title, footer and ' +
+          'legend column leave no room on this sheet. Falling back to a full-bleed map.');
+      }
+      const mapPx = fits ? { width: layout.map.w, height: layout.map.h, dpi: px.dpi } : px;
+
       const baseRaster = (finalPath === 'single')
-        ? await _renderSingleCanvas(sourceMap, px, signal)
-        : await _renderTileStitch(sourceMap, px, signal);
+        ? await _renderSingleCanvas(sourceMap, mapPx, signal)
+        : await _renderTileStitch(sourceMap, mapPx, signal);
 
       _setProgress('compose', 0, 1, 'compositing overlay');
-      const composed = await _composeOverlay(baseRaster, spec, px);
+      // ★ THE FOOTER CREDITS WHOEVER ACTUALLY SERVED THE TILES. posterDefaults ships
+      // '© Mapbox © OpenStreetMap', which under the fleet's MapLibre default credits a company that
+      // served nothing and omits the three parties whose licences do apply. Read from the map rather
+      // than from a constant; the spec's value stays as the fallback, because an EMPTY attribution is
+      // the one outcome a licence never allows. The caller's spec is copied, not mutated — it belongs
+      // to whoever passed it in.
+      const credit = attributionTextFromMap(sourceMap);
+      const specForOverlay = credit
+        ? { ...spec, slots: { ...spec.slots, footer: { ...(spec.slots?.footer || {}), attribution: credit } } }
+        : spec;
+      // Paper first, then the map into the box the layout reserved. White rather than transparent: a
+      // PNG with holes prints as whatever is under it, and the slots draw panels expecting paper.
+      const sheet = fits ? _placeMapOnSheet(baseRaster, layout, px) : baseRaster;
+      const composed = await _composeOverlay(sheet, specForOverlay, px);
 
       _setProgress('encode', 0, 1, `encoding ${format.toUpperCase()}`);
       const blob = (format === 'pdf')
@@ -284,6 +325,18 @@ export function useMapPoster(getSourceMap) {
       if (container?.parentNode) container.parentNode.removeChild(container);
       restoreDpr();
     }
+  }
+
+  // Draw the map onto a full sheet at the position the layout reserved for it.
+  function _placeMapOnSheet(mapCanvas, layout, px) {
+    const sheet = document.createElement('canvas');
+    sheet.width = px.width;
+    sheet.height = px.height;
+    const ctx = sheet.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, px.width, px.height);
+    ctx.drawImage(mapCanvas, layout.map.x, layout.map.y, layout.map.w, layout.map.h);
+    return sheet;
   }
 
   // ─── Overlay compositing ──────────────────────────────────────────────

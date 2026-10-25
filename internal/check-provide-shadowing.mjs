@@ -3,7 +3,7 @@
  * check-provide-shadowing — a nested custom element keeps its OWN pinia, i18n and profileModules, and
  * says so deliberately instead of tripping Vue's overwrite warning 24 times.
  *
- * THE DEFECT (Driver's console, 2026-09-28): 24 Vue warnings —
+ * THE DEFECT (seen in a live console, 2026-09-28): 24 Vue warnings —
  *   'App already provides property with key "profileModules" / "appI18n" / "Symbol(pinia)" inherited
  *    from its parent element. It will be overwritten with the new value.'
  * eight of each, from a composite mounting child custom elements.

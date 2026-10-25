@@ -39,7 +39,7 @@ import FilterDropdown from '@map/components/search/FilterDropdown.vue'
 // several I had written from the markup instead: the rop1 filter is 'People Group' not
 // 'Affinity Bloc', the search placeholder is the full
 // 'Search names, country/continent, religions...', and prayer_coverage reads 'Intercessors'.
-import { useRegionsI18n } from './useRegionsI18n.js'
+import { useRegionsI18n } from '@map/i18n/useRegionsI18n.js'
 // THEIR SEARCH, via the repo's Fuse-compatible shim. fuzzy.js exposes the surface their UupgsList
 // uses — keys, threshold, minMatchCharLength, matches[].indices — and its own header says those
 // indices exist to drive the <span class="search-highlight"> wrapping. So the wiring is a port.
@@ -213,9 +213,9 @@ const preFiltered = computed(() => rows.value.filter((p) => {
     // and `people_praying` is NOT in the field list they request — they fetch
     // people_committed. So the field is always undefined and the filter matches nothing.
     // MEASURED on their live /regions/india: 855 rows before, 0 after clicking Engaged.
-    // The scope ruling is "it exists on DX-life and must MATCH", so this reproduces their
+    // The scope rule is that what exists on DX Life must match it here, so this reproduces their
     // result rather than quietly correcting it. Reading people_committed instead would make
-    // us DIFFER. Flagged for the Driver: the upstream fix is one word, in their file.
+    // us DIFFER. Raised upstream as a product question: the fix is one word, in their file.
     if (k === 'engaged') { if (!((p.people_praying ?? 0) > 0)) return false; continue }
     // Their `exact` branch is `filtered = filtered` — a no-op here. It only changes the FUSE
     // threshold once a search term exists, which is where we already read active.exact.
@@ -349,7 +349,7 @@ useShadowStyles(
   '  width:1em; height:1em; fill:none; stroke:var(--dx-muted); stroke-width:2; pointer-events:none; }' +
   // .filters__toggle — centred, chevron rotates when expanded
   // ★ THEIRS IS .button.compact.link, NOT A BARE BUTTON, and ours was missing four of its
-  // declarations. rega measured the gap on /regions/ethiopia: ours 25.44px tall against their 37.63.
+  // declarations. Measured on /regions/ethiopia: ours 25.44px tall against their 37.63.
   // Their numbers reconcile exactly once the right rules are applied -- _buttons.scss gives
   // .button { border:1px solid var(--button-border-color, transparent); line-height:
   // var(--line-height-none); border-radius:100px } and .button.compact { padding: var(--spacing-xs)
@@ -359,7 +359,7 @@ useShadowStyles(
   // base line-height 1.5 through as 23.44. All four are portable, so all four are ported.
   // THE ONE SUBSTITUTION, documented rather than silently skipped: their .button also sets
   // font-family: var(--font-family-buttons), which resolves to Brandon Grotesque. That face is
-  // commercial and BLOCKED ON THE DRIVER, so this button keeps our stand-in and the family remains
+  // commercial and BLOCKED ON A LICENSING DECISION, so this button keeps our stand-in and the family remains
   // the one measured difference here. Everything geometric now matches.
   '.filters__toggle{ background:none; cursor:pointer; font:inherit; font-size:var(--font-size-sm);' +
   // ★ LITERAL 10px, NOT var(--spacing-xs) -- I used the token and it DOES NOT EXIST.
@@ -367,7 +367,7 @@ useShadowStyles(
   // --spacing-sm (13.3px) are deliberately NOT tokenised: '10px' is far too common a literal in this
   // CSS to substitute safely, and a wrong substitution here is worse than a magic number because it
   // reads as deliberate." I substituted anyway.
-  // WHAT AN UNDEFINED var() COSTS, measured by rega: it invalidates the WHOLE declaration at compute
+  // WHAT AN UNDEFINED var() COSTS, measured: it invalidates the WHOLE declaration at compute
   // time, so padding fell to 0 on BOTH axes and the button went 25.44 -> 17.63 -- FURTHER from their
   // 37.63 than before I touched it. The border, radius and line-height all landed; only this line
   // failed, and it failed silently. Their computed value is "10px 41.6158px", so with the literal:
@@ -462,7 +462,7 @@ useShadowStyles(
   '  border-radius:100px; border:1px solid transparent; line-height:1; text-decoration:none;' +
   '  text-transform:uppercase; font-size:var(--font-size-md);' +
   // THEIR FAMILY IS "Brandon Grotesque", WHICH IS COMMERCIAL — the one substitution RULE 1
-  // allows, and the Driver ruled it must not ship in a public giveaway (2026-09-24).
+  // allows, and a commercial face must not ship in a public giveaway.
   // Figtree chosen by MEASUREMENT, not by name: on live doxa.life their button renders
   // 'FULL PROFILE' at 128.00px in Brandon at 500/19.5312px. Of 19 libre grotesques measured
   // the same way, Figtree is 126 (-2.00) — closest — against Inter 134, Archivo 135,

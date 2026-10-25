@@ -249,7 +249,7 @@ for (const url of urls) {
       // sized, GL is live, tiles load, attribution renders — and the pins are GONE, because an
       // unstyled .mapboxgl-canvas-container computes position:STATIC instead of ABSOLUTE and every
       // absolutely-positioned child loses its anchor. That is a basemap with none of our data on it,
-      // which is exactly what the Driver reported while this gate reported PASS.
+      // which is exactly what was reported while this gate reported PASS.
       //
       // MEASURED 2026-09-24 on upg-100-list: mapboxgl.version 3.24.0 running against a v3.3.0
       // stylesheet injected into the shadow root, canvas-container position:static, 0 markers.

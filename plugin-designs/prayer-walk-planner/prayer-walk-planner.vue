@@ -12,8 +12,8 @@
  * MapLibre/OpenFreeMap VECTOR basemap instead, already proven keyless elsewhere in
  * this repo — library/styles/registry.js).
  *
- * ── CLIENT-SIDE API (the Driver's explicit ask: "if you build a client-side API into
- * the prayer walk planner, then you can connect an AGENT to it") ──────────────────────
+ * ── CLIENT-SIDE API (why it exists: with a client-side API, an AGENT can be connected to
+ * the prayer walk planner) ──────────────────────
  *
  * Two ways to reach it, both backed by the SAME reactive state:
  *
@@ -51,16 +51,18 @@ import { labelFont } from '@map/maps/label-font.js'
 import { ref, shallowRef, reactive, computed, onMounted, onBeforeUnmount, nextTick, inject, watch } from 'vue'
 import { useMapInstance } from '@map/composables/useMapInstance.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
-import { openPrintFrame } from '@map/composables/printInPlace.js'
+import { printDocument } from '@map/composables/printInPlace.js'
+import { tStatic } from '@map/i18n/index.js'
 import ShareButton from '@map/components/map-controls/ShareButton.vue'
 import FullscreenButton from '@map/components/map-controls/FullscreenButton.vue'
+import HelpButton from '@map/components/map-controls/HelpButton.vue'
 import { resolveNamedStyle } from '@map/styles/registry.js'
 import { ensureRtlTextPlugin } from '@map/maps/rtl-text.js'
 import { localizeBasemapLabels } from '@map/maps/localize-labels.js'
 import { translate, LOCALES } from './src/strings.js'
 
 // ─── The host's attributes stay on the host ───────────────────────────────────
-// ★ THE "VERY TINY MAP" (Driver; measured 2026-09-25: 747x76 in the Research Gallery at 1280x800,
+// ★ THE TINY MAP (measured 2026-09-25: 747x76 in the Research Gallery at 1280x800,
 // and 390x0 on a phone, while the standalone leaf filled 1003x739). This SFC is mounted AS the
 // custom-element root (index.js — that is what puts the client API on the element), so Vue's
 // attribute fallthrough copied every non-prop attribute of <prayer-walk-planner> onto the root
@@ -105,6 +107,14 @@ const uiLocale = computed(() => {
 const uiDir = computed(() => (uiLocale.value === 'ar' ? 'rtl' : 'ltr'))
 const tr = (key, params) => translate(uiLocale.value, key, params)
 const moreOpen = ref(false)   // the phone "More" menu
+// PHONE: the zone list folds behind a ☰ button (test round 2 #8) and opens as a drawer over the
+// map; on a wide screen it is the sidebar as before. It used to be simply hidden on a phone, so a
+// walker could not see, select, rename or delete a zone there.
+const listOpen = ref(false)
+const zonesBtn = ref(null), zonesClose = ref(null)
+function openZones() { listOpen.value = true; nextTick(() => zonesClose.value?.focus?.()) }
+function closeZones() { listOpen.value = false; nextTick(() => zonesBtn.value?.focus?.()) }
+function onZonesKey(e) { if (e.key === 'Escape' && listOpen.value) { e.preventDefault(); e.stopPropagation(); closeZones() } }
 
 // The shared controls (Share, Full screen) label themselves through the vue-i18n instance index.js
 // installs, which reads only the PAGE language. Inside the Research Gallery the language arrives in
@@ -452,7 +462,7 @@ async function printInternal(ids) {
   const esc = (s) => String(s == null ? '' : s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
 
   // ── PER-ZONE PRINT MAP: a PAGE-SHAPED, PRINT-RESOLUTION render of each zone ──────────────
-  // The Driver: "the printed map is a ~10px sliver". Cause, measured 2026-09-25: print used to
+  // The printed map was a ~10px sliver. Cause, measured 2026-09-25: print used to
   // fitBounds the LIVE map and snapshot its canvas, so the printed image was exactly the size
   // and shape of whatever the live map happened to be on screen: 747x76 inside the Research
   // Gallery, which is the sliver. Even full-page it was screen-resolution and screen-shaped.
@@ -491,7 +501,8 @@ async function printInternal(ids) {
   }).join('')
 
   const title = targets.length === 1 ? tr('docTitleOne') : tr('docTitleMany', { n: targets.length })
-  const w = openPrintFrame(
+  // printDocument: the in-place frame on desktop, the page itself on a phone (printInPlace.js says why).
+  const how = await printDocument(
     '<!DOCTYPE html><html lang="' + uiLocale.value + '" dir="' + uiDir.value + '"><head><meta charset="utf-8"><title>' + esc(title) + '</title>' +
     '<style>' +
       // letter portrait explicitly -- size:auto lets the browser pick landscape (the same
@@ -514,9 +525,9 @@ async function printInternal(ids) {
       '.points{font-size:9.5px;line-height:1.5;color:#6d766e;margin:4px 0 0}' +
       '.footer{margin-top:4px;font-size:9px;color:#6d766e;border-top:1px solid #d1d4cd;padding-top:4px}' +
     '</style></head><body>' + pages + '</body></html>',
-    { autoprint: true }
+    { labels: { print: tStatic('wall.hud.printNow') || 'Print', close: tStatic('buttons.close') || 'Close' } },
   )
-  if (!w) {
+  if (how === 'blocked') {
     statusMsg.value = tr('printUnavailable')
     return { opened: false, count: 0 }
   }
@@ -641,9 +652,10 @@ useShadowStyles(
   '.pwp-body{position:relative;flex:1;min-height:0;display:flex}' +
   '.pwp-map{position:relative;flex:1;min-width:0}' +
   '.pwp-map-el{position:absolute;inset:0}' +
-  '.pwp-map-controls{position:absolute;top:10px;right:10px;z-index:4}' +
+  '.pwp-map-controls{position:absolute;top:10px;right:10px;z-index:4;display:flex;flex-direction:column;gap:8px}' +
   '.pwp[dir=rtl] .pwp-map-controls{right:auto;left:10px}' +
-  '.pwp-list{width:260px;flex-shrink:0;overflow-y:auto;background:#fff;border-left:1px solid #d1d4cd;padding:8px}' +
+  '.pwp-list{width:260px;flex-shrink:0;overflow-y:auto;background:#fff;border-inline-start:1px solid #d1d4cd;padding:8px}' +
+  '.pwp-zones-btn,.pwp-list-head,.pwp-backdrop{display:none}' +
   '.pwp-list-empty{padding:16px 10px;font-size:12px;color:#6d766e}' +
   '.pwp-item{display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;margin-bottom:4px;' +
     'border:1px solid transparent;cursor:pointer}' +
@@ -653,7 +665,18 @@ useShadowStyles(
   '.pwp-item-title-input{flex:1;font-size:13px;font-weight:600;padding:2px 4px;border:1px solid #92b195;border-radius:4px}' +
   '.pwp-item-del{border:none;background:transparent;color:#8a3b3b;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px}' +
   '.pwp-item-del:hover{background:rgba(138,59,59,.12)}' +
-  '@media (max-width:640px){.pwp-list{display:none}}' +
+  // PHONE: the list is a drawer from the reading-end edge, over the map, behind the ☰ Zones button.
+  '@media (max-width:640px){' +
+    '.pwp-list{display:none;position:absolute;inset-block:0;inset-inline-end:0;width:min(300px,86%);z-index:7;' +
+      'box-shadow:0 0 24px rgba(0,0,0,.22);border-inline-start:none}' +
+    '.pwp-list.is-open{display:block}' +
+    '.pwp-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 8px;' +
+      'margin-bottom:6px;border-bottom:1px solid #eceee9;font-size:13px;font-weight:700}' +
+    '.pwp-list-x{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#6d766e;' +
+      'min-width:36px;min-height:36px;border-radius:6px}' +
+    '.pwp-backdrop{display:block;position:absolute;inset:0;z-index:6;background:rgba(20,28,22,.28)}' +
+    '.pwp-zones-btn{display:inline-flex;order:-3}' +
+  '}' +
   // PHONE: ONE ROW, SCROLLED SIDEWAYS, instead of a toolbar that wrapped to three rows (139px of a
   // 844px screen, measured 2026-09-25) above the map a walker is trying to read. Nothing is clipped:
   // the row scrolls, labels never truncate. The two actions a walk needs, Draw and Print, lead the
@@ -678,6 +701,9 @@ useShadowStyles(
 <template>
   <div class="pwp" :dir="uiDir" :lang="uiLocale">
     <div class="pwp-toolbar">
+      <!-- PHONE: the zone list's hamburger (hidden on a wide screen, where the list is a sidebar). -->
+      <button ref="zonesBtn" type="button" class="pwp-btn pwp-zones-btn" :aria-expanded="listOpen ? 'true' : 'false'"
+        aria-controls="pwp-zone-list" @click="listOpen ? closeZones() : openZones()">☰ {{ tr('zones', { n: polygons.length }) }}</button>
       <button type="button" class="pwp-btn pwp-draw" :class="{ 'is-active': drawing }"
         :aria-pressed="drawing" @click="onDrawClick">
         {{ drawing ? tr('drawing') : tr('draw') }}
@@ -687,7 +713,7 @@ useShadowStyles(
         {{ tr('finish', { n: drawPoints.length }) }}
       </button>
       <!-- PHONE: these three collapse behind "More" (they ran past x=390 in a sideways row with no
-           scroll cue, rega ka3). Desktop: the toggle is hidden and they sit inline as before. -->
+           scroll cue, measured ka3). Desktop: the toggle is hidden and they sit inline as before. -->
       <button type="button" class="pwp-btn pwp-more-btn" :aria-expanded="moreOpen ? 'true' : 'false'" @click="moreOpen = !moreOpen">⋯ {{ tr('more') }}</button>
       <div class="pwp-listops" :class="{ 'is-open': moreOpen }" @click="moreOpen = false">
         <button type="button" class="pwp-btn is-danger" :disabled="selectedCount === 0"
@@ -732,9 +758,15 @@ useShadowStyles(
              FullscreenButton requests fullscreen on this element's custom-element host, and falls
              back to a CSS pseudo-fullscreen where the API does not exist (iOS Safari). A planner
              embedded in a partner page or the gallery can take the whole screen for drawing. -->
-        <div class="pwp-map-controls"><FullscreenButton :map-container="mapContainer" /></div>
+        <!-- The "?" asks the host for this map's help (doxa:help); it shows only where a host answers. -->
+        <div class="pwp-map-controls"><FullscreenButton :map-container="mapContainer" /><HelpButton hosted /></div>
       </div>
-      <div class="pwp-list">
+      <div v-if="listOpen" class="pwp-backdrop" @click="closeZones"></div>
+      <div id="pwp-zone-list" class="pwp-list" :class="{ 'is-open': listOpen }" @keydown="onZonesKey">
+        <div class="pwp-list-head">
+          <span>{{ tr('zones', { n: polygons.length }) }}</span>
+          <button ref="zonesClose" type="button" class="pwp-list-x" :aria-label="tr('closeZones')" @click="closeZones">×</button>
+        </div>
         <div v-if="polygons.length === 0" class="pwp-list-empty">
           {{ tr('emptyList') }}
         </div>

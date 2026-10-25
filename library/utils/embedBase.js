@@ -212,6 +212,24 @@ export function absoluteEmbedUrl(leaf, profileConfig = null) {
   return rel
 }
 
+/**
+ * The tree's PUBLIC address, for the Share menu's Embed tab (no trailing slash). Its URL, Iframe and JavaScript codes
+ * point here, so an embed follows the stable releases served there, never a dev server or the page's own host.
+ * Ladder: profileConfig.shareBaseUrl → window.MAP_SHARE_BASE_URL → the build's shareBaseUrl (vite.doxa-maps-build-
+ * config.json, baked as __DOXA_SHARE_BASE__) → '' (unset: the Embed tab keeps the tree the bundle was loaded from).
+ * @param {object|null} [profileConfig]  the parsed profile-config (already unref'd)
+ * @returns {string}
+ */
+export function resolvePublicBase(profileConfig) {
+  // https only (an http base would give mixed-content codes on an https partner page), plus a local test server
+  const ok = (v) => typeof v === 'string' && /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/)/i.test(v.trim())
+  const fromConfig = profileConfig?.shareBaseUrl
+  if (ok(fromConfig)) return stripSlashes(fromConfig)
+  if (typeof window !== 'undefined' && ok(window.MAP_SHARE_BASE_URL)) return stripSlashes(window.MAP_SHARE_BASE_URL)
+  // typeof-guarded: a build or a test that defines no __DOXA_SHARE_BASE__ reads '' instead of throwing
+  return stripSlashes(typeof __DOXA_SHARE_BASE__ === 'string' ? __DOXA_SHARE_BASE__ : '')
+}
+
 export function resolveShareUrl({ shareUrl, embedPath, profileConfig } = {}) {
   const cfg = profileConfig || null
   const hasWindow = typeof window !== 'undefined'

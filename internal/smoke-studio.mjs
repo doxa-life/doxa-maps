@@ -141,11 +141,11 @@ if (state.tabs === 0) {
 
 // ── assertion 5 (setup): activate ONE tab ────────────────────────────────────
 // ★ SAMPLE SEVERAL TABS, AND MEASURE DEPTH — both of these were weaknesses in the first version of
-// this gate, and both sat exactly where the Driver's reports live.
+// this gate, and both sat exactly where the reported bugs live.
 //
 // (a) TAB 0 ONLY WAS NOT ENOUGH. The original activated the first tab on the theory that one mount
 //     exercises the whole resolver path. True for a RESOLVER bug — every tab fails together — but
-//     false for a per-plugin failure. The Driver reported "could not load Big Picture" while tab 0
+//     false for a per-plugin failure. Big Picture was reported as not loading while tab 0
 //     was fine, and this gate would have passed. Sampling a spread catches a single bad bundle
 //     without paying for all 29 (~75s). SAMPLE_TABS stays small so the budget holds.
 //

@@ -14,7 +14,7 @@
  * the charts and the CSV then show.
  */
 
-// ── the access ladder (the Driver's three words, then the sub-ladder) ───────────────────────────────
+// ── the access ladder (the three headline words, then the sub-ladder) ───────────────────────────────
 export const ACCESS_LEVELS = ['own', 'bridge', 'zero']
 export const ACCESS_DETAILS = ['read_watch', 'read', 'hear', 'stories', 'none']
 export const BANDS = ['yes', 'partial', 'no', 'nodata']
@@ -33,7 +33,7 @@ export const LEVEL_COLOR = { own: '#3b463d', bridge: '#7d3b30', zero: '#1f1f1f' 
 
 // ── the English for every CODED label (the catalogue gospelInternet.<family>.<code> holds each locale).
 // Used as the call-site fallback when a key is built from a code, so a missing key reads as English, not
-// as "read_watch". Wording rules (gospel-plugin): "own" is a resource in their OWN language, not that
+// as "read_watch". Wording rules: "own" is a resource in their OWN language, not that
 // anyone has heard it; a bridge is a way IN, never coverage, and never called access without "bridge".
 export const LABELS_EN = {
   level: { own: 'Something in own language', bridge: 'Nothing in own language · bridge only', zero: 'Nothing in own language · no way in yet' },
@@ -74,7 +74,7 @@ export const FACET_RAIL = [
   { id: 'messaging', drill: ['messaging'] },
 ]
 
-// ── URL state (SPEC-GOSPEL-INTERNET-DASHBOARD section 3; kit D2's query form, glue until it lands) ──
+// ── URL state (../README.md, "The views"; kit D2's query form, glue until it lands) ──
 // query name -> facet key. `|` separates several values (a comma occurs inside real values).
 export const URL_KEYS = {
   access: 'access_level', detail: 'access_detail', band: 'band', region: 'region',
@@ -88,7 +88,7 @@ export const SHARE_FACETS = Object.fromEntries(Object.entries(URL_KEYS))
 
 // MAP STATE: what a link written while the map was the default carries and only the map shows (an open or
 // selected people group's pin, a country or province, the province view). Such a link with no ?panel= opens
-// the MAP, so old map links keep working; a bare link opens the tree (dx-shepherd ENDTOKEN-GOINT-ATTR).
+// the MAP, so old map links keep working; a bare link opens the tree.
 const MAP_STATE = ['group', 'groups', 'country', 'province']
 export const hasMapState = (q) => MAP_STATE.some((k) => q.get(k)) || q.get('view') === 'province'
 
@@ -110,7 +110,7 @@ export function parseQuery(search) {
   const codes = [...list('codes'), ...list('code')].filter((c) => /^[a-z]{3}$/.test(c))
   if (codes.length && !filters.language) filters.language = codes.length === 1 ? codes[0] : codes
   const groups = list('groups').filter((s) => /^[a-z0-9-]+$/.test(s))
-  // '' = not in the URL: the board opens on its default (the language tree, the Driver 2026-09-28)
+  // '' = not in the URL: the board opens on its default (the language tree, 2026-09-28)
   const panel = ['tree', 'map'].includes(q.get('panel')) ? q.get('panel') : hasMapState(q) ? 'map' : ''
   const tree = /^[a-z0-9-]{3,40}$/.test(q.get('tree') || '') ? q.get('tree') : ''
   // A tree node narrows by LANGUAGE (its ISO codes); the URL carries the node, not the code list.
@@ -301,7 +301,9 @@ export function sortRows(rows, { key, dir = 1 } = {}) {
 export function buildCsv(rows, columns, { provenance = '' } = {}) {
   const esc = (v) => {
     let s = v === null || v === undefined ? '' : String(v)
-    if (/^[=+\-@]/.test(s)) s = "'" + s
+    // A leading = + - @ TAB or CR is neutralised: a spreadsheet can strip a leading TAB/CR and then read the =
+    // after it as a formula (OWASP's list). The same guard as the library's useCsvExport.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
     if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"'
     return s
   }

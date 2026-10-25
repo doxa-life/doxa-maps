@@ -3,7 +3,7 @@
   "pinHint": {
     "tapDot": "Toque num ponto colorido — alguém ainda precisa de oração"
   },
-  "upg100WallHeading": "Minha lista UPG 100 — Listas de oração e cartazes",
+  "upg100WallHeading": "Minha lista UPG100 — Listas de oração e cartazes",
   "upg100WallTag": "Mobilização de oração",
   "upg100WallIntroA": "Como você alimentaria uma multidão de cinco mil? Jesus os sentou em grupos de cinquenta e de cem, e o impossível tornou-se compartilhável (Lucas 9.14). Fizemos o mesmo com os 2.106 povos não alcançados: 27 listas de cerca de cinquenta a cem. Cada lista imprime como pacote de oração e cartaz, para que 27 discípulos, igrejas ou líderes locais levem uma cada um — orando por eles ",
   "upg100WallIntroEmph": "pelo nome do seu povo",
@@ -31,5 +31,15 @@
   "territoriesSelected": "Territórios: {count}",
   "bandInRange": "✓ faixa 50–100",
   "bandOutOfRange": "faixa 50–100",
-  "mapContextLost": "Este mapa foi descarregado para libertar memória gráfica."
+  "mapContextLost": "Este mapa foi descarregado para libertar memória gráfica.",
+  "nOfTotal": "{n} de {total}",
+  "mapInitFailed": "Falha ao iniciar o mapa — verifique o token e o contêiner",
+  "countryWallIntroA": "Um cartaz por país, pronto para orar, imprimir e pendurar na parede — orando por eles ",
+  "countryWallIntroB": ". As regiões e os países são ordenados pelo número de povos não engajados que abrigam, para que a maior necessidade venha primeiro.",
+  "countryWallSoon": "Em breve: será gerada uma lista de oração para cada país, com o nome de cada povo não alcançado nele.",
+  "countryWallHeading": "Cartazes por país — Listas de oração e cartazes",
+  "largerScreenNotice": "Este mapa experimental foi feito para telas maiores. Ele abre aqui, mas algumas partes podem não caber ou não funcionar bem no celular.",
+  "desktopOnlyNotice": "{label} só funciona no computador — abra esta página num computador para usá-lo.",
+  "noticeDismiss": "Fechar",
+  "countryPosterTooMany": "Povos demais para caber de forma legível em um só cartaz — uma solução está a caminho."
 }

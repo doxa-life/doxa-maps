@@ -31,7 +31,8 @@
     "readyRosetta": "Bereit · Pins: {pins} · Rosetta-Stichproben: {samples} (gold ★)",
     "readyPins": "Bereit · Pins: {pins} · einen Pin anklicken",
     "readyLanguage": "Bereit · Pins: {pins} · Familienabdeckung {coverage} % · Top 25 = {top} %",
-    "readyReligion": "Pins: {pins} · am häufigsten: {religion} ({count})"
+    "readyReligion": "Pins: {pins} · am häufigsten: {religion} ({count})",
+    "d3Failed": "Die Diagrammbibliothek konnte nicht geladen werden."
   },
   "ui": {
     "chooseView": "Ansicht wählen",
@@ -56,7 +57,8 @@
     "sunburst": "ROP-Hierarchie · Affinitätsblock → Volkscluster · scrollen zum Zoomen",
     "pins": "Alle Volksgruppen-Pins je Land · anklicken für systemübergreifende IDs",
     "coverage": "Übersetzungsabdeckung · Färbung = durchschnittlich gefüllte Sprachen je Land · Pin oder Land anklicken",
-    "rosetta": "ID-Rosetta · Farbe = vorhandene IDs · ★ = Beispielzeile"
+    "rosetta": "ID-Rosetta · Farbe = vorhandene IDs · ★ = Beispielzeile",
+    "translations": "Name der Volksgruppe · {n} Sprachen · einen Punkt anklicken"
   },
   "legendTitle": {
     "avgLocales": "Durchschnitt Sprachen / {n}",
@@ -88,5 +90,10 @@
   },
   "card": {
     "nameInLocales": "Name in {n} Sprachen"
+  },
+  "title": "PPLR-Datenkarten",
+  "index": {
+    "title": "PPLR-Datenprüfung",
+    "help": "Klicken Sie auf eine Kachel oder wählen Sie oben eine Ansicht."
   }
 }

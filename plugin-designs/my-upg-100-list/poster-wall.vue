@@ -24,10 +24,10 @@
  *   cardStocks             — the reader picks the prayer-card size at print time.
  *   posterAction="print"   — open the print dialog instead of saving a file.
  *   hidePrayerListWhenSoon — no "coming soon" placeholder on a wall whose list DOES print.
- * The last two are a Driver ruling, not a preference (2026-09-23): "three print buttons, each
- * opening an in-browser print dialog, no silent file download as the default action. A raw
- * 'Download' button and a 'Prayer List: coming soon' placeholder were exactly the two buttons he
- * objected to."
+ * The last two are a product ruling, not a preference (2026-09-23): three print buttons, each
+ * opening an in-browser print dialog, and no silent file download as the default action. A raw
+ * 'Download' button and a 'Prayer List: coming soon' placeholder were exactly the two buttons
+ * ruled out.
  *
  * CROSS-PANE COMMS — unchanged and still the decoupling that matters: this wall NEVER imports the
  * map. The shared component dispatches the window CustomEvent named below, scoped by instanceId,
@@ -39,19 +39,34 @@
  * IDEA-POSTER-EXPORT-404-ON-DROPPED-FOLDER-TRADEOFF.
  */
 import { computed, inject, ref } from 'vue'
-import { useOptionalT } from '@map/composables/useOptionalT.js'
+import { useOptionalT, useOptionalI18n } from '@map/composables/useOptionalT.js'
 // The page's people-group LIST (library/lists/): every people-group fetch below keeps only its groups.
-import { applyPeopleGroupList, resolvePeopleGroupList } from '@map/lists/peopleGroupList.js'
+import { resolvePeopleGroupList } from '@map/lists/peopleGroupList.js'
 import PosterWall from '@map/components/poster/PosterWall.vue'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
 // The reader's language, for the DATA fetch below. Not for interface text — that goes through t().
 import { getRuntimeLocale, detectLocale } from '@map/i18n/index.js'
+// The list's total for the intro, from the funnel (never a number written into a string; see data/upg-total.js).
+import visionFunnel from '../../data/people-groups/vision-funnel.json'
+import { upgTotal, countInSentence } from './data/upg-total.js'
 // Named imports: only the list arrays ship in the bundle; the file's bookkeeping fields stay out.
 import { zonesForList } from './data/zones-for-list.js'
 // The SAME normalize+evaluate pipeline the sibling map profile uses to turn the live
 // /people-groups/list payload + a list's `selector` into the exact rows that belong to it.
-import { normalizeRecords, extractRecords } from './data/normalize.js'
+import { createPeopleGroupRecords } from '@map/lists/peopleGroupRecords.js'
+import { makeZoneSheet } from './data/zone-sheet-print.js'
+import { REGION_KEY } from './data/legend-tree.js'
+import { keyedError } from '@map/i18n/keyedError.js'
+// A zone's title in the reader's language (tier A: its country; others keep their label) — the same
+// generator the map's legend and the packet use, so a card, its alt text and its print say one name.
+import { zoneTitle } from './data/zone-title.js'
+import { countryName } from '@map/utils/countryName.js'
 import { evaluate as evaluateSelector } from './data/selector-evaluator.js'
+
+// The table the zone map sheets were generated from (generate.mjs labels each country with it), so a
+// packet printed from this wall names page 1's countries in its own language, as the list's print does.
+// Lazy: only a packet print needs it.
+const iso3Names = () => import('@map/data/iso3-name.js').then((m) => m.ISO3_NAME)
 
 const profileConfig = inject('profileConfig', ref(null))
 const instanceId = computed(() => profileConfig.value?.instanceId || 'upg-100-wall')
@@ -84,8 +99,8 @@ const REGION_OF = {
   // the region is read as a cultural/linguistic sweep.
   'maghreb-egypt': 'Middle East',
   'middle-east-core': 'Middle East',
-  // CENTRAL ASIA is its own section. Brief: "the 55 UPG Pakistan map is wrongly
-  // added to Middle East, it is Central Asia." It had been folded into the Middle
+  // CENTRAL ASIA is its own section: the 55-UPG Pakistan map belongs to Central
+  // Asia, not the Middle East. It had been folded into the Middle
   // East as "the same sweep continuing east", but Pakistan, Afghanistan,
   // Uzbekistan, Tajikistan, Kyrgyzstan and Kazakhstan are Central/South Asia —
   // filing them under the Middle East misnames six countries to save a heading.
@@ -108,25 +123,11 @@ const REGION_OF = {
 // below reads it directly. Passing regionFor straight in built and loaded cleanly and
 // then threw `c.startsWith is not a function` at first render: the whole wall was blank,
 // 0 cards, with nothing wrong at the source layer.
-// ★ THE ENGLISH VALUES ABOVE ARE GROUPING KEYS; THIS TRANSLATES AT RENDER (studio's split).
+// ★ THE ENGLISH VALUES ABOVE ARE GROUPING KEYS; THIS TRANSLATES AT RENDER.
 // REGION_OF keeps its English values as stable identity — changing them would re-key the
-// grouping — and the heading a reader sees is resolved here, per locale.
-//
-// ⚠ TWO OF THE SEVEN HEADINGS HAVE NO KEY YET: 'India' and 'Other'. check:hardcoded-english
-// reported five, not seven, and it was honest about why — its header states it CANNOT SEE
-// SINGLE-WORD STRINGS, since a bare word carries too many non-prose meanings to flag without
-// drowning the signal. So the spec was built from five and these two are the blind spot
-// materialising. They fall through to their English text until poster.region_india /
-// poster.region_other exist; raised with studio rather than coined here.
-const REGION_KEY = {
-  'Africa': 'region_africa',
-  'Middle East': 'region_middle_east',
-  'Central Asia': 'region_central_asia',
-  'Southeast Asia + Oceania': 'region_southeast_asia_oceania',
-  'China + Mongolia': 'region_china_mongolia',
-  'India': 'region_india',
-  'Other': 'region_other',
-}
+// grouping — and the heading a reader sees is resolved here, per locale, through REGION_KEY
+// (data/legend-tree.js), the one table the legend's region rows translate through as well. Every
+// heading has a poster.region_* key in all 11 locales, India and Other included.
 const regionLabel = (english) => {
   const key = REGION_KEY[english]
   return key ? t(`poster.${key}`) : english   // no key yet -> the English heading, not a raw key
@@ -153,62 +154,51 @@ const regionFor = (id) => {
 // buildLegendNodes collapses the two deaf_lists into one unified row. This spread still yields 27 because
 // it reads the three geographic buckets and the deaf row is synthesised — so the number is right for what
 // this list IS, and the old comment was describing the wrong thing.
+const { locale: wallLocale } = useOptionalI18n('')
 const items = computed(() => {
   const z = zonesForList(resolvePeopleGroupList(profileConfig))
+  // The i18n locale REF, read here so this computed re-runs on a runtime language switch: getRuntimeLocale()
+  // is a plain getter, and a computed that reads only it is resolved once and never again (a frozen label).
+  const l = wallLocale && (wallLocale.value ?? wallLocale)
+  const locale = (typeof l === 'string' && l) || getRuntimeLocale() || detectLocale()
   return [
     ...(z.lists || []),
     ...(z.asia_lists || []),
     ...(z.uncovered_lists || []),
   ].filter(l => l && l.id)
+    // ★ THE CARD'S NAME IN THE READER'S LANGUAGE. item.label is the Show-on-map button's accessible
+    // name, every poster's alt text and tooltip, the print HUD's title and the printed documents' title
+    // — all five were English in every locale. zoneTitle declines (null) for a zone it cannot name, and
+    // that zone keeps its hand-written label, exactly as on the legend and the packet.
+    .map(l => { const title = zoneTitle(l, null, { countryName, locale }); return title ? { ...l, label: title } : l })
 })
 
-// ─── THE RECORDS PROVIDER — the one thing that cannot be shared ──────────────
+// ─── THE RECORDS PROVIDER — now the library's (lists/peopleGroupRecords.js) ─────────
+// This wall kept its own fetch (the field list, the reader's language, list membership, normalisation
+// and the pg_slugs special case). All of it is the print standard's records provider now, which every
+// map shares, so a fix to any of it reaches every wall. What is THIS profile's is only the selector
+// language: pg_slugs is understood by the provider; every other UPG-100 selector goes through the same
+// evaluator the map uses, so the map, the list print and the card deck cannot disagree about membership.
+const recordsFor = createPeopleGroupRecords({
+  apiBase: () => API_BASE,
+  lang: () => getRuntimeLocale() || detectLocale(),
+  profileConfig,
+  evaluate: (selector, records) => evaluateSelector(selector, records),
+})
 async function fetchListRecords(list) {
-  if (!API_BASE) throw new Error('no API configured')
-  // image_url + primary_language are what make a PRAYER CARD rather than a data
-  // tile: a face and the tongue the gospel has to reach them in. The deck shipped
-  // without either because they were never requested here — measured 95/95 groups
-  // DO have a portrait, so the omission cost every card its photo.
-  const fields = 'slug,name,country_code,wagf_region,wagf_block,rop1,population,religion,'
-    // imb_gsec feeds the profile description's reachedness sentence — absent, every wall-printed
-    // packet ran at HALF LENGTH (the same missing-field class as the other two fetch sites, found
-    // by diffing what the wall path actually prints against the packet's card).
-    + 'image_url,primary_language,imb_gsec'
-  // ★ THE READER'S LANGUAGE, NOT ENGLISH. This was `&lang=en`, hardcoded, so the on-screen prayer
-  // cards showed English people-group and country names whatever language the reader picked —
-  // while every word of the interface AROUND them was translated. Found in gospel's Driver-lens
-  // audit (card 3, 2026-09-28). The resolution order is the one the sibling plugins already use
-  // (people-groups-grid.vue:276, research-map-plus-grid.vue:147): what the host set at runtime,
-  // then what the page itself says.
-  // ⚠ SEPARATE FROM THE PRINTED POSTER. The poster generator fetches lang=en of its own accord
-  // (generate.mjs:93) and that is an open question for the Driver about what a print artifact is
-  // for. This line is the ON-SCREEN wall only.
-  const lang = getRuntimeLocale() || detectLocale()
-  const resp = await fetch(`${API_BASE}/api/people-groups/list?fields=${fields}&lang=${lang}`, { cache: 'no-store' })
-  if (!resp.ok) throw new Error(`people-groups fetch failed (${resp.status})`)
-  const records = normalizeRecords(await applyPeopleGroupList(extractRecords(await resp.json()), profileConfig))
-  // ★ pg_slugs BYPASSES the shared evaluator — MEASURED live (2026-09-23): 12 of the 27
-  // lists (the entire India + China buckets) carry `{ type:'pg_slugs', values:[...] }`,
-  // and selector-evaluator.js documents that it "intentionally THROWS" on that type
-  // (upg-100-list.vue:1455-1461, "BUG-A FIX"). Calling evaluateSelector() unconditionally
-  // threw on every India/China card, which silently ate the click (the async function's
-  // catch surfaced the evaluator's own error text, and window.open() was never reached —
-  // found by polling the exportState HUD after a real click during verification, not by
-  // inspection: the button looked fine and clicked fine). Ported the SAME special-case
-  // upg-100-list.vue already uses: pg_slugs matches slug ∈ selector.values directly;
-  // every other selector type still goes through the shared evaluator so the map, the
-  // list print and the card deck can never disagree about membership.
-  const slugs = (list.selector && list.selector.type === 'pg_slugs')
-    ? new Set(list.selector.values || [])
-    : evaluateSelector(list.selector, records)
-  return records.filter((r) => r && slugs.has(r.slug))
-    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+  if (!API_BASE) throw keyedError('wall.hud.noApi', 'no people-groups service is configured')
+  return recordsFor(list.selector)
 }
+
+// ★ THE SHEET, GENERATED AT THE CLICK (the print standard: generate, store only previews): the zone's map
+// drawn in the browser for the poster print and the packet's page 1 — data/zone-sheet-print.js, the one
+// helper every UPG-100 surface prints a zone through.
+const zoneSheet = makeZoneSheet({ allRecords: () => recordsFor.all(), assetsBase: () => assetsBase.value, profileConfig })
 
 // The wall's own copy. v-html in the shared component, so the <strong> lands as markup —
 // the emphasis is the point: praying for them BY NAME is the whole brief.
 //
-// ★ THROUGH t(), NOT A LITERAL. rega measured ?lang=ar and found this intro, the heading and
+// ★ THROUGH t(), NOT A LITERAL. Measured at ?lang=ar: this intro, the heading and
 // the tag rendering in English while the wall's buttons beside them were translated — the
 // copy a reader reads FIRST was the untranslated part. The <strong> travels inside the
 // translated string so each language can emphasise its own words, which is not something a
@@ -217,26 +207,26 @@ async function fetchListRecords(list) {
 // that guard once (host i18n -> catalogue -> the key) instead of a hand-rolled copy.
 // No namespace: callers pass FULL keys here, exactly as the raw useI18n().t they used to get.
 //
-// ★ ONE BEHAVIOUR GAIN FROM WAVE 3c (regions-plugin, 4c05e589): the old path was the bare
+// ★ ONE BEHAVIOUR GAIN FROM WAVE 3c (4c05e589): the old path was the bare
 // useI18n().t, so on a host WITH i18n a missing key rendered the raw dotted key. It now falls through.
 //
 // ★ AND THE humanizeKey FALLBACK IS GONE — the one deliberate departure from 4c05e589, which kept it.
 // It rendered a key's last segment title-cased, so a bare host showed "Upg100 Wall Intro" where a
 // whole SENTENCE exists: wrong even in English, and untranslatable because it comes from the
 // identifier rather than a catalogue. It was kept on the theory that these keys were not fully
-// catalogued — I told regions-plugin exactly that, and it was FALSE: this file's three keys are
+// catalogued — and that was FALSE: this file's three keys are
 // present in all ELEVEN locales, 0 gaps (enumerated 2026-09-27; the only three, all string literals).
-// ⚠ IT GUARDS A BARE HOST, NOT A MISSING KEY. Those are different failures and I had them confused.
-// Product call taken by dx-shepherd (UPGHK, 2026-09-27) under the Driver's standing goal that the
+// ⚠ IT GUARDS A BARE HOST, NOT A MISSING KEY. Those are different failures, and the two had been confused.
+// A product decision (2026-09-27), under the standing goal that the
 // production maps be localized.
 const t = useOptionalT('')
 
-// ★ THE MARKUP IS COMPOSED HERE, so the CATALOGUE holds plain text (dx-shepherd UPGHTML, 2026-09-27).
+// ★ THE MARKUP IS COMPOSED HERE, so the CATALOGUE holds plain text (2026-09-27).
 // vue-i18n warns "[intlify] Detected HTML in '…'" twice per tab pass, and it is right to: a translated
 // string carrying <strong> is the only one in this tree that does — I measured every en catalogue area
 // and upg100WallIntro is 1 of 1, so this was not a convention, it was my outlier.
 //
-// ⚠ WHY THE OBVIOUS FIXES DO NOT APPLY HERE. The shepherd's suggestion — markup in the template, or
+// ⚠ WHY THE OBVIOUS FIXES DO NOT APPLY HERE. The usual suggestions — markup in the template, or
 // <i18n-t> interpolation — assumes this profile renders the sentence. It does not: `intro` is a STRING
 // PROP on the library PosterWall, rendered there with v-html (PosterWall.vue:955), and that component
 // has no slots at all. So the markup has to arrive inside the string, and the only question is who
@@ -254,25 +244,27 @@ const t = useOptionalT('')
 const escHtml = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const intro = computed(() => {
-  // The three plain-text keys studio adds (rule 5B — the catalogue is theirs). Until they land, the
+  // The three plain-text keys come from the shared catalogue (rule 5B). Until they land, the
   // single legacy key is still the source of truth, so this renders identically before AND after: no
-  // flag day, and my landing does not have to be ordered against theirs.
-  const a = t('messages.upg100WallIntroA')
+  // flag day, and this consumer does not have to land in step with the catalogue.
+  // The total is {n}, formatted for the reader (it printed a stale 2,106 in all eleven languages).
+  const a = countInSentence(t, 'upgMap.wallIntroA', upgTotal(visionFunnel), getRuntimeLocale() || detectLocale())
   const b = t('messages.upg100WallIntroEmph')
   const c = t('messages.upg100WallIntroB')
   const missing = (v, key) => !v || v === key
   // ★ THE LEGACY upg100WallIntro FALLBACK IS GONE (2026-09-27). It existed for exactly one window: the
-  // three plain-text keys were landing in studio's catalogue while this consumer was already written,
+  // three plain-text keys were landing in the shared catalogue while this consumer was already written,
   // so the branch rendered the old single markup-bearing key until they arrived. They are on main in
   // all eleven locales, so the branch is now DEAD CODE — and dead code that names a key keeps that key
-  // alive: studio cannot delete upg100WallIntro while this line reads it (their L13U measurement).
+  // alive: the catalogue cannot delete upg100WallIntro while this line reads it (measured).
   // A fallback whose condition can no longer be true is not safety, it is a reference.
   // If A or Emph ever went missing the per-key fallback still yields English from the en block, and
   // check:i18n-keys-exist fails the build before a reader could see it.
   const tail = missing(c, 'messages.upg100WallIntroB') ? '' : escHtml(c)
   return `${escHtml(a)}<strong>${escHtml(b)}</strong>${tail}`
 })
-const heading = computed(() => t('messages.upg100WallHeading'))
+// The display name, plain ("UPG 100 List Posters", no second "Posters"); upgMap ships only in this bundle.
+const heading = computed(() => t('upgMap.wallHeading'))
 const wallTag = computed(() => t('messages.upg100WallTag'))
 
 </script>
@@ -289,13 +281,22 @@ const wallTag = computed(() => t('messages.upg100WallTag'))
     :tag="wallTag"
     :intro="intro"
     unit="UPG"
-    item-noun="list"
+    item-count-key="wall.listCount"
     :records="fetchListRecords"
+    :iso3-names="iso3Names"
+    :sheet="zoneSheet"
     :card-stocks="true"
     poster-action="print"
     preview-action="print"
     :hide-prayer-list-when-soon="true"
     download-prefix="doxa-upg-100"
     :columns-control="true"
+    :min-card-px="150"
   />
+  <!-- min-card-px 150: "Posters per row: 2" now SHOWS two on a phone. The shared clamp (210px) forced one at
+       390 and silently overrode the select, which read 2 (2026-09-30: work like the country posters,
+       which opted in first). A two-up card is ~162px, so each thumbnail is ~114px and its poster title is
+       too small to read; two-up was chosen over one-up with that trade shown side by side. The action
+       labels wrap (PosterWall's .pfs > .pbtn), so none clip. -->
+
 </template>

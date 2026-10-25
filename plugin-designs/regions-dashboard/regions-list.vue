@@ -43,7 +43,8 @@ import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { applyPeopleGroupList } from '@map/lists/peopleGroupList.js'
 import { SHADOW_BOX_SIZING_RESET } from './src/shadowReset.js'
 import { splitLastWord } from './src/useLastWordHighlight.js'
-import { useRegionsI18n } from './src/useRegionsI18n.js'
+import { useRegionsI18n } from '@map/i18n/useRegionsI18n.js'
+import { useOptionalT } from '@map/composables/useOptionalT.js'
 // ar renders right-to-left. RTL_LOCALES is the shared set and :dir on our own root is the
 // house pattern (doxa-simple-map.vue:18, :246, :1346) — an EMBEDDED element must not reach for
 // document.documentElement.dir, which belongs to the host page.
@@ -54,21 +55,21 @@ import { summarizeRegions, PEOPLE_GROUP_LIST_FIELDS } from '@map/utils/countries
 // DX-life's spacing/type scales under THEIR token names. Prepended to this
 // component's shadow CSS so every var() below resolves inside the shadow root.
 import { DXLIFE_TOKENS } from './dxlife-tokens.js'
-// THE COUNTRY-POSTER DROPDOWN (Driver 2026-09-24) — the THIRD sanctioned addition, after the
-// SELECT VIEW tab strip and the no-selection chooser. Their wording: "a toggle or carrot added
-// to the bottom of each region section that says view country posters".
+// THE COUNTRY-POSTER DROPDOWN — the THIRD sanctioned addition, after the SELECT VIEW tab strip
+// and the no-selection chooser. The requirement: a toggle at the bottom of each region section
+// that opens that region's country posters.
 //
-// NOTHING HERE IS REBUILT. PosterWall is already the shared, fully parameterised grid that
-// my-upg-100-list/poster-wall.vue and country-posters/country-poster-wall.vue both render, and
-// it already owns the card layout, the "Show on map" header button, the Print Options footer
-// and the client-side raster. This file supplies only data and a toggle — the same division of
-// labour country-poster-wall.vue states in its own header ("this profile supplies only its
-// data and taxonomy").
-import PosterWall from '@map/components/poster/PosterWall.vue'
+// NOTHING HERE IS REBUILT. Each region's posters are the library's <dxm-poster-section type="country">
+// (library/elements/posterSectionElement.js), the same section, cards and print options as the Country Posters
+// wall, so the list is composed from the shared element rather than drawing a wall of its own. This file supplies
+// only the toggle and the region.
 import RegionSectionCard from '@map/components/regions/RegionSectionCard.vue'
-import posterData from '@map/data/country-posters.json'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
+import { registerPosterSectionElement } from '@map/elements/posterSectionElement.js'
+import { regionKey } from '@map/components/poster/types/countryPosterType.js'
 import { onBeforeUnmount } from 'vue'
+import { cyrillicHeading } from '@map/styles/portedGlobals.js'
+import { hostElement } from '@map/utils/hostElement.js'
 
 const props = defineProps({
   profileConfig: { type: String, default: '' },
@@ -125,6 +126,12 @@ const isRTL = computed(() => RTL_LOCALES.has(i18nLocale.value))
 // invisible inside the composite, where the tab strip names the view, and plainly missing on
 // /doxa-maps/regions-dashboard/regions-list/index.html, which is a page in its own right.
 const { t, tf } = useRegionsI18n()
+// ★ A SECOND TRANSLATOR, DELIBERATELY. useRegionsI18n's t() resolves DX-life's English sentences as
+// keys inside the `regions` namespace only, which is what this page is cloned from. A dotted key in
+// another area — messages.countryPosterTooMany — misses there and would render the literal string
+// "messages.countryPosterTooMany" on the wall. tKey is vue-i18n's own lookup, for keys that live
+// outside this page's namespace.
+const tKey = useOptionalT('')
 const headTitle = computed(() => splitLastWord(t('Regions')))
 
 // ★ REGISTER BEBAS NEUE AT DOCUMENT LEVEL, not in the shadow root: @font-face is document-scoped
@@ -154,7 +161,7 @@ useDocumentFont('Bebas Neue', BEBAS_NEUE_FACES, fontAssetsBase)
 // wider per glyph. Registered the same way and for the same reason as Bebas.
 useDocumentFont('Poppins', POPPINS_FACES, fontAssetsBase)
 // Figtree stands in for Brandon Grotesque, which is commercial and must not ship in a public
-// giveaway (Driver, 2026-09-24). @font-face is DOCUMENT-scoped, so it registers here beside
+// giveaway. @font-face is DOCUMENT-scoped, so it registers here beside
 // the other two rather than inside the shadow root that uses it.
 useDocumentFont('Figtree', FIGTREE_FACES, fontAssetsBase)
 // Oswald, for CYRILLIC HEADINGS ONLY. base/_globals.scss:35-44 switches every h1/h2/h3 to
@@ -171,8 +178,8 @@ const loadFailed = ref(false)
 
 // ── same field list the source page's PEOPLE_GROUP_LIST_FIELDS asks for ─────
 // Their PEOPLE_GROUP_LIST_FIELDS, imported rather than restated — one list, one source.
-// ★ THIS PAGE ASKS FOR TWO FIELDS, NOT EIGHT. The Driver reported the list page being slow and
-// guessed the posters; the posters are behind a v-if and never load until a region is opened. The cost
+// ★ THIS PAGE ASKS FOR TWO FIELDS, NOT EIGHT. The list page was reported slow, with the posters
+// suspected; the posters are behind a v-if and never load until a region is opened. The cost
 // was this fetch: it requested the full PEOPLE_GROUP_LIST_FIELDS for EVERY people group, then
 // summarizeRegions computed population, adoption, engagement, commitment and pin lat/lngs from them —
 // and this page renders NONE of that. It shows a region's label, its group count, its country count
@@ -208,11 +215,7 @@ function summaryLine(region) {
 
 // ── emit (Vue + native composed CustomEvent, same pattern as people-groups-grid) ────────────
 const inst = getCurrentInstance()
-function hostEl() {
-  const root = inst?.vnode?.el || inst?.proxy?.$el
-  try { const rn = root && root.getRootNode && root.getRootNode(); if (rn && rn.host) return rn.host } catch (_) {}
-  return root
-}
+const hostEl = () => hostElement(inst)
 function dispatch(name, detail) {
   emit(name, detail)
   const el = hostEl()
@@ -266,16 +269,32 @@ async function loadRegions() {
   }
 }
 
-// ─── COUNTRY POSTERS, per region ─────────────────────────────────────────────────────────
-// One wall per region, opened by the footer toggle. instanceId is suffixed with the region
-// slug because PosterWall scopes its CustomEvent by instanceId so several embeds on one page
-// never cross-talk (PosterWall.vue:40) — and here there genuinely are several.
-const POSTER_EVENT = 'doxa-regions:show-country-on-map'
+// ─── COUNTRY POSTERS, per region ─────────────────────────────────────────────
+// One poster section per region, opened by the footer toggle: the library's <dxm-poster-section type="country">.
+// Its scope is the region's key through the country type's own regionKey, so the list and the element can never
+// spell a region two ways. It is not collapsible (the toggle already opens and shuts it) and shows two cards a row,
+// on a phone as well.
+// ⚠ The element files countries under the poster data's region (library/data/country-posters.json), so this list
+// shows exactly that data's membership for each region.
+registerPosterSectionElement()
+const SECTION_EVENT = 'doxa-country-posters:show-on-map'
 // Read off the injected config the same way every other value in this file is (see the note
 // above cfg) — a bare default here would make two embeds on one page answer each other's
 // poster events.
 const instanceId = computed(() => cfg.value.instanceId || 'regions-list')
 const posterAssetsBase = computed(() => resolveAssetsBase(cfg.value))
+const sectionAttrs = (region) => ({
+  type: 'country',
+  scope: regionKey(region.value || region.label),
+  locale: i18nLocale.value || languageCode.value || 'en',
+  collapsible: 'false',
+  columns: '2',
+  // Two posters a row on a phone too, as this list has always shown them: 150 px lets two cards fit at 390.
+  'min-card-px': '150',
+  'assets-base': posterAssetsBase.value,
+  // The same people-groups service this list reads its regions from, so a card's list and deck match it.
+  'api-base-url': prayBaseUrl.value,
+})
 const openPosters = ref(new Set())
 
 function togglePosters(region) {
@@ -285,44 +304,16 @@ function togglePosters(region) {
 }
 const postersOpen = (region) => openPosters.value.has(region.slug)
 
-// The poster dataset is keyed by ISO-3 (`iso3`); the regions rollup keys by `code`. Same
-// codes, so the join is direct.
-const POSTER_BY_ISO3 = new Map((posterData.countries || []).map(c => [String(c.iso3 || '').toUpperCase(), c]))
-
-// Every country in the region gets a card, in PosterWall's own shape. A country with no
-// generated poster is NOT dropped — it is passed with a reason, which is what the wall's
-// `unsupported` slot is for, so the grid never silently loses a country.
-function postersFor(region) {
-  return (region.countries || []).map((c) => {
-    const rec = POSTER_BY_ISO3.get(String(c.code || '').toUpperCase())
-    if (rec) return rec
-    return {
-      id: `country-${String(c.code || '').toLowerCase()}`,
-      iso3: c.code,
-      label: c.name,
-      count: c.count,
-      unsupportedReason: t('No poster has been generated for this country yet.'),
-    }
-  })
-}
-
-// Their own not-yet reason travels WITH the record, so the number the wall prints can never
-// drift from the data — country-poster-wall.vue:63 does exactly this. India is the only
-// country in the dataset that carries one (855 people groups, no sheet); China is fine at 3x4.
-const posterUnsupported = (c) => c.unsupportedReason || null
-
-// One region's wall is already inside a region section, so it needs no second level of
-// collapsing and no grouping: everything in it is that one region.
-const posterGroupBy = () => 'countries'
-
-// PosterWall's "Show on map" dispatches a window CustomEvent carrying listId (the poster id,
+// A poster card's "Show on map" dispatches a window CustomEvent carrying listId (the poster id,
 // e.g. "country-chn") or null when the user toggles the same card off. Mapping that id back to
 // the country record and reusing selectCountry() is what makes the button open the dashboard
-// tab for that country — the Driver's "click view on map button, which will open the country
-// dashboard page for that country".
+// tab for that country: the requirement is that the view-on-map button opens the country
+// dashboard page for that country.
+// The library's poster sections name themselves 'poster-section-country-<region>' (PosterSectionView.vue); selecting
+// through selectCountry() keeps the region context in the selection.
 function onPosterShowOnMap(ev) {
   const d = ev?.detail || {}
-  if (!String(d.instanceId || '').startsWith(instanceId.value)) return
+  if (!String(d.instanceId || '').startsWith('poster-section-country-')) return
   if (!d.listId) return // a deselect is not a navigation
   const iso3 = String(d.listId).replace(/^country-/, '').toUpperCase()
   for (const region of regions.value) {
@@ -339,8 +330,8 @@ function onPosterShowOnMap(ev) {
 // already had this watcher (line 541); this tab was simply missed.
 watch(languageCode, () => { loadRegions() })
 
-onMounted(() => { if (typeof window !== 'undefined') window.addEventListener(POSTER_EVENT, onPosterShowOnMap) })
-onBeforeUnmount(() => { if (typeof window !== 'undefined') window.removeEventListener(POSTER_EVENT, onPosterShowOnMap) })
+onMounted(() => { if (typeof window !== 'undefined') window.addEventListener(SECTION_EVENT, onPosterShowOnMap) })
+onBeforeUnmount(() => { if (typeof window !== 'undefined') window.removeEventListener(SECTION_EVENT, onPosterShowOnMap) })
 
 onMounted(loadRegions)
 
@@ -352,12 +343,12 @@ onMounted(loadRegions)
 // resolving the SCSS token files (tokens/semantic/_spacing.scss, _shapes.scss, _colors.scss,
 // _typography.scss) AND reading getComputedStyle() live on https://doxa.life/regions — both agree.
 // Colours/fonts/radii are an intentional exception to this repo's material-light chrome tokens —
-// the Driver asked for an exact clone of DX-life's OWN design here, so the clone wins.
+// an exact clone of DX-life's OWN design is required here, so the clone wins.
 useShadowStyles(
   // Their _reset.scss:3-8 FIRST -- see src/shadowReset.js.
   SHADOW_BOX_SIZING_RESET +
   DXLIFE_TOKENS +
-  ':host{ display:block; width:100%; height:100%; min-height:320px; }' +
+  ':host{ display:block; position:relative; width:100%; height:100%; min-height:320px; }' +
   '.rl-root{ position:absolute; inset:0; display:flex; flex-direction:column; min-height:0;' +
   // --dx-surface = --color-surface-default ($color-beige-50); --dx-elevated = --color-surface-white
   // --dx-text = --color-text-on-default ($color-green-600 #2a332a) -- body copy on the light page bg
@@ -447,7 +438,14 @@ useShadowStyles(
   // BOTH TAG FORMS, deliberately: their site tags the document ru-RU while our i18n locale is `ru`,
   // and a host page embedding this element may set either. A selector that matched only one would
   // work on their site and fail on ours, or the reverse, depending on who set the attribute.
-  '[lang="ru"] .rl-title, [lang="ru-RU"] .rl-title,' +
+  // ★ THIS RULE WAS INERT AND ATE THE STYLE-ID. It used to end with a trailing comma and no
+  // declaration block, so the concatenation emitted
+  //     [lang="ru"] .rl-title, [lang="ru-RU"] .rl-title,regions-list
+  // — a selector list with nothing to apply, so the Russian heading font never applied, and
+  // useShadowStyles' style-id argument was consumed as CSS, leaving the sheet unlabelled. Braces
+  // stayed balanced, so nothing caught it for weeks. check:shadow-css-parses now has an arm that
+  // does (SELECTOR WITH NO BLOCK), and this file is its poison test.
+  cyrillicHeading('.rl-title'),
   'regions-list'
 )
 </script>
@@ -508,27 +506,7 @@ useShadowStyles(
           @select-country="(c) => selectCountry(c, region)"
         >
           <template #extra>
-            <PosterWall
-              :items="postersFor(region)"
-              :group-by="posterGroupBy"
-              :instance-id="`${instanceId}-${region.slug}`"
-              :assets-base="posterAssetsBase"
-              :event-name="POSTER_EVENT"
-              :heading="''"
-              :intro="''"
-              unit="UPG"
-              item-noun="country"
-              item-noun-plural="countries"
-              :collapsible="false"
-              :embedded="true"
-              :section-heads="false"
-              :columns="2"
-              :columns-control="true"
-              :unsupported="posterUnsupported"
-              download-prefix="doxa-country"
-              poster-action="print"
-              prayer-list-soon-message="Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it."
-            />
+            <dxm-poster-section v-bind="sectionAttrs(region)" />
           </template>
         </RegionSectionCard>
       </template>

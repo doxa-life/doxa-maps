@@ -17,7 +17,7 @@ building ones run the live source with hot reload; the showing ones serve the **
 ## 1. Your laptop — `bun run dev`
 
 ```bash
-git clone --depth 1 https://git.nuxtbase.app/doxa-open/doxa-maps.git
+git clone --depth 1 <your-repo-url>
 cd doxa-maps
 bun install --frozen-lockfile
 bun run dev          # → http://localhost:5173/  is the Plugin Studio
@@ -36,16 +36,18 @@ Details: [HOWTO-join-the-table.md](./HOWTO-join-the-table.md).
 ## 2. A shared cloud dev server — Docker or Coolify, with `/data`
 
 One running copy of the Plugin Studio that follows a branch and hot-reloads every push, for a whole team
-or for an agent that lives on a server. Nobody edits files on it: changes arrive by pushing.
+or for an agent that lives on a server. Nobody edits files on it: changes arrive by pushing. It follows
+`development`, the branch the team lands on, and publishes `main` (production) at `/cdn` (way 3).
 
 ```bash
-docker build -t dx-maps-dev deployment/cloud
+docker build -t dx-maps-dev .
 docker run -d -p 5173:5173 -v dx-maps-data:/data \
-  -e REPO_URL=https://<host>/<owner>/<repo>.git -e BRANCH=main dx-maps-dev
+  -e REPO_URL=https://<host>/<owner>/<repo>.git -e BRANCH=development -e PRODUCTION_BRANCH=main dx-maps-dev
 ```
 
-Or paste `deployment/cloud/Dockerfile` into a container host (Coolify's "Dockerfile" build pack) and give
-it a domain.
+Or `docker compose up -d --build` with the root `compose.yaml`, or point a container host at the repo: it
+finds the root `Dockerfile` (the platforms are in [deployment/cloud/README.md](../deployment/cloud/README.md#where-it-runs)).
+Give it a domain.
 
 - **Give it a persistent `/data` volume.** It holds the team PocketBase (dev and prod) and the last
   published build. Without one, every restart or redeploy starts empty.
@@ -64,24 +66,31 @@ Details: [deployment/cloud/README.md](../deployment/cloud/README.md) and
 The built folder, `dx-maps/`, is what other sites embed. Every link inside it is relative, so it works
 from any address.
 
-- **From the cloud dev server:** `/cdn/` serves the **`production`** branch, never `main`. `main` is the
-  shared sandbox where everyone lands all day; `production` moves only when you decide the current state
-  is ready to be public. The container notices when `production` moves and rebuilds `/cdn` by itself
-  (about 2 minutes after the move, then about 2 minutes to build). Each build removes private files,
+- **From the cloud dev server:** `/cdn/` serves **`main`**, which is production (`PRODUCTION_BRANCH=main`;
+  the container's default is a branch named `production`). `development` is the shared table where
+  everyone lands all day; `main` moves only when a maintainer publishes. The container notices when `main`
+  moves and rebuilds `/cdn` by itself (about 2 minutes after the move, then about 2 minutes to build). Each build removes private files,
   refuses to publish if any remain, keeps the last good build if anything fails, and swaps
   `/cdn/dx-maps/` over atomically. `/cdn/` is public (no sign-in) and sends
-  `Access-Control-Allow-Origin: *`, so both iframes and JS embeds work on other sites.
+  `Access-Control-Allow-Origin: *`, so both iframes and JS embeds work on other sites. The manifest, the
+  pages and each map's script revalidate after 5 minutes (with an ETag), so browsers pick up a publish
+  within minutes.
 
-  **To publish (promote main to production)**, once the checks pass on the commit you want public:
+  **To publish (merge development into main)**, once the checks pass on the commit you want public:
 
   ```bash
-  git fetch origin && git checkout main && git merge --ff-only origin/main
-  bun run gates:pre                   # the checks must pass on exactly this commit
-  git push origin main:production     # /cdn follows within a few minutes
+  git fetch origin && git switch main && git merge --ff-only origin/main
+  git merge --ff-only origin/development   # everything the team landed, as checked
+  bun run gates:pre                        # the checks must pass on exactly this commit
+  git push origin main                     # /cdn follows within a few minutes
   ```
 
   An admin can also rebuild at once (`POST /admin/build`), and `/admin/status` shows what `/cdn` serves
-  and what `production` points at.
+  and what `main` points at.
+
+  Copy-paste snippets are relative unless the build is given an absolute base:
+  `EMBED_BASE_URL=https://<host>/<path>` (the address the `dx-maps/` folder is served under, without
+  `dx-maps`) makes every snippet absolute, so it works when pasted on another site.
 - **On any static host:** build locally with `BUILD_ALLOW=1 bun run build` and upload `public/dx-maps/`.
   For JS embeds on other sites, the host must send `Access-Control-Allow-Origin: *`.
 
@@ -97,10 +106,13 @@ Details, per host (Cloudflare Pages, jsDelivr, any web server) and per embed sty
 Copy the built `dx-maps/` folder into your site's `public/` (renaming it is fine) and your site becomes
 the host: no second server and no cross-site setup, because the maps and the page share one origin.
 
-**Live example:** the DX-life branch
-[`research-gallery`](https://git.nuxtbase.app/doxa-life/doxa-maps-cdn/src/branch/research-gallery)
-drops the folder into DX-life's `public/` and fills `/research` with the Research Gallery. Run it with
-`bun install && bun run dev`, then open `/research/`.
+**Live example:** DX-life's drop-in branch copies the folder into its `public/` and fills `/research` with
+Deep Research.
+
+**The two routes, on your laptop:** DX-life has one branch per route: `research-gallery-drop-in` (this
+section, no Docker) and `research-gallery-subdomain` (the dx-maps container on its own address, with
+PocketBase). The exact commands for each (ports, settings, and what to check) are in `documentation/LAPTOP-6WAY.md`
+on those branches. The earlier CDN route is retired.
 
 ---
 

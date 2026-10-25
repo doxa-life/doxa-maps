@@ -11,6 +11,11 @@
   <script>window.MAP_OWNS_PAGE = true;</script>
   <title>pair · stack-demo</title>
   <link rel="icon" href="data:,">
+  <!-- A9 hints: the map's origins, so DNS/TLS + the engine start with the bundle, not after it (engine = provider or the MapLibre default). -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+  <link rel="preconnect" href="https://pray.doxa.life" crossorigin />
+  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js" integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous" />
   <!-- NON-MAP leaf (app-shell / composite / grid / card / chart-table): NO map peer.
        This element draws no map tiles, so it needs no Mapbox/MapLibre engine and MUST NOT
        gate on a token. Any nested MAP (in a composite/shell) renders in its own iframe leaf,
@@ -28,9 +33,10 @@
        min-height:100% here resolved against BODY's computed height, which is auto (body only has
        min-height:100%, never a definite height) — and a percentage of auto collapses to 0. Any
        element whose own chrome is position:absolute / height:100% (upg-100-mfe -> .pane-col -> .pane)
-       then measured 0 and the leaf looked empty. 100dvh depends on NO ancestor, keeps the page
-       growable (it is a MIN), and is correct on mobile with dynamic toolbars. */
-    #slot, stack-demo { position: static; inset: auto; width: 100%; min-height: 100dvh; display: block; }
+       then measured 0 and the leaf looked empty. A viewport unit depends on NO ancestor and keeps the page
+       growable (it is a MIN). svh, not dvh: dvh follows the mobile URL bar, so the slot (and its map)
+       resized while the reader scrolled; svh never moves. 100vh first for a browser without svh. */
+    #slot, stack-demo { position: static; inset: auto; width: 100%; min-height: 100vh; min-height: 100svh; display: block; }
     #status { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
       padding: 24px; text-align: center; color: #9aa7b8;
       font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -51,7 +57,7 @@
     @media print {
       html, body { height: auto; background: #fff; }
       #status:not(.err) { display: none; }
-      /* ★ RELEASE THE FIXED HOST, MEASURED (rega, RQ-RGPRINT on a035408e2). The leaf pins both the
+      /* ★ RELEASE THE FIXED HOST, MEASURED (a print check on a035408e2). The leaf pins both the
          slot and the element with position:fixed; inset:0. A fixed element is painted once, on the
          first page, so the printed document was exactly ONE viewport: 900px tall, while the content
          continued to y=1753. Every plugin whose leaf is taller than a screen has been printing its
@@ -72,7 +78,7 @@
 
   <script>window.MAP_APP_API_URL = "https://pray.doxa.life";</script>
   <!-- Bundle IIFE — registers the <stack-demo> custom element. -->
-  <script src="../../stack-demo.js" integrity="sha384-DuzmgJyJc9yGTqmO+9rSTTxZEaIspcEwXpFoygY1QUbKQES5CA/bXppd0gw11McE" crossorigin="anonymous"></script>
+  <script src="../../stack-demo.js" integrity="sha384-9Az86/R8dgizfdkex695aMeLQGqZLkdHiq1QFdAXVrTbpy7xQ2DkrI6DCLf4bLKx" crossorigin="anonymous"></script>
 
   <script>
     // Mapbox token resolution — the A3 ladder, in precedence order:
@@ -88,7 +94,10 @@
     (function () {
       var slot = document.getElementById('slot');
       var status = document.getElementById('status');
-      var BASE_CONFIG = {"assetsBase":"../../../assets","profile":"stack-demo"};
+      var BASE_CONFIG = {"assetsBase":"../../../assets","profile":"stack-demo","urlOwner":"app"};
+      // Framed (the iframe embed on a partner's page): READ the address, never write it. A push inside a frame adds
+      // entries to the partner page's own Back button (the joint session history).
+      try { if (window.self !== window.top) delete BASE_CONFIG.urlOwner } catch (e) { delete BASE_CONFIG.urlOwner }
       // MapLibre map pages AND shell pages (app-shell / nested-mfe-spa) need NO token:
       // the ladder below is skipped entirely and the element mounts immediately.
       // (A leaf whose engine is MapLibre at RUNTIME joins them — see PROVIDER below.)
@@ -173,10 +182,11 @@
       if (urlTk) { try { localStorage.setItem('MAPS_STAGING_TK', urlTk); } catch (e) {} }
       var directToken = (BASE_CONFIG && BASE_CONFIG.tk) || urlTk || stored || HOST_TOKEN || BAKED_TOKEN;
       // PROVIDER — the same ladder as resolveMapProvider (library/composables/useMapProvider.js):
-      // profile-config.provider → ?provider= → window.MAP_PROVIDER → 'auto'. An explicit engine wins.
-      // 'auto' = Mapbox when a token is available (a rung above, a host-set window.MAP_TOKEN, or a token
-      // endpoint to ask), otherwise MapLibre, keyless: no token prompt, no request to Mapbox. The
-      // element decides the same way from the token this page hands it, so the two cannot disagree.
+      // profile-config.provider → ?provider= → window.MAP_PROVIDER → 'auto'. An explicit engine wins,
+      // and 'auto' draws with MapLibre whether or not a token is available (the element decides that).
+      // This page only decides whether to FIND a token first: when one is on offer (a rung above, a
+      // host-set window.MAP_TOKEN, or a token endpoint) it resolves it, since place search uses it on
+      // either engine; with none, it mounts at once, keyless: no token prompt, no request to Mapbox.
       var ASKED = String((BASE_CONFIG && BASE_CONFIG.provider) || qp('provider') || window.MAP_PROVIDER || '').toLowerCase().trim();
       var EXPLICIT = (ASKED === 'mapbox' || ASKED === 'maplibre') ? ASKED : '';
       var HAS_TOKEN = !!(directToken || (typeof window.MAP_TOKEN === 'string' && window.MAP_TOKEN));

@@ -3,9 +3,9 @@
 // ★ THE POINT OF THIS FILE: A DECK PRINTS AS CARDS, NOT AS PAPER.
 // The previous deck set `@page{size:letter portrait}` and gave each card
 // `height:100%`, so one card was stretched across a whole 8.5x11 sheet — 95
-// mostly-empty letter pages, with no photo. The Driver: "the print dialog that
-// opens up needs to show all the cards not in a paper format but a CARD format,
-// the aspect ratio that is used in the card generator."
+// mostly-empty letter pages, with no photo. The print dialog has to show every
+// card in a CARD format, not a paper format: the aspect ratio the card generator
+// uses.
 //
 // So the page IS the card: @page takes the card's own dimensions, and every card
 // fills exactly one page. Print two-sided on cardstock and cut, or print to PDF
@@ -42,11 +42,14 @@ import { qrSvg } from './qr.js';
 // band is a strip too short to carry a face or leave room for the rows beneath it.
 // A landscape card puts the photo BESIDE the text instead — so `side: true` is a
 // LAYOUT switch the CSS reads, not a cosmetic flag.
+// `label` is the English name (and the fallback). `noun` names the stock for a localized label — the
+// NOUN is translated and the size is not: "2.5 × 3.5 in" is what a printer's paper box says in every
+// language, and A6 is an international designation, so it has no noun and prints as named.
 export const STOCK = {
-  poker: { w: 2.5, h: 3.5, label: 'Card 2.5 × 3.5 in' },
-  pokerLandscape: { w: 3.5, h: 2.5, label: 'Card 3.5 × 2.5 in (landscape)', side: true },
-  postcard: { w: 4, h: 6, label: 'Postcard 4 × 6 in' },
-  postcardLandscape: { w: 6, h: 4, label: 'Postcard 6 × 4 in (landscape)', side: true },
+  poker: { w: 2.5, h: 3.5, label: 'Card 2.5 × 3.5 in', noun: 'card' },
+  pokerLandscape: { w: 3.5, h: 2.5, label: 'Card 3.5 × 2.5 in (landscape)', noun: 'card', side: true },
+  postcard: { w: 4, h: 6, label: 'Postcard 4 × 6 in', noun: 'postcard' },
+  postcardLandscape: { w: 6, h: 4, label: 'Postcard 6 × 4 in (landscape)', noun: 'postcard', side: true },
   a6: { w: 4.13, h: 5.83, label: 'A6 105 × 148 mm' },     // explicit in, NOT "A6"
 };
 
@@ -85,6 +88,20 @@ export function createCardRenderer({ strings, lang = 'en', stock = 'poker',
   // deliberate property of the format rather than an inference from its numbers.
   const SIDE = S.side === true;
 
+  // ★ THE PHOTO IS PRINTED NO LARGER THAN ITS PIXELS CAN HOLD. The people-group photos are small:
+  // measured on a sample across the dataset, every one is at most 200 px wide (typically 200x250), and
+  // the API offers no larger variant. The card used to stretch that across the full 2.5in top band with
+  // object-fit:cover, i.e. 200 source px over 2.5in: about 80 ppi, visibly blurred in print, on the one
+  // part of the card that is a person's face. So the photo is now a framed portrait at the source's own
+  // 4:5 shape, sized from its PIXELS rather than from the card: 200x250 at PHOTO_PPI prints at about
+  // 1.1x1.4in, sharp. A bigger card (a postcard) gets more room around the face, never a bigger, blurrier
+  // face. The 250x250 regional no-photo images fit the same frame at a higher density still.
+  const PHOTO_PPI = 180;
+  const PW = Math.round(200 / PHOTO_PPI * PX);   // frame width in CSS px (~1.11in)
+  const PH = Math.round(250 / PHOTO_PPI * PX);   // frame height in CSS px (~1.39in)
+  const COL = Math.round(W * 0.42);             // landscape: the photo column
+  const BAND = Math.max(Math.round(H * 0.46), PH + 24);   // portrait: the header band behind photo + name
+
   // The live profile URL for this group, in this language. English has no prefix
   // (the generator's own rule); every other language does.
   const profileUrl = (slug) => (lang === 'en'
@@ -104,35 +121,43 @@ export function createCardRenderer({ strings, lang = 'en', stock = 'poker',
     page-break-after:always;break-after:page}
   .card:last-child{page-break-after:auto;break-after:auto}
 
-  /* THE PHOTO. Portrait: full-bleed across the TOP, the largest thing on the card
-     by design — a face is what makes this a prayer card rather than a data tile.
-     Landscape: full-bleed down the LEFT instead, because a 46% band on a 2.5in-tall
-     card is a strip too short to carry a face AND leave room for the rows. */
-  .ph,.ph-none{position:absolute;left:0;top:0;display:block;
-    width:${SIDE ? Math.round(W * 0.42) : W}px;
-    height:${SIDE ? H : Math.round(H * 0.46)}px}
+  /* THE PHOTO. A framed portrait at its own 4:5 shape, sized from its pixels (PHOTO_PPI above), on a
+     warm band: across the top on a portrait card with the name beside it, down the left on a landscape
+     card with the name below it. A face is what makes this a prayer card rather than a data tile, and
+     a face printed from too few pixels is blurred, which is no way to show someone. */
+  .band{position:absolute;left:0;top:0;
+    width:${SIDE ? COL : W}px;height:${SIDE ? H : BAND}px;
+    background:linear-gradient(160deg,#e6dfcd,#cfc6ad)}
+  .ph,.ph-none{position:absolute;display:block;box-sizing:border-box;
+    left:${SIDE ? Math.round((COL - PW) / 2) : 12}px;
+    top:${SIDE ? 12 : Math.round((BAND - PH) / 2)}px;
+    width:${PW}px;height:${PH}px;border:3px solid #fff;border-radius:2px;
+    box-shadow:0 1px 4px rgba(0,0,0,.25)}
   .ph{object-fit:cover;background:#ddd6c6}
-  .ph-none{background:linear-gradient(160deg,#e6dfcd,#cfc6ad);display:flex;
+  .ph-none{background:#efe9da;display:flex;
     align-items:center;justify-content:center;text-align:center;padding:6px;
-    font:italic 11px Georgia,serif;color:#8c8170}
+    font:italic 10px Georgia,serif;color:#8c8170}
 
-  /* A soft scrim under the name so it stays legible over any photo. */
-  .scrim{position:absolute;left:0;
-    width:${SIDE ? Math.round(W * 0.42) : W}px;
-    top:${SIDE ? Math.round(H * 0.58) : Math.round(H * 0.30)}px;
-    height:${SIDE ? Math.round(H * 0.42) : Math.round(H * 0.16)}px;
-    background:linear-gradient(to bottom,rgba(24,22,18,0),rgba(24,22,18,.72))}
-  .nm{position:absolute;
-    left:${SIDE ? 10 : 14}px;
-    ${SIDE ? `width:${Math.round(W * 0.42) - 20}px;` : `right:14px;`}
-    top:${SIDE ? Math.round(H * 0.74) : Math.round(H * 0.355)}px;
-    font:700 ${SIDE ? 15 : 19}px Georgia,serif;color:#fff;line-height:1.05;
-    text-shadow:0 1px 3px rgba(0,0,0,.5)}
-  .nm.long{font-size:${SIDE ? 12 : 15}px}
+  .nm{position:absolute;display:flex;align-items:center;
+    ${SIDE
+    ? `left:10px;width:${COL - 20}px;top:${12 + PH + 6}px;bottom:10px;align-items:flex-start;justify-content:center;text-align:center;`
+    : `left:${12 + PW + 10}px;right:8px;top:0;height:${BAND}px;`}
+    font:700 ${SIDE ? 14 : 17}px Georgia,serif;color:#1b1a17;line-height:1.1;overflow:hidden;
+    overflow-wrap:anywhere}
+  /* Steps by the LONGEST WORD as well as the length: the name sits in a narrow box beside the photo,
+     and one unbreakable word (the dataset has 16-letter ones, e.g. Pagativeshagallu) would overflow it
+     sideways. overflow-wrap:anywhere is the last resort, so a name is never cut off without a sign. */
+  .nm.long{font-size:${SIDE ? 11.5 : 14}px}
+  .nm.xlong{font-size:${SIDE ? 10.5 : 11}px}
+  /* A HYPHEN ONLY WHERE A WORD CANNOT FIT. hyphens:auto on every name would let the browser split ANY
+     word at a line end ("Northern Conchu-/cos"), and a people group's name split mid-word is worse than
+     the problem it solves. So it applies only to names holding a 14+ letter word (12 of 2,107), and the
+     limit keeps short words whole: the only multi-word ones are "Deaf <X>", and Deaf is never split. */
+  .nm.hy{-webkit-hyphens:auto;hyphens:auto;hyphenate-limit-chars:10 4 4}
 
   .body{position:absolute;right:14px;overflow:hidden;
-    left:${SIDE ? Math.round(W * 0.42) + 12 : 14}px;
-    top:${SIDE ? 12 : Math.round(H * 0.48)}px;
+    left:${SIDE ? COL + 12 : 14}px;
+    top:${SIDE ? 12 : BAND + 8}px;
     bottom:${SIDE ? Math.round(H * 0.30) : Math.round(H * 0.20)}px}
   .row{display:flex;gap:6px;font:400 9.5px Georgia,serif;line-height:1.5;margin-bottom:1px}
   .k{color:#8c8170;min-width:52px;flex:0 0 auto}
@@ -142,7 +167,7 @@ export function createCardRenderer({ strings, lang = 'en', stock = 'poker',
   /* FOOTER: the QR is the card's whole reason to survive the day it is handed
      over — it carries the reader to the live profile in their own language. */
   .ft{position:absolute;right:14px;bottom:10px;
-    left:${SIDE ? Math.round(W * 0.42) + 12 : 14}px;
+    left:${SIDE ? COL + 12 : 14}px;
     display:flex;align-items:flex-end;gap:8px}
   .qr{flex:0 0 auto;line-height:0}
   .ftx{flex:1 1 auto;min-width:0}
@@ -151,6 +176,15 @@ export function createCardRenderer({ strings, lang = 'en', stock = 'poker',
   .url{font:400 7px Georgia,serif;color:#a89f8c;word-break:break-all;margin-top:1px}
   .brand{position:absolute;right:14px;bottom:10px;
     font:400 7px Georgia,serif;color:#b9ae99;text-align:right}`;
+  }
+
+  // The name's size step, from its length and its longest word (see .nm above).
+  function nameSize(name) {
+    const word = Math.max(0, ...String(name).split(/[\s,()/-]+/).map((w) => w.length));
+    if (word >= 14) return ' xlong hy';
+    if (name.length > 28) return ' xlong';
+    if (word >= 11 || name.length > 16) return ' long';
+    return '';
   }
 
   // One card = one page.
@@ -177,8 +211,8 @@ export function createCardRenderer({ strings, lang = 'en', stock = 'poker',
       .map(([k, v]) => `<div class="row"><div class="k">${esc(k)}</div>`
         + `<div class="v">${esc(v)}</div></div>`).join('');
 
-    return `<div class="card">${photo}<div class="scrim"></div>`
-      + `<div class="nm${name.length > 16 ? ' long' : ''}">${esc(name)}</div>`
+    return `<div class="card"><div class="band"></div>${photo}`
+      + `<div class="nm${nameSize(name)}">${esc(name)}</div>`
       + `<div class="body">${rows}${relHtml}</div>`
       + `<div class="ft"><div class="qr">${qrSvg(url, { size: 54, margin: 1 })}</div>`
       + `<div class="ftx"><div class="cta">${esc(t('card_cta'))}</div>`

@@ -23,7 +23,7 @@
  * already showing chips — two chip rows over one filterSet is the bug the dedup removed.
  */
 import { inject, computed } from 'vue'
-import { tStatic } from '@map/i18n/index.js'
+import { tStatic, formatList } from '@map/i18n/index.js'
 
 // This component's chrome, read out of the catalogue. tStatic and not useI18n: these mount inside
 // custom elements that install no i18n plugin, and an unguarded useI18n() throws on the way in and
@@ -54,7 +54,9 @@ const filterSet = bus?.filterSet || {}
 // punctuation: the second difference reads as a rendering bug rather than as missing configuration.
 // Kept as one liftable expression on purpose — check:legend-mirrors pulls it out of this source and
 // drives it, so "no resolver yields the raw value" is measured instead of asserted.
-const labelFor = (facet, value) => (cfg?.legend?.labelFor ? cfg.legend.labelFor(facet, value) : (Array.isArray(value) ? value.join(', ') : value))
+// Several values on ONE facet are ALTERNATIVES: the selection bus matches with includes(), so adding a value
+// widens the result. 'or' in the reader's language says that; a bare comma read as ALL to most people.
+const labelFor = (facet, value) => (cfg?.legend?.labelFor ? cfg.legend.labelFor(facet, value) : (Array.isArray(value) ? formatList(value, { type: 'disjunction' }) : value))
 const chips = computed(() => Object.entries(filterSet).map(([k, v]) => ({
   k,
   text: String(labelFor(k, v)),
@@ -93,7 +95,7 @@ const removeLabel = (c) => T('aria.removeFilter', 'Remove filter {name}').replac
 useShadowStyles(`
   /* BOUNDED so the chips never slide under the centred search bar (BUG-SELECTION-CHIPS-UNDER-SEARCHBAR).
      MEASURED live at 1440x900 before the fix: search x 540..900, first chip x 482..718 — ~178px of
-     overlap, which is the Driver's "renders badly under the TOP search bar".
+     overlap, which is why the chips rendered badly under the top search bar.
      WHY THE CHIPS MOVE AND NOT THE SEARCH: DashboardTopBar deliberately absolute-centres the search
      (left:50% + translateX(-50%)) so its centre stays fixed "regardless of the left (title/breadcrumb/
      chips) or right content widths" — a flow-based margin:auto would drift as chips grow. It also
@@ -102,8 +104,8 @@ useShadowStyles(`
      50% - min(180px, 21%). The chip strip starts after the brand/breadcrumb and must STOP SHORT of
      that edge. min(180px,21%) + a 14px gutter gives the max-width below; 34% is the conservative
      floor for narrow viewports where the 42% clamp binds instead of the 360px one.
-     nowrap + the per-chip cap keeps the bar at 52px — the Driver has repeatedly said NEVER add a
-     second header row, so growing the bar is not an option. Overflowing chips scroll horizontally
+     nowrap + the per-chip cap keeps the bar at 52px. A second header row is ruled out, repeatedly
+     and firmly, so growing the bar is not an option. Overflowing chips scroll horizontally
      and every truncated label keeps its full text in a title tooltip. */
   /* NO max-width here ON PURPOSE. The bound lives ONCE, on .rd-left in DashboardTopBar (which wraps
      brand + breadcrumb + chips together). I briefly had a second cap here and it was both redundant

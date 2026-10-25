@@ -44,7 +44,7 @@ useShadowStyles(
   // fallback is wider" than Bebas. That is STALE: Bebas is vendored now (assets/fonts/bebas-neue,
   // glyph oracle 279 = 279 SAME), so there is no wider fallback to compensate for.
   // Its other claim -- "every value DX-life itself renders keeps their size" -- was FALSIFIED by
-  // measurement: rega found "43,045,275" (10 chars, so it hit the 'long' bucket) rendered at
+  // measurement: "43,045,275" (10 chars, so it hit the 'long' bucket) rendered at
   // 38.15px against their 47.68px on the same-width card, while the other three stats matched
   // exactly. A rule whose own invariant is violated in practice is not protecting anything.
   // Deleted WITH its mechanism -- the binding and lenBucket() too, not just the rules.

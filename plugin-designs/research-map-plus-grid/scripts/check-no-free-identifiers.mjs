@@ -16,7 +16,7 @@
  *
  * So this reads what the compiler reads and asks the one question those gates cannot: is every name
  * this file USES actually BOUND somewhere — imported, declared, a parameter, or a known global?
- * No browser, no mount, milliseconds per file. It is the cheap half of the pair; exp-shepherd's
+ * No browser, no mount, milliseconds per file. It is the cheap half of the pair; the browser lane's
  * check:composites-mount is the expensive half that proves the thing actually runs.
  *
  * SCOPE: every .vue under plugin-designs/ and library/ — fleet-wide, because the mistake was a
@@ -38,7 +38,10 @@ import * as acorn from 'acorn'
 
 const TAG = 'NO-FREE-IDENTIFIERS'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
-const ROOTS = ['plugin-designs', 'library']
+// internal/ too, and .mjs files (below): 30 browser gates gained `const ROOT = …(_fileURLToPath(…))` in one
+// commit, and the two that never imported it crashed on load for four days, because they run only by hand.
+// A free identifier at module scope is the same defect in a Node script as in an SFC.
+const ROOTS = ['plugin-designs', 'library', 'internal']
 
 // Vue's <script setup> compiler macros: real bindings the compiler provides, not free names.
 const VUE_MACROS = [
@@ -52,7 +55,7 @@ const GLOBALS = [
   'Promise', 'Set', 'Map', 'WeakMap', 'WeakSet', 'Date', 'RegExp', 'Proxy', 'Reflect', 'BigInt',
   'Error', 'TypeError', 'RangeError', 'SyntaxError', 'Infinity', 'NaN', 'undefined',
   'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent',
-  'encodeURI', 'decodeURI', 'structuredClone', 'queueMicrotask', 'crypto',
+  'encodeURI', 'decodeURI', 'structuredClone', 'queueMicrotask', 'crypto', 'atob', 'btoa',
   'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
   'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback',
   'fetch', 'Headers', 'Request', 'Response', 'AbortController', 'AbortSignal',
@@ -60,6 +63,7 @@ const GLOBALS = [
   'Event', 'CustomEvent', 'EventTarget', 'MessageChannel', 'BroadcastChannel',
   'IntersectionObserver', 'DOMException', 'createImageBitmap', 'ResizeObserver', 'MutationObserver', 'PerformanceObserver', 'performance',
   'HTMLElement', 'HTMLCanvasElement', 'HTMLImageElement', 'Element', 'Node', 'NodeList', 'DOMParser',
+  'Path2D', 'OffscreenCanvas', 'ImageData',   // canvas built-ins (the Wall draws its icons with Path2D)
   'Image', 'Audio', 'Intl', 'getComputedStyle', 'matchMedia', 'alert', 'confirm', 'prompt',
   'localStorage', 'sessionStorage', 'devicePixelRatio', 'innerWidth', 'innerHeight',
   'process', 'Buffer', '__dirname', '__filename', 'require', 'module', 'exports',
@@ -73,7 +77,15 @@ const GLOBALS = [
   'DataView', 'WeakRef', 'FinalizationRegistry', 'ClipboardItem', 'CSSStyleSheet', 'XMLSerializer',
   // Build-time defines: vite REPLACES these before the browser ever sees them (vite.config.js
   // `define`), so they are bound by the bundler rather than by the file.
-  '__DOXA_TREE_NAME__', '__DOXA_QA__',
+  '__DOXA_TREE_NAME__', '__DOXA_QA__', '__DOXA_SHARE_BASE__',
+  // Bound by the build too, but by a transform rather than `define`: with DX_SHIP_ONE_LOCALE the
+  // i18nAreasPlugin prepends `const __DX_LOCALE_SRI__ = {…}` to library/i18n/index.js; without it the
+  // name does not exist, which is why its one read sits behind `typeof … !== 'undefined'`.
+  '__DX_LOCALE_SRI__',
+  // Standard globals the first lists missed, found by extending the scan to internal/*.mjs: eval and
+  // EvalError; Bun in scripts `bun` runs; and window members used inside page.evaluate() callbacks,
+  // which run in the browser, not in Node.
+  'eval', 'EvalError', 'Bun', 'scrollX', 'scrollY', 'scrollTo', 'Storage',
 ]
 const PRELUDE = new Set([...VUE_MACROS, ...GLOBALS])
 
@@ -260,7 +272,7 @@ function vueFiles(dir, out = []) {
     // and the bug that emptied Big Picture's Religion and Region charts was a plain .js module:
     // useDashboardAggregations.js read NEUTRAL five times and never imported it. A bundle compiles
     // .js and .vue alike; the gate was seeing half of what ships.
-    else if (e.endsWith('.vue') || e.endsWith('.js')) out.push(p)
+    else if (e.endsWith('.vue') || e.endsWith('.js') || e.endsWith('.mjs')) out.push(p)
   }
   return out
 }
@@ -272,8 +284,10 @@ let scanned = 0
 
 for (const file of files) {
   const src = readFileSync(file, 'utf8')
+  // A dated one-shot diagnostic (tagged @one-shot, see check-no-orphan-gates) is kept as a recipe, not run.
+  if (/^\s*(?:\*|\/\/)\s*@one-shot\b/m.test(src.slice(0, 2600))) continue
   let descriptor
-  if (file.endsWith('.js')) {
+  if (file.endsWith('.js') || file.endsWith('.mjs')) {
     // A .js module is its own script block. Running it through the SFC parser is what broke the first
     // attempt at this: parseSFC found no <script>, the content came back shifted, and acorn reported
     // "Unexpected token (2:1)" — the second line of the file's own doc comment. offset 0 keeps the

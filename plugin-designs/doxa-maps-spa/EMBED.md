@@ -1,8 +1,8 @@
-# Embedding the Research Gallery
+# Embedding Deep Research
 
-![The Research Gallery embedded by script on a partner page: the tab rail on the left, Big Picture open](../../documentation/readme-images/deploy3-js-embed-dxlife.png)
+![Deep Research embedded by script on a partner page: the tab rail on the left, Big Picture open](../../documentation/readme-images/deploy3-js-embed-dxlife.png)
 
-`<doxa-maps-spa>` (labeled **Research Gallery**) is the capability-5 app shell: one element whose
+`<doxa-maps-spa>` (labeled **Deep Research**) is the capability-5 app shell: one element whose
 tab rail nests every production map. It is built to drop onto somebody else's page. Below,
 `TREE` means the URL of the built `doxa-maps/` folder wherever it is served, for example
 `https://YOUR-HOST/doxa-maps`.
@@ -13,7 +13,7 @@ tab rail nests every production map. It is built to drop onto somebody else's pa
 |---|---|---|
 | **Paste** | two lines: `<script>` + `<doxa-maps-spa>` | one `<iframe>` |
 | **Sizing** | a block in your layout, `85vh` by default | whatever size you give the frame |
-| **Language** | follows your page (`<html lang>`), or `language="…"` | `?lang=…` on the `src` |
+| **Language** | follows your page (`<html lang>`), or `language="…"`; readers can switch it in the gallery (see Events) | `?lang=…` on the `src` |
 | **Open on a map** | `tab="upg-100"` | `?tab=upg-100` |
 | **Keyless maps** | `provider="maplibre"` | `?provider=maplibre` |
 | **Your server must send** | CORS on the whole tree | CORS + `frame-ancestors` on the leaf page |
@@ -61,9 +61,11 @@ Add `?tab=<id>` to the `src` to open a specific map.
 | `token-url` | none | Token endpoint forwarded to each map. |
 | `tree-base` | derived from the script URL | Pin the tree root explicitly (needed only when the script is re-hosted apart from its tree). |
 | `heading` | `DX-Maps` | Shell title (shown only when the shell header is enabled). |
+| `home-href` | `https://doxa.life` (with `/ar`, `/fr`, … in the gallery's language) | Your homepage, for the "Back to homepage" link directly above the rail 19s Collapse button (at the top of the drawer on a phone). Pass your own to send readers back to your site. `javascript:` and `data:` URLs are ignored. |
+| `home-label` | "Back to homepage" in the gallery’s language | The link’s text, in your own words. |
 
 Tab ids: `dashboard-plus-grid` (Big Picture), `research-map-plus-grid` (Simple Research),
-`regions-dashboard`, `upg-100`, `prayer-map` (Prayer Progress), `cities-internet`,
+`regions-dashboard`, `upg-100` (UPG 100 List Posters), `prayer-map` (Prayer Progress), `country-posters`, `poster-design`, `cities-internet`,
 `gospel-resources`, and every Experimental bundle by its bundle name.
 
 ## Events
@@ -75,6 +77,32 @@ mirror it into its own URL or analytics:
 document.querySelector('doxa-maps-spa')
   .addEventListener('tab-change', (e) => console.log(e.detail[0].id, e.detail[0].label))
 ```
+
+### The language menu: `doxa-language-request`
+
+Readers can change the language from the gallery itself: a menu at the end of the phone bar, and at
+the bottom of the rail on a desktop. Before switching, the gallery asks your page first by dispatching
+a cancelable `doxa-language-request` event (it bubbles and crosses shadow roots). Its shape is
+`e.detail.language`, not an array.
+
+- **Your page owns the language** (it passes `language`, or its URL carries the locale): call
+  `preventDefault()` and change the language your own way. Then set the gallery's `language`, and the
+  gallery follows.
+
+  ```js
+  const gallery = document.querySelector('doxa-maps-spa')
+  gallery.addEventListener('doxa-language-request', (e) => {
+    e.preventDefault()
+    switchMySiteTo(e.detail.language)   // your router or i18n; then gallery.setAttribute('language', …)
+  })
+  ```
+
+  On Nuxt with @nuxtjs/i18n that call is `navigateTo(switchLocalePath(e.detail.language))`;
+  switchLocalePath already keeps the query and hash. If a new locale route re-mounts the page, carry the
+  open tab across: keep the id from `tab-change` (`e.detail[0].id`) in `?tab=`, which the gallery reads.
+
+- **You do nothing:** the gallery switches itself. The reader's pick then holds even over a `language`
+  you passed, until you change that attribute again. The gallery never writes your page's URL.
 
 ## A good guest on your page
 

@@ -49,7 +49,7 @@ function exactIndices(haystack, needle) {
 // (threshold 0.4, ignoreLocation) tolerates TYPOS -- an extra trailing letter ("Bhutann"),
 // a substituted one ("Indoa") -- because bitap scores k errors against the pattern length.
 // A subsequence can only ever DROP haystack chars; an EXTRA needle char always fails it.
-// Measured on the live dashboard: 'Bhutan' -> 13 rows, 'Bhutann' -> 0. The Driver's test.
+// Measured on the live dashboard: 'Bhutan' -> 13 rows, 'Bhutann' -> 0, the reported test.
 //
 // So this is the standard approximate-substring DP (Sellers/Ukkonen "k-errors" matching):
 // best edit distance of the needle against ANY window of the haystack (free start, free end),
@@ -63,7 +63,7 @@ function approxIndices(haystack, needle, threshold) {
   // ★ ABSOLUTE CAP AT 2 EDITS (the classic did-you-mean bound). threshold*len alone grows with
   // the term: at 8+ chars it allowed 3 errors, and 3-edit windows are how 'Canadian' -- a country
   // with ZERO rows in this dataset -- raked 47 rows of unrelated facets. Every real typo the
-  // Driver reported (Bhutann, Banladesh, Austrian->Austria, Canadian->Canada) is 1-2 edits.
+  // reported (Bhutann, Banladesh, Austrian->Austria, Canadian->Canada) is 1-2 edits.
   const maxErr = Math.min(2, Math.floor(threshold * m))
   if (maxErr <= 0) return null
   // dp[j] = min errors matching the whole prefix n[0..i] ending at text position j.
@@ -88,9 +88,8 @@ function approxIndices(haystack, needle, threshold) {
 /**
  * Low-level predicates shared with the dashboard's search matcher (useDashboardShell.js).
  *
- * ★ TIERED, NOT A UNION (Driver 2026-09-24: "fuzzy search is too fuzzy -- Bhutan returns more
- * results than just the country, and there is no interoperability with the other filters like
- * selecting it as a place"). The first fuzzy pass returned exact matches PLUS every <=k-error
+ * ★ TIERED, NOT A UNION: search was too fuzzy (Bhutan returned more than the country) and did not
+ * agree with the other filters, such as choosing it as a Place. The first fuzzy pass returned exact matches PLUS every <=k-error
  * neighbour, so the EXACT term 'Bhutan' counted 132 rows while the Country filter counted 13 --
  * two controls disagreeing about the same place. The conventional contract is tiered: when a
  * term has exact matches, return ONLY those (search now agrees with the facet, 13 = 13); the
@@ -106,9 +105,8 @@ export function exactMatches(text, term) {
   return raw.toLowerCase().includes(q.toLowerCase())
 }
 /**
- * ★ TIER 2 — FACET-VALUE RESOLUTION (Driver 2026-09-24: "if I search the name of the country
- * and add n to it, like Austrian or Canadian, I would like for there to be a selection of that
- * country in the search results -- the table under the map shows the result for that country").
+ * ★ TIER 2 — FACET-VALUE RESOLUTION: a country's name with an n added (Austrian, Canadian) selects
+ * that country in the search results, so the table under the map shows that country's result.
  * Given the DISTINCT values of a facet (country labels, region names...), return the values the
  * term fuzzy-resolves to. A term like 'Austrian' then selects rows by country === 'Austria' --
  * byte-identical to picking the country as a Place filter -- instead of raking every text field

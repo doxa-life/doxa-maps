@@ -2,7 +2,7 @@
  "meta": {
   "title": "Key Cities / Location Clusters",
   "grain": "one row per ~25km location cluster",
-  "caveat": "A cluster is people-group CENTROIDS, not a settlement. place_name comes from a cited gazetteer (Nominatim/OSM, ODbL); an unnamed row is honest, not missing.",
+  "caveat": "A cluster is people-group PINS (each marks a people group, not a town), not a settlement. place_name comes from a cited gazetteer (Nominatim/OSM, ODbL); an unnamed row is honest, not missing.",
   "internet_caveat": "Internet figures are NATIONAL. Per-city connectivity is not publicly available at this scale."
  },
  "columns": [

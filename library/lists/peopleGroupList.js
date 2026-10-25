@@ -15,7 +15,7 @@
  * prayer fields live. applyPeopleGroupList() keeps the rows whose slug belongs to the list, from a
  * membership file the build writes (data/people-groups/lists/<id>.json, served under the asset
  * pool). So under Project 700 a map shows the DOXA groups that are Project 700 groups. The list's
- * groups that DOXA does not carry are Tier B, per map (SPEC-PEOPLE-GROUP-LIST-PROP.md).
+ * groups that DOXA does not carry are Tier B, per map (library/lists/README.md).
  *
  * FAILS CLOSED. If a non-default list's membership cannot be loaded, the map gets NO rows and the
  * console names the list and the URL. A map that silently showed all 2,107 while an embed asked for
@@ -23,6 +23,7 @@
  *
  * Pure except for the fetch; safe outside a Vue setup().
  */
+import { retryFetch } from '../composables/retryFetch.js'
 import registry from './lists.json'
 import { resolveAssetsBase } from '../utils/embedBase.js'
 
@@ -90,7 +91,7 @@ const membership = new Map()
 export function loadListMembership(id, profileConfig) {
   const url = `${resolveAssetsBase(unwrapConfig(profileConfig))}/people-groups/lists/${id}.json`
   if (!membership.has(url)) {
-    membership.set(url, fetch(url)
+    membership.set(url, retryFetch(url)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then((d) => new Set(Array.isArray(d?.slugs) ? d.slugs : []))
       .catch((e) => { membership.delete(url); throw new Error(`list "${id}" membership ${url}: ${e.message}`) }))

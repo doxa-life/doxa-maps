@@ -24,7 +24,7 @@
  * (library/scripts/people-groups/build-points.mjs; 0.74 MB instead of the 7.5 MB slim file) — plus
  * the live DOXA set via the standard pray-tools pipeline.
  *
- * ★ LOAD ORDER (2026-09-25, the Driver: "not even loading, takes a very long time"). Pins used to
+ * ★ LOAD ORDER (2026-09-25: the map was reported as not loading, or taking a very long time). Pins used to
  *   wait for BOTH the 7.5 MB file AND the live prayer API before anything drew. Now the compact
  *   file alone draws every pin by GSEC, and the DOXA overlay recolours its pins black when the API
  *   answers. A slow or unreachable API costs the black layer, never the map.
@@ -39,6 +39,7 @@ import { useShadowStyles }    from '@map/composables/useShadowStyles.js'
 import { DataSourceManager }  from '@map/utils/DataSourceManager.js'
 import MapToolbar             from '@map/components/map-controls/MapToolbar.vue'
 import ShareButton            from '@map/components/map-controls/ShareButton.vue'
+import HelpButton             from '@map/components/map-controls/HelpButton.vue'
 import { resolveAssetsBase }  from '@map/utils/embedBase.js'
 
 useShadowStyles(`
@@ -109,7 +110,7 @@ const assetsBase  = computed(() => resolveAssetsBase(profileConfig?.value || {})
 // place for the two to drift apart.
 // C4 wave 3d: the guard is library/composables/useOptionalI18n now — this site needs more than `t`,
 // so it takes the {t, te, locale} form rather than useOptionalT.
-// ★ THE LOCALE-HONOURING FALLBACK, per dx-shepherd's ruling (2026-09-27) and the Driver's goal (d):
+// ★ THE LOCALE-HONOURING FALLBACK (ruled 2026-09-27, product goal (d)):
 // a BARE-HOST EMBED WITH ?lang=ar MUST RENDER ARABIC. Recorded in COMMON.md as the embed contract.
 // This file used to pass its inline EN map as the fallback, which served ENGLISH to exactly the hosts
 // that cannot install vue-i18n — the seven bundles here that install none. tStatic honours the runtime
@@ -132,7 +133,7 @@ const uiLocale = computed(() => {
 })
 const fmt = (n) => { try { return Number(n).toLocaleString(uiLocale.value) } catch (_) { return Number(n).toLocaleString() } }
 
-// ─── The four categories (the Driver's palette) ──────────────────────────────
+// ─── The four categories (the chosen palette) ────────────────────────────────
 // Tuned for the LIGHT basemap (2026-09-25; was a near-black map, where the black DOXA pins vanished).
 // Same four meanings and hues; yellow and green are a step darker because pure #f1c40f / #2ecc71
 // wash out on near-white, and every pin carries a thin dark ring instead of a white one.
@@ -188,8 +189,18 @@ const mapData = useMapData({
   markRaw: (v) => v,
 })
 
-let featuresAll = []          // kept for legend clicks (filter + fitBounds)
+// ★ PERFORMANCE (DRV1650-APG-PERFORMANCE, 2026-09-29). The map worker gets SLIM features: an id (the
+// row's index) and one category number. Every name, country, language and religion used to ride on
+// all 12,379 features, 3.7 MB of GeoJSON built and re-tiled TWICE (first paint, then the DOXA recolour);
+// slim, it is 1.25 MB, built once. The popup reads the row by id. The DOXA recolour no longer rebuilds
+// the 12,379 with all their fields: DOXA pins are a small source of their own drawn on top, and the base
+// is re-sent once, slim, WITHOUT them (an invisible twin per DOXA group still cost a draw: measured).
+let rows = []                 // the decoded rows; a feature's id is its index here
+let doxaIds = new Set()       // row indexes in the DOXA set (empty until the prayer API answers)
 let doxaBySlugRop = new Map() // rop3 → { slug, name } for the pray link
+// Category numbers on the base layer, from GSEC alone (DOXA is its own layer): the paint and the
+// sort order read these.
+const GSEC_CAT = ['frontier', 'unreached', 'reached']
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
@@ -198,7 +209,7 @@ function esc(s) {
 
 // Rows in one shape whichever file served them: the compact points file (column arrays + string
 // dictionaries), or — for a tree built before it existed — the old slim file's objects.
-async function loadRows() {
+async function loadRows() {   // → the decoded rows
   const base = assetsBase.value
   const r = await fetch(`${base}/people-groups/people-groups-points.json`)
   if (r.ok) {
@@ -220,28 +231,34 @@ async function loadRows() {
   }))
 }
 
-// Every pin by GSEC, from the file alone — the DOXA overlay (applyDoxa) comes later and never blocks.
-function buildFeatures(rows, doxaSet) {
+// A row the map can place (the file carries a few without coordinates).
+const placed = (row) => { const lat = Number(row.lat), lng = Number(row.lng); return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0) }
+// A row's category: DOXA first, else by GSEC. The counts, the legend filter and the popup all use it.
+const catOf = (i) => (doxaIds.has(i) ? 'doxa' : categorize({ GSEC: rows[i].gsec }, new Set()))
+const slimPoint = (i, c) => ({ type: 'Feature', id: i, geometry: { type: 'Point', coordinates: [Number(rows[i].lng), Number(rows[i].lat)] }, properties: { c } })
+
+// Every pin by GSEC, from the file alone: built ONCE. The DOXA overlay (applyDoxa) comes later and never blocks.
+function buildBase() {
   const feats = []
-  const c = { doxa: 0, frontier: 0, unreached: 0, reached: 0 }
-  for (const row of rows) {
-    const lat = Number(row.lat), lng = Number(row.lng)
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) continue
-    const cat = categorize({ ROP3Code: row.rop3, GSEC: row.gsec }, doxaSet)
-    c[cat]++
-    feats.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: {
-        name: row.name, country: row.country, population: Number(row.population) || 0,
-        gsec: row.gsec, evangelical: row.evangelical, language: row.language, religion: row.religion,
-        rop3: String(row.rop3 || ''), category: cat,
-      },
-    })
-  }
-  counts.value = c
-  featuresAll = feats
+  for (let i = 0; i < rows.length; i++) if (placed(rows[i]) && !doxaIds.has(i)) feats.push(slimPoint(i, GSEC_CAT.indexOf(catOf(i))))
+  recount()
   return { type: 'FeatureCollection', features: feats }
+}
+function recount() {
+  const c = { doxa: 0, frontier: 0, unreached: 0, reached: 0 }
+  for (let i = 0; i < rows.length; i++) if (placed(rows[i])) c[catOf(i)]++
+  counts.value = c
+}
+// The DOXA set arrived: its pins go on the top layer (a ~2,100-point source) and the base is re-sent,
+// slim, without them, so no DOXA group is drawn twice.
+function applyDoxa(doxaSet) {
+  const m = map.value
+  if (!m || !m.getSource('apg')) return
+  const ids = new Set()
+  for (let i = 0; i < rows.length; i++) if (placed(rows[i]) && doxaSet.has(String(rows[i].rop3 || ''))) ids.add(i)
+  doxaIds = ids
+  m.getSource('apg').setData(buildBase())
+  m.getSource('apg-doxa').setData({ type: 'FeatureCollection', features: [...ids].map((i) => slimPoint(i, 0)) })
 }
 
 // The live DOXA set (rop3 = peoplegroups.org ROP3Code). Resolves to an empty set on failure.
@@ -263,9 +280,14 @@ async function loadDoxaSet() {
   return doxaSet
 }
 
+// Pin size and ring, shared by the base and the DOXA layer.
+const PIN_RADIUS = ['interpolate', ['linear'], ['zoom'], 0, 2.2, 4, 3.4, 8, 6, 12, 9]
+const PIN_STROKE_WIDTH = ['interpolate', ['linear'], ['zoom'], 0, 0.3, 6, 0.6, 12, 1]
+
 function addLayer(fc) {
   const m = map.value
   m.addSource('apg', { type: 'geojson', data: fc })
+  m.addSource('apg-doxa', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
   m.addLayer({
     id: 'apg-pins', type: 'circle', source: 'apg',
     // ★ circle-sort-key IS A LAYOUT PROPERTY, NOT PAINT — and putting it in paint cost this
@@ -277,29 +299,43 @@ function addLayer(fc) {
     // Same failure shape as the *-emissive-strength drops fixed alongside this; the sort order
     // itself is unchanged, it just now lives where the style spec says it belongs.
     layout: {
-      // DOXA above frontier above unreached above reached — the assignment stays visible.
-      'circle-sort-key': ['match', ['get', 'category'], 'doxa', 4, 'frontier', 3, 'unreached', 2, 1],
+      // frontier above unreached above reached (DOXA is the layer above all three).
+      'circle-sort-key': ['match', ['get', 'c'], 0, 3, 1, 2, 1],
     },
     paint: {
-      'circle-color': ['match', ['get', 'category'],
-        'doxa', CAT_COLOR.doxa, 'frontier', CAT_COLOR.frontier,
-        'unreached', CAT_COLOR.unreached, CAT_COLOR.reached],
+      'circle-color': ['match', ['get', 'c'], 0, CAT_COLOR.frontier, 1, CAT_COLOR.unreached, CAT_COLOR.reached],
       // Thin high-contrast ring — visible, never clunky (the pin-visibility spec).
       // A thin DARK ring on the light basemap: separates overlapping pins and keeps the yellow and
       // green legible on near-white (a white ring was right only on the old dark map).
       'circle-stroke-color': '#1f2937',
-      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 0, 0.3, 6, 0.6, 12, 1],
+      'circle-stroke-width': PIN_STROKE_WIDTH,
       'circle-stroke-opacity': 0.55,
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2.2, 4, 3.4, 8, 6, 12, 9],
+      'circle-radius': PIN_RADIUS,
       'circle-opacity': 0.92,
     },
   })
-  m.on('mouseenter', 'apg-pins', () => { m.getCanvas().style.cursor = 'pointer' })
-  m.on('mouseleave', 'apg-pins', () => { m.getCanvas().style.cursor = '' })
-  m.on('click', 'apg-pins', (e) => {
-    const f = e.features && e.features[0]
-    if (!f) return
-    const p = f.properties
+  // DOXA: the assignment, black, above everything else.
+  m.addLayer({
+    id: 'apg-doxa-pins', type: 'circle', source: 'apg-doxa',
+    paint: {
+      'circle-color': CAT_COLOR.doxa,
+      'circle-stroke-color': '#1f2937', 'circle-stroke-width': PIN_STROKE_WIDTH, 'circle-stroke-opacity': 0.55,
+      'circle-radius': PIN_RADIUS, 'circle-opacity': 0.92,
+    },
+  })
+  for (const id of ['apg-pins', 'apg-doxa-pins']) {
+    m.on('mouseenter', id, () => { m.getCanvas().style.cursor = 'pointer' })
+    m.on('mouseleave', id, () => { m.getCanvas().style.cursor = '' })
+  }
+  // ONE click handler, top layer first: a DOXA pin wins over a base pin under it.
+  m.on('click', (e) => {
+    const hits = m.queryRenderedFeatures(e.point, { layers: ['apg-doxa-pins', 'apg-pins'].filter((id) => m.getLayer(id)) })
+    const f = hits[0]
+    if (!f || rows[Number(f.id)] == null) return
+    const i = Number(f.id), row = rows[i]
+    const category = catOf(i)
+    const p = { name: row.name, country: row.country, population: Number(row.population) || 0, gsec: row.gsec,
+      evangelical: row.evangelical, language: row.language, religion: row.religion, rop3: String(row.rop3 || ''), category }
     const doxaRec = p.category === 'doxa' ? doxaBySlugRop.get(p.rop3) : null
     const cat = CATS.find(x => x.id === p.category)
     const pray = doxaRec && doxaRec.slug
@@ -329,16 +365,21 @@ function selectCat(id) {
   if (activeCat.value === id) {          // click again = show everything
     activeCat.value = null
     m.setFilter('apg-pins', null)
+    m.setLayoutProperty('apg-doxa-pins', 'visibility', 'visible')
     m.fitBounds([[-170, -55], [179, 72]], { padding: 20, duration: 900 })
     return
   }
   activeCat.value = id
-  m.setFilter('apg-pins', ['==', ['get', 'category'], id])
+  // DOXA lives on its own layer; the other three are the base layer's category numbers (the base holds
+  // no DOXA group, so a GSEC filter never shows one twice).
+  if (id === 'doxa') m.setFilter('apg-pins', ['==', ['get', 'c'], -1])
+  else m.setFilter('apg-pins', ['==', ['get', 'c'], GSEC_CAT.indexOf(id)])
+  m.setLayoutProperty('apg-doxa-pins', 'visibility', id === 'doxa' ? 'visible' : 'none')
   // Zoom OUT to see every dot of the chosen category (the visibility spec).
   let minX = 180, minY = 85, maxX = -180, maxY = -85, n = 0
-  for (const f of featuresAll) {
-    if (f.properties.category !== id) continue
-    const [x, y] = f.geometry.coordinates
+  for (let i = 0; i < rows.length; i++) {
+    if (!placed(rows[i]) || catOf(i) !== id) continue
+    const x = Number(rows[i].lng), y = Number(rows[i].lat)
     if (x < minX) minX = x; if (x > maxX) maxX = x
     if (y < minY) minY = y; if (y > maxY) maxY = y
     n++
@@ -359,15 +400,16 @@ onMounted(async () => {
   if (!map.value) { if (mapContainer.value) mapError.value = tStatic('messages.mapUnavailable'); return }
   map.value.once('style.load', async () => {
     try {
-      const rows = await rowsPromise
-      if (!rows || !map.value) return
+      const loaded = await rowsPromise
+      if (!loaded || !map.value) return
+      rows = loaded
       setProjectionOn(map.value, 'mercator')   // per-engine shape: library/useMapProvider (C2)
-      addLayer(buildFeatures(rows, new Set()))   // every pin, by GSEC — the first paint
+      addLayer(buildBase())   // every pin, by GSEC — the first paint
       mapStore?.registerMap?.('all-people-groups', map.value)
       appReady.value = true
       // DOXA overlay: recolour when the prayer API answers, whenever that is.
       const doxaSet = await doxaPromise
-      if (doxaSet.size && map.value && map.value.getSource('apg')) map.value.getSource('apg').setData(buildFeatures(rows, doxaSet))
+      if (doxaSet.size && map.value) applyDoxa(doxaSet)
       doxaReady.value = true
     } catch (err) { mapError.value = String(err?.message || err) }
   })
@@ -404,6 +446,7 @@ const totalShown = computed(() =>
          top offset collapses to the desktop 10px instead of reserving space for one. -->
     <MapToolbar :has-geocoder="false">
       <ShareButton :is-dark="isDark" :embed-path="SHARE_EMBED_PATH" />
+      <HelpButton :is-dark="isDark" hosted />
     </MapToolbar>
 
     <div v-if="appReady" class="apg-legend">

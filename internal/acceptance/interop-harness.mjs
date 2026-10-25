@@ -18,8 +18,8 @@
  * API. Camera motion in particular (fitBounds/flyTo) has NO API equivalent to mirror; the only
  * way to prove "select rows, the map flies to the selection" is to select rows and read the map.
  *
- * ── THE COMBINATION MATRIX (Driver: "EVERY SINGLE COMBINATION ... log whether it DISPLAYED,
- *    pass/fail only") ─────────────────────────────────────────────────────────────────────────
+ * ── THE COMBINATION MATRIX (EVERY SINGLE COMBINATION, logging only whether it DISPLAYED,
+ *    pass/fail) ─────────────────────────────────────────────────────────────────────────
  * One line per combination, BOTH halves recorded, pass/fail only. "Displayed" is never inferred
  * from a click firing or an element existing — see WHAT COUNTS AS DISPLAYED per pair below.
  *

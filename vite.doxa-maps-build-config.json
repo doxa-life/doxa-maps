@@ -3,11 +3,13 @@
   "name": "dx-maps",
   "paths": [],
   "embedBaseUrl": "",
+  "//shareBaseUrl": "The PUBLIC address of this tree (https, no trailing slash) for the Share menu's Embed tab only: its URL, Iframe and JavaScript codes point there. Empty (the default, committed): the codes point at the tree the bundle is served from, so the stable site gives its own public URLs by construction. Set it at deploy time (or per page: window.MAP_SHARE_BASE_URL, or per embed: profile-config.shareBaseUrl) to send every code to one address. It does NOT touch the manifest's snippets (embedBaseUrl).",
+  "shareBaseUrl": "",
   "assetsBaseUrl": "",
   "tokenUrl": "",
   "token": "",
   "dropin": {
-    "dest": "../doxa-life/public/embed/doxa-maps-build",
+    "dest": "../doxa-life/public",
     "include": [
       "README.md"
     ],
@@ -23,9 +25,16 @@
     "key-cities"
   ],
   "qaWidget": false,
+  "posterSources": true,
+  "//posterSources": [
+    "Ship posters/<id>.html (the 28 poster SOURCES, 27 MB raw, 7 MB gzipped) in <tree>/assets/posters/, without",
+    "the 41 MB of .webp rasters. The prayer packet's first page (the zone map) and the wall's print fallback",
+    "fetch these; without them the map page printed blank and the fetch failure was swallowed. The copies",
+    "are byte-identical to data/posters/, so git stores each file once. check:poster-print-fallback asserts it."
+  ],
   "//token": [
-    "THE PUBLIC MAPBOX KEY, BAKED ON PURPOSE (Driver ruling 2026-09-21): 'all maps can use the pk",
-    "from the api, no problem \u2014 if they want to set a mapbox sk they can'. This is token-ladder",
+    "THE PUBLIC MAPBOX KEY, BAKED ON PURPOSE (ruled 2026-09-21): every map may use the pk from the",
+    "API, and a host that wants to set a Mapbox sk can. This is token-ladder",
     "RUNG 3 (see internal/generate-tree.mjs:595): rungs 1-3 are used DIRECTLY with no network call,",
     "so baking it makes every map work out of the box on ANY host \u2014 including one with no",
     "/api/maps/token endpoint and no CORS on the fallback, which is exactly why maps on the live test host",
@@ -34,5 +43,5 @@
     "than copying this literal around. A pk. is a PUBLIC key protected by URL restrictions, not by",
     "secrecy \u2014 never put an sk. here; check:public-hygiene still fails the build on sk./tk."
   ],
-  "//tokenUrl-2026-09-22": "EMPTIED 2026-09-22. It pointed at https://doxa.life/api/maps/token, which serves a URL-RESTRICTED token \u2014 tiles 403 from every origin except doxa.life, so the basemap rendered as an empty void while pins drew fine (the Driver's exact report: 'it's loading the pins, but it's not loading the actual underlying map'). That endpoint sits ABOVE the baked token in the ladder, so leaving it set would fetch the broken token and overwrite the good one. Measured: the baked token = 200 from no-Referer, the live test host AND localhost; the domain-restricted token = 403 from all three."
+  "//tokenUrl-2026-09-22": "EMPTIED 2026-09-22. It pointed at https://doxa.life/api/maps/token, which serves a URL-RESTRICTED token \u2014 tiles 403 from every origin except doxa.life, so the basemap rendered as an empty void while pins drew fine (reported exactly so: the pins load, but not the underlying map). That endpoint sits ABOVE the baked token in the ladder, so leaving it set would fetch the broken token and overwrite the good one. Measured: the baked token = 200 from no-Referer, the live test host AND localhost; the domain-restricted token = 403 from all three."
 }

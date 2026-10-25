@@ -11,7 +11,7 @@
  * the component and which from the renderer.
  */
 import { computed } from 'vue'
-import { anchorPlacement, cellCount, scatterCells } from './packetCharts.js'
+import { anchorPlacement, cellCount, scatterCells, topCells } from './packetCharts.js'
 
 const props = defineProps({
   rows: { type: Number, default: 100 },
@@ -28,10 +28,32 @@ const props = defineProps({
   seed: { type: String, default: '' },
   /** Cells to shade, when used as a plain "weeks lived" grid. The share page uses ShareCalendar. */
   shaded: { type: Number, default: 0 },
+  /**
+   * WHERE the shaded cells sit: 'scatter' (the default, unchanged) or 'top'.
+   *
+   * ★ THE TWO ANSWER DIFFERENT QUESTIONS, which is why this is a prop and not a fix. 'scatter'
+   * says "these weeks fall somewhere in a life and we do not know where" — honest for weeks lived.
+   * 'top' makes the grid a MAGNITUDE a reader can measure against its own frame: 32 cells scattered
+   * across 5,200 are invisible confetti, while 32 stacked from the corner are an obvious sliver.
+   * A share page wants 'top'; a life page wants 'scatter'. Default stays 'scatter' so no existing
+   * caller moves.
+   */
+  fill: { type: String, default: 'scatter' },
+  /**
+   * Rows to mark as a distinct band from row 1 — the printed calendar highlights Jesus' 33 years
+   * this way. 0 draws no band. Rows, not cells, because the band is read along the year axis and a
+   * cell count would drift with the column width.
+   */
+  highlightRows: { type: Number, default: 0 },
 })
 
 const total = computed(() => cellCount(props.rows, props.columns))
-const shadedSet = computed(() => (props.shaded > 0 ? scatterCells(total.value, props.shaded, props.seed) : new Set()))
+// The band in CELLS, derived from ROWS so it tracks the column count rather than a fixed number.
+// Clamped to the grid: a highlightRows larger than the grid marks the whole grid rather than
+// overflowing into a class nothing renders.
+const highlightBand = computed(() => Math.min(total.value, Math.max(0, Math.round(props.highlightRows)) * props.columns))
+
+const shadedSet = computed(() => (props.shaded > 0 ? (props.fill === 'top' ? topCells(total.value, props.shaded) : scatterCells(total.value, props.shaded, props.seed)) : new Set()))
 const placedAnchor = computed(() => anchorPlacement(props.anchor, total.value))
 const anchorIndex = computed(() => placedAnchor.value.index)
 </script>
@@ -50,7 +72,11 @@ const anchorIndex = computed(() => placedAnchor.value.index)
         v-for="i in total"
         :key="i"
         class="lcal__c"
-        :class="{ 'lcal__c--on': shadedSet.has(i - 1), 'lcal__c--anchor': anchorIndex === i - 1 }"
+        :class="{
+          'lcal__c--on': shadedSet.has(i - 1),
+          'lcal__c--anchor': anchorIndex === i - 1,
+          'lcal__c--band': highlightBand > 0 && i <= highlightBand,
+        }"
       />
     </div>
     <p v-if="anchor && anchor.label && anchorIndex >= 0" class="lcal__foot">{{ anchor.label }}</p>
@@ -70,6 +96,12 @@ const anchorIndex = computed(() => placedAnchor.value.index)
 .lcal__grid { display: grid; grid-auto-rows: 13px; gap: 2px; width: 100%; }
 .lcal__c { display: block; width: 100%; height: 100%; border: 1px solid var(--pk-rule, #d8d3c4); border-radius: 1px; background: #fff; }
 .lcal__c--on { background: var(--pk-on, #2f6d4f); border-color: var(--pk-on, #2f6d4f); }
+/* The highlight band (the printed calendar marks Jesus' 33 years this way). An OUTLINE, not a
+   fill: the band and the shaded cells must be readable at the same time, and two fills in one
+   32x32px cell are indistinguishable in print. Drawn under --on so a shaded cell inside the band
+   still reads as shaded. */
+.lcal__c--band { border-color: var(--pk-band, #b08968); }
+.lcal__c--band.lcal__c--on { border-color: var(--pk-on, #2f6d4f); }
 /* The anchor is a RING, never a fill: it marks a position without claiming the cell's meaning. */
 .lcal__c--anchor { border-color: var(--pk-ink, #1b1a17); border-width: 2px; }
 .lcal__unplaced { font: 700 12px Georgia, serif; color: #8a1c1c; margin: 6px 0 0; }

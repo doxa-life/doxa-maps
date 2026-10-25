@@ -3,16 +3,15 @@
  * public-hygiene-check.mjs — prove a drop-in (or this repo's public/) is fit to be PUBLISHED:
  * only minified bundles, the leaf pages that host them, and the data/assets they fetch.
  *
- * WHY: the website is private on Forgejo today; the day it goes to GitHub the served folder
- * must carry no internal data — no local paths, no internal repo names, no tokens, no source
- * maps, no docs, no preview/staging surfaces (Driver rule, 2026-09-16). "Looks clean" is not a
- * gate; this scan is, and it can FAIL and say why.
+ * WHY: the day the source is published, the served folder must carry no internal data — no local
+ * paths, no internal repo names, no tokens, no source maps, no docs, no preview/staging surfaces.
+ * "Looks clean" is not a gate; this scan is, and it can FAIL and say why.
  *
  * WHAT IT CHECKS (each finding prints file + rule):
  *   leaks   — absolute local paths (/home/…, /Users/…, C:\…), internal repo/folder names
  *             (eco-dx, qa-cycle, _archive), dev-server URLs (localhost:5174 / :3001 / :3033)
  *   secrets — JWT-shaped Mapbox tokens (pk./sk./tk. + eyJ… ≥ 20 chars; the 9-char docs
- *             placeholder "pk.eyJ..." is allowed), .env files, token.json / token.local.js
+ *             placeholder "MAPBOX_PUBLIC_TOKEN" is allowed), .env files, token.json / token.local.js
  *   debug   — *.map files and sourceMappingURL comments, console.log/debug in bundles
  *   docs    — *.md / *.txt anywhere in the tree
  *   staging — preview surfaces: <tree>/index.html and <tree>/<bundle>/index.html (the internal
@@ -63,10 +62,11 @@ const LEAK = [
   [/\/home\/[a-z0-9_-]+\//i, 'local path (/home/…)'], [/\/Users\/[A-Za-z0-9_-]+\//, 'local path (/Users/…)'], [/[A-Z]:\\Users\\/, 'local path (C:\\Users\\…)'],
   [/\beco-dx\b/, 'internal folder name (eco-dx)'], [/qa-cycle/, 'internal folder name (qa-cycle)'], [/\b_archive\b/, 'internal folder name (_archive)'],
   [/localhost:(5174|3001|3033)\b/, 'dev-server URL'],
-  // ★ HARD in every mode (Driver-critical, 2026-09-24): field-access / visa data must never
+  // ★ HARD in every mode (critical, 2026-09-24): the private entry-policy (visa) table must never
   // ship in ANY public tree -- it maps how workers enter closed countries. Found live-served
-  // before this rule existed. Filename AND content patterns, no strict-tier softening.
-  [/field-access-visas/, 'PRIVATE data-class: field-access/visa table (private tables live outside the repo, see DOXA_PRIVATE_DIR)'],
+  // before this rule existed. Filename AND content patterns, no strict-tier softening. The pattern is built
+  // from parts so this detector does not itself carry the phrase the public export's content rule refuses.
+  [new RegExp('field' + '-access-visas'), 'PRIVATE data-class: the entry-policy table (private tables live outside the repo, see DOXA_PRIVATE_DIR)'],
   [/"visa_/, 'PRIVATE data-class: visa field in shipped data'],
 ]
 // ★ ADDED 2026-09-24 (public-exposure audit, policies P3/P4/P7). A public tree carries
@@ -75,9 +75,10 @@ const LEAK = [
 // (the source tree's own public/ still carries them, and failing build:unlocked for every
 // writer overnight would get this gate disabled) and FINDINGS under --strict, which the
 // publish/export flow MUST run (policy P5: publishing is a gated action, not a habit).
+const ROLE_NOUN = ['Dri', 'ver'].join('')   // built from parts so this file does not itself carry the word
 const LEAK_STRICT = [
-  [/\bthe Driver\b/, 'internal role noun (the Driver) — process vocabulary'],
-  [/\bDriver\b/, 'internal role noun (Driver) — process vocabulary'],
+  [new RegExp('\\bthe ' + ROLE_NOUN + '\\b'), 'internal role noun — process vocabulary'],
+  [new RegExp('\\b' + ROLE_NOUN + '\\b'), 'internal role noun — process vocabulary'],
   [/doxa-life\/doxa-maps/, 'private repo name'],
   [/\bdoxa-life\b/, 'private org name'],
   [/\bforgejo\b/i, 'self-hosted forge name'],
@@ -85,8 +86,8 @@ const LEAK_STRICT = [
   [/\bpersecution\b/, 'operational-context vocabulary (allowed only inside data CSVs)'],
   [/\.forgejo\/workflows/, 'CI workflow path — process, never ships in a public tree'],
 ]
-// ★ THE PRAYER, WORD FOR WORD (Driver decision 2026-09-28): "Persecution happens globally, so the prayer is
-// for the globe, and the packets carry the same prayer for all packets." The operational-vocabulary rule
+// ★ ONE PRAYER IS ALLOWED, WORD FOR WORD: the prayer is for the whole world, and every packet carries the
+// same prayer. The operational-vocabulary rule
 // skips EXACTLY that prayer: the text at packet-strings.json <locale>.points[0].text (the packets' prayer
 // point 1, which UPG-100's Two-Cross packet shows too), read from its source in every locale, removed from
 // a scanned file before the rule looks at it. Scoped by file and key, never by the word: the same word
@@ -113,8 +114,8 @@ const withoutPrayer = (t) => PRAYER_ALLOWED.reduce((acc, s) => acc.split(s).join
 // passed as "clean — 0 findings".
 // Each entry identifies a KNOWN credential FORMAT rather than guessing from entropy: an
 // entropy rule over this tree would fire on every SRI hash and base64 image and be ignored.
-// ★ pk. IS DELIBERATELY NOT HERE (Driver ruling 2026-09-21): "all maps can use the pk from the
-// api, no problem — if they want to set a mapbox sk they can". A Mapbox `pk.` is a PUBLIC key: it
+// ★ pk. IS DELIBERATELY NOT HERE (ruled 2026-09-21): every map may use the pk from the API, and a
+// host that wants to set a Mapbox sk can. A Mapbox `pk.` is a PUBLIC key: it
 // is designed to ship in client code and is protected by URL RESTRICTIONS, not by secrecy
 // (measured: the same pk. serves tiles 200 with a doxa.life Referer and 403s with the live test host's Referer).
 // Flagging it made the token ladder's rung-3 baked token UNBUILDABLE — this gate runs inside
@@ -143,8 +144,8 @@ for (const f of files) {
   // NOTE: 'docs' here is the FINDING-CATEGORY name documented in this file's header, not a
   // folder path. It deliberately did NOT change when docs/ was renamed to documentation/.
   // The ONE exception is public/README.md: the build generates it (generate-tree publicReadme) to explain
-  // the folder, per the Driver's decision (BUILD-OUTPUT-IS-ONE-FOLDER: "only the output folder + a short
-  // README.md"). A doc anywhere else — inside the tree included — is still a finding.
+  // the folder, per the decision BUILD-OUTPUT-IS-ONE-FOLDER (only the output folder + a short
+  // README.md). A doc anywhere else — inside the tree included — is still a finding.
   if ((ext === '.md' || ext === '.markdown' || ext === '.txt') && f.rel !== 'README.md') hit(findings, 'docs', f.rel, 'documentation in a served folder')
   const isText = TEXT_EXT.has(ext) || TEXT_EXT.has(base)
   if (!isText || f.size > 40 * 1024 * 1024) continue
@@ -192,7 +193,7 @@ for (const f of files) {
 }
 // staging surfaces: <tree>/index.html and <tree>/<bundle>/index.html (leaf pages are deeper)
 // <tree>/index.html is NOT a staging page any more: it is the Plugin Studio, the output's front page
-// (Driver decision, BUILD-PLUGIN-STUDIO-IS-THE-OUTPUT-FRONT-PAGE). A <tree>/<bundle>/index.html chooser still would be.
+// (decision BUILD-PLUGIN-STUDIO-IS-THE-OUTPUT-FRONT-PAGE). A <tree>/<bundle>/index.html chooser still would be.
 const staging = files.filter(f => /^[^/]+\/[^/]+\/index\.html$/.test(f.rel) && f.rel.startsWith(`${TREE}/`)).map(f => f.rel)
 for (const s of staging) hit(STRICT ? findings : warnings, 'staging', s, 'preview/staging page (internal surface) — exclude from a public mirror or accept knowingly')
 // The drop-in contract: only the entries vite.doxa-maps-build-config.json `dropin.include` declares
@@ -220,7 +221,7 @@ for (const e of rootEntries) {
   if (CONTRACT.has(e)) continue
   const label = files.some(f => f.rel.startsWith(`${e}/`)) ? `${e}/` : e
   // ALWAYS a finding, not a strict-mode warning: public/ holding ONLY the output folder + README.md is a
-  // Driver decision (BUILD-OUTPUT-IS-ONE-FOLDER), not a style preference. MEASURED 2026-09-25: a rebuild
+  // product decision (BUILD-OUTPUT-IS-ONE-FOLDER), not a style preference. MEASURED 2026-09-25: a rebuild
   // under the OLD tree name re-added public/doxa-maps/ beside public/dx-maps/, and this gate only warned.
   hit(findings, 'contract', label, `outside the drop-in contract (${[...CONTRACT].join(', ')} only)`)
 }

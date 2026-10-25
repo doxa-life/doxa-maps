@@ -41,21 +41,36 @@ export const hasReadableScripture = (c) =>
  */
 
 /** Scripture Earth directory names, as a reader would say them. */
-const SE_KIND = { PDF: 'PDF', audio: 'audio', sab: 'app', study: 'study notes', viewer: 'read online' }
+// The VALUES here are displayed (joined into a row's scope), so they are labels and take keys; the
+// KEYS are the upstream feed's own codes and must never be translated. PDF/audio/app stay as they
+// are: an abbreviation and two words that are the same token in the locales we ship.
+const SE_KIND = (tx) => ({ PDF: 'PDF', audio: 'audio', sab: 'app',
+  study: tx('gospel.rows.studyNotes', 'study notes'), viewer: tx('gospel.rows.readOnline', 'read online') })
 
 /**
  * Every resource a language offers, flattened for a list or a table.
  * @param {object} c  one entry of the pin index's codes[]
  * @returns {{url:string,title:string,type:string,scope:string}[]}
  */
-export function resourceRows(c) {
+// ★ THE FALLBACKS BELOW ARE UI TEXT, NOT DATA. Each `c.x || 'English'` is shown when a record
+// carries no name of its own, so an Arabic or Chinese reader saw English for exactly the rows whose
+// source was least complete. check:hardcoded-english does not read .js files yet, which is why these
+// survived the bundle's sweep.
+//
+// `t` is PASSED IN rather than imported: this module is a pure function with no component context,
+// and the plugin already threads its translator the same way. It is optional and falls back to the
+// English written here, so a caller without a translator degrades to today's behaviour.
+//
+// 'JESUS Film' below is deliberately NOT keyed: it is the project's name, not a label.
+export function resourceRows(c, t = null) {
+  const tx = (key, en) => { try { const v = t && t(key); return v && v !== key ? v : en } catch (_) { return en } }
   if (!c) return []
   const out = []
   const add = (title, type, url, scope = '') => {
     if (url) out.push({ url, title, type, scope })
   }
 
-  add(c.sv || 'Scripture in this language', 'Scripture', c.s, c.ss || '')
+  add(c.sv || tx('gospel.rows.scriptureHere', 'Scripture in this language'), 'Scripture', c.s, c.ss || '')
   /* c.fT is set only where the JESUS Film component does NOT carry this language and a
      different JESUS Film Project feature does — The Savior, Magdalena. Calling that "JESUS
      Film" would be the same class of lie as calling Open Bible Stories Scripture. */
@@ -66,26 +81,32 @@ export function resourceRows(c) {
   if (c.au) {
     const media = String(c.au.m || 'audio')
     add(
-      c.au.n || 'Scripture',
+      c.au.n || tx('gospel.rows.audio', 'Scripture'),
       /* ⚠ ONE RECORD, TWO CAPABILITIES, AND THE TYPE ONLY SAID ONE. Faith Comes By Hearing's media
          list is often "audio, text, video": this typed every such row 'Audio Scripture', so the
          access table's byType.Scripture never saw it and 2,001 people groups were published as
          "watch or hear, cannot read" while their own readable text sat behind that link. TEXT
          decides the type; the media list stays in the scope so nothing is hidden, and the access
          builder counts a Scripture row whose scope names audio as hearable too. */
-      /text/.test(media) ? 'Scripture' : 'Audio Scripture',
+      /text/.test(media) ? tx('gospel.rows.audio', 'Scripture') : tx('gospel.rows.audioScripture', 'Audio Scripture'),
       c.au.u,
-      media === 'audio' ? 'Listen in a browser' : `In a browser — ${media}`,
+      media === 'audio' ? tx('gospel.rows.listenBrowser', 'Listen in a browser')
+        : tx('gospel.rows.inBrowser', 'In a browser — {media}').replace('{media}', media),
     )
   }
-  if (c.bv) add(c.bv.n || 'Bible video', 'Bible video', c.bv.u, c.bv.sc || '')
-  if (c.gp) add(c.gp.n || 'Gospel presentation', 'Gospel presentation', c.gp.u, 'Read in this language')
+  if (c.bv) add(c.bv.n || tx('gospel.rows.bibleVideo', 'Bible video'), 'Bible video', c.bv.u, c.bv.sc || '')
+  if (c.gp) add(c.gp.n || tx('gospel.rows.gospelPresentation', 'Gospel presentation'), 'Gospel presentation', c.gp.u, tx('gospel.rows.readHere', 'Read in this language'))
   if (c.se) {
-    add('Scripture Earth', 'Scripture', c.se.u, (c.se.k || []).map((k) => SE_KIND[k] || k).join(', '))
+    add('Scripture Earth', 'Scripture', c.se.u, (c.se.k || []).map((k) => SE_KIND(tx)[k] || k).join(', '))
   }
   if (c.ga) {
-    add(c.ga.n ? `Words of Life — ${c.ga.n}` : 'Gospel audio', 'Gospel audio', c.ga.u, 'Listen in this language')
+    add(c.ga.n ? tx('gospel.rows.wordsOfLife', 'Words of Life — {name}').replace('{name}', c.ga.n)
+    : tx('gospel.rows.gospelAudio', 'Gospel audio'), 'Gospel audio', c.ga.u,
+    tx('gospel.rows.listenHere', 'Listen in this language'))
   }
-  add('Zume discipleship training', 'Discipleship training', c.z)
+  // The brand is INTERPOLATED, not retyped by a translator: "Zume" is the publisher's name and must
+  // survive every locale unchanged, while "discipleship training" is an ordinary noun phrase.
+  add(tx('gospel.rows.discipleship', '{brand} discipleship training').replace('{brand}', 'Zume'),
+    'Discipleship training', c.z)
   return out
 }

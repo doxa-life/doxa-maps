@@ -13,7 +13,7 @@ function setGlobal(name, value) {
  *   social platform on tap — the connectivity view of where DX people groups can be reached online.
  *
  * Every country shaded by measured internet penetration, with its NAMED carriers
- * and dominant social platform on tap. Brief: "all these are missing maps."
+ * and dominant social platform on tap. One of the data maps this project adds.
  *
  * CLONE of gospel-resources/resources-map.vue with the data and bands swapped —
  * profiles duplicate, the pattern does not get re-derived. Same mobile-first
@@ -39,9 +39,9 @@ function setGlobal(name, value) {
  * and mobile carriers but ALSO banks, universities and hosting resellers; the
  * carrier flag is a NAME-PATTERN HEURISTIC, not a verified classification.
  */
-import { computed, inject, ref, shallowRef, markRaw, onMounted, onBeforeUnmount } from 'vue'
+import { computed, inject, ref, shallowRef, markRaw, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useOptionalT, fillParams } from '@map/composables/useOptionalT.js'
-import { tStatic } from '@map/i18n/index.js'
+import { tStatic, formatList } from '@map/i18n/index.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { addMapAttribution } from '@map/composables/useMapAttribution'
 
@@ -49,6 +49,8 @@ import { addMapAttribution } from '@map/composables/useMapAttribution'
 // children). ThemeToggleButton is omitted: this profile's isDark is a read-only
 // computed off profile-config with no theme-toggle handler to wire it to.
 import MapToolbar       from '@map/components/map-controls/MapToolbar.vue'
+import MapInfoButton    from '@map/components/map-controls/MapInfoButton.vue'
+import { useEdgeScrollAffordance } from '@map/composables/useEdgeScrollAffordance.js'
 import ZoomInButton     from '@map/components/map-controls/ZoomInButton.vue'
 import ZoomOutButton    from '@map/components/map-controls/ZoomOutButton.vue'
 import LocationButton   from '@map/components/map-controls/LocationButton.vue'
@@ -70,6 +72,16 @@ import LegendDesktop from '@map/components/legends/LegendDesktop.vue'
 const LegendMobile = retryableAsyncComponent(() => import('@map/components/legends/LegendMobile.vue'))
 
 const profileConfig = inject('profileConfig', ref(null))
+// EDGE SCROLL AFFORDANCE: the gray side strips that say the page scrolls PAST the map (UPG-100's pattern).
+// This map builds its map RAW with new gl.Map, not through useMapInstance, so nothing wired the strips
+// for it and a phone had no scroll escape at the map's edges. Flagged per embed, because it is a
+// promise: <… edge-scroll-affordance="false"> or config.edgeScrollAffordance switches it off for a map
+// with nothing beneath it. Defaults on, as UPG-100's does.
+const EDGE_SCROLL_AFFORDANCE = computed(() => {
+  const v = profileConfig.value?.edgeScrollAffordance
+  return v === undefined || v === null ? true : !(v === false || v === 'false')
+})
+let detachEdges = null
 const isDark = computed(() => profileConfig.value?.isDark === true)
 // The token through the library's channel (documentation/reference-universal-props.md): the
 // profile-config tk, then ProfileLoader's injected mapboxToken (which carries the page-wide shared
@@ -81,21 +93,95 @@ const mapboxToken = computed(() => profileConfig.value?.tk || injectedTk?.value
 const assetsBase = computed(() => resolveAssetsBase(profileConfig.value))
 
 const mapEl = ref(null)
+// ★ THE LICENCE CREDIT, COMPACT (plugin-designer 5.8, the bottom-of-map standard). The engine's own
+// AttributionControl, with geoBoundaries as custom attribution (its licence asks for the name and a link back).
+// On a narrow map the engine draws it compact, EXPANDED at first; CREDIT_FOLD_MS after it first shows,
+// foldCredit folds it to its (i) the way the engine's own drag does (it drops the -compact-show class), and a
+// tap on the (i) opens it again. The style may still be loading when the map is built, so it looks every half
+// second, for up to 30 s, and stops once the credit is there and folded, or is full width (not compact).
+const GB_CREDIT = '<a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a>'
+const CREDIT_FOLD_MS = 3000
+let creditTimer = 0
+function foldCredit(triesLeft = 60) {
+  creditTimer = 0
+  const box = mapEl.value
+  if (!box) return
+  const shown = box.querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show, .mapboxgl-ctrl-attrib.mapboxgl-compact-show')
+  // The clock starts once the STYLE's own credit has joined geoBoundaries (it arrives with the style's
+  // sources), so the first expanded show names the basemap too; measured, the fold otherwise came while
+  // only "geoBoundaries" had shown. After 30 s it starts anyway.
+  const inner = shown && shown.querySelector('.maplibregl-ctrl-attrib-inner, .mapboxgl-ctrl-attrib-inner')
+  const full = !!(inner && inner.textContent.replace('geoBoundaries', '').replace(/[|\s]/g, '').length)
+  if (shown && (full || triesLeft <= 0)) {
+    creditTimer = setTimeout(() => { creditTimer = 0; shown.classList.remove('maplibregl-compact-show', 'mapboxgl-compact-show') }, CREDIT_FOLD_MS)
+    return
+  }
+  const credit = box.querySelector('.maplibregl-ctrl-attrib, .mapboxgl-ctrl-attrib')
+  if (!shown && credit && !/attrib-empty/.test(credit.className)) return
+  if (triesLeft > 0) creditTimer = setTimeout(() => foldCredit(triesLeft - 1), 500)
+}
+function addCompactCredit(map, gl) {
+  if (typeof gl?.AttributionControl !== 'function') return false
+  try { map.addControl(new gl.AttributionControl({ customAttribution: GB_CREDIT }), 'bottom-right') } catch (_) { return false }
+  foldCredit()
+  return true
+}
 const mapRef = shallowRef(null)
 const rows = ref([])
 const selected = ref(null)
 const aiNoticeOpen = ref(true)   // dismissible AI-research disclaimer in the detail sheet
 const err = ref(null)
+// Starts TRUE: the notice must be on screen for the first frame, not switched on after a tick.
+// Measurement showed 7-30s to the first data paint, and for that whole window the map was an empty basemap with
+// nothing to say it was still working — indistinguishable from a broken embed.
+const loading = ref(true)
+
+// ─── "What can this map do?" is on its way (Prayer Progress's announcement) ────────────────────
+// The control column, with its ⓘ on top, renders only once the map exists, after the data, which can
+// take tens of seconds on a slow phone. So at mount this map tells the gallery's MapInfo a control is
+// COMING, and MapInfo waits for the map instead of a clock rather than flashing its floating ⓘ first.
+// A failure (err) or an unmount before the map exists withdraws it, so the floating ⓘ shows at once.
+// A standalone page has no MapInfo: nothing answers and nothing changes.
+function announceInfoPending(pending) {
+  const el = mapEl.value
+  if (!el) return
+  try { el.dispatchEvent(new CustomEvent('dxmaps:mapinfo-pending', { bubbles: true, composed: true, detail: { pending } })) } catch (_) {}
+}
+// A MapInfo that mounts after this map asked into the void announces itself; answer it again.
+const reannounceInfoPending = () => { if (!mapRef.value && !err.value) announceInfoPending(true) }
+watch(err, (e) => { if (e) announceInfoPending(false) })
+
+// ─── On a phone the control column starts BELOW the folded legend ─────────────────────────────────
+// The ⓘ is the column's top control, and its one-time pointer runs sideways from it across the map's
+// top band, which on a phone is this legend's. MapToolbar's phone rule puts the column at top:72px,
+// inside that band, so the pointer lay over the legend's title and buttons. The column now starts 8px
+// below the FOLDED legend's measured bottom, whatever its height in each language. Measured only while
+// folded, and before the toolbar exists, so opening the legend never moves the controls under the reader's
+// thumb (MapInfo would re-place its pointer on its 1.5 s timer, but the controls should not jump). Desktop
+// is unchanged.
+const legendEl = ref(null)
+const toolbarTop = ref(0)
+let legendRO = null
+function measureLegend() {
+  const el = legendEl.value
+  if (!el || !narrow.value || legendOpen.value) return
+  const b = el.offsetTop + el.offsetHeight
+  if (b > 0) toolbarTop.value = b + 8
+}
+function watchLegend() {
+  try { legendRO = new ResizeObserver(measureLegend); if (legendEl.value) legendRO.observe(legendEl.value) } catch (_) { legendRO = null }
+  measureLegend()
+}
 // India by state (data/tables/internet-by-adm1.json, NFHS-5): the one country with sub-national data.
 const adm1 = shallowRef(null)          // { meta, byArea: { [adm1]: { name, women: {total,urban,rural}, men: {…} } } }
 const adm1Sex = ref('women')           // which half of the survey the fill shows; both are in the sheet
 const selectedAdm1 = ref(null)
 
-// ── People-group dots (Driver: "red dots on the map to show me where the people groups are")
+// ── People-group dots — red dots showing where the people groups are
 // The DOXA list from pray-tools, the same list Prayer Progress draws. It carries the slug the
 // detail panel fetches by. The shared pin table (tables/people-group-pins.json) has no slug,
 // so its dots could not open that panel.
-// Dark slate with a white ring (Driver 2026-09-28: the red dots looked wrong on the mostly green
+// Dark slate with a white ring (red dots looked wrong on the mostly green
 // map). A neutral dark reads on every fill here, the green/amber/red/grey bands AND India's pale-to-deep
 // blues, and it carries no "good/bad" meaning the way red does on a map whose red means under 25%.
 // The white ring keeps it apart from the deepest blue and from the dark basemap.
@@ -104,7 +190,7 @@ const uiStore = inject('uiStore', null)
 const _lang = (() => { const v = inject('lang', null)?.value; return (v && v !== 'en') ? v : null })()
 // The reader's language for the ENGINE'S OWN labels (the canvas's "Map" name, "Zoom in", attribution…).
 // This map is built raw, not through useMapInstance, so it must hand the engine that locale itself;
-// without it they stayed English under ar on both engines (rega, row 34). Same ladder as
+// without it they stayed English under ar on both engines (measured). Same ladder as
 // useMapInstance's readerLang: ProfileLoader's lang, then profile-config, then ?lang=, then <html lang>.
 const readerLang = () => {
   if (_lang) return _lang
@@ -216,13 +302,43 @@ function paintGroups(map) {
 // installed it, so English from the shipped catalog is the fallback, never a blank or a key.
 // Carrier and platform names are data and are not translated.
 // C4 wave 3b: the guard is library/composables/useOptionalT.js now, and the fallback resolves through
-// tStatic — the RUNTIME LOCALE first, English as the last resort. exp-shepherd's call as this
-// plugin's owner (2026-09-26), on the same reasoning gospel-plugin gave: the bundle already carries
+// tStatic — the RUNTIME LOCALE first, English as the last resort. This plugin owns that
+// choice, on the same reasoning the other map plugins use: the bundle already carries
 // all 11 catalogues, so a partner embedding without vue-i18n being served English is a bug, not a
 // decision. The old enLookup was English-only, which is exactly what that served.
 // The local fill() is gone with the guard: fillParams applies the same interpolation, except it leaves
 // a placeholder for a NULL value where this fill() rendered the string "null".
 const t = useOptionalT('connectivity')
+
+// ── The legend folds on a phone (Gospel Resources' pattern) ──────────────────────────────────
+// Fully open, this legend took 297px of a 712px phone map, 86% of its width, with the India block
+// and both caveats always showing. On a phone the title stays and the rest folds behind one button:
+// folded, not deleted, because the caveats are what stop a national figure being read as a city's.
+// Desktop is unchanged: always open, no control. The choice is remembered for the SESSION
+// (sessionStorage, wrapped because a sandboxed embed throws on access), and a remembered choice
+// wins over the width default, so crossing the breakpoint never reopens what the reader closed.
+const narrow = ref(false)
+const legendOpen = ref(true)
+const LEGEND_KEY = 'ci.legendOpen'
+function rememberLegend(v) {
+  try { window.sessionStorage?.setItem(LEGEND_KEY, v ? '1' : '0') } catch (_) {}
+}
+function recallLegend() {
+  try { const v = window.sessionStorage?.getItem(LEGEND_KEY); return v == null ? null : v === '1' }
+  catch (_) { return null }
+}
+function toggleLegend() { legendOpen.value = !legendOpen.value; rememberLegend(legendOpen.value) }
+function syncNarrow() {
+  const n = typeof window !== 'undefined' && window.innerWidth < 700
+  if (n === narrow.value) return
+  narrow.value = n
+  const remembered = recallLegend()
+  legendOpen.value = remembered == null ? !n : remembered
+}
+if (typeof window !== 'undefined') {
+  syncNarrow()
+  window.addEventListener('resize', syncNarrow)
+}
 
 // Bands, not a continuous ramp: a reader can hold four categories, not a gradient.
 const BANDS = [
@@ -358,7 +474,11 @@ function showAdm1Sex(sex) {
   const map = mapRef.value
   if (map?.getLayer('ci-adm1-fill')) map.setPaintProperty('ci-adm1-fill', 'fill-color', adm1Fill(sex))
 }
-const adm1Missing = computed(() => (adm1.value?.meta?.boundaries?.IND?.missing || []).join(', '))
+// CONJUNCTION: these states are ALL missing a boundary, so "A, B, and C" is the honest reading. The
+// names land inside a translated sentence (connectivity.adm1.missing, :595), and ar reads
+// "لا توجد بعد حدود ولاية لـ {names}: …" — so a hardcoded ", " put English separators inside Arabic
+// prose. ar joins with و and no comma, zh with 、; no key could have fixed that.
+const adm1Missing = computed(() => formatList(adm1.value?.meta?.boundaries?.IND?.missing || [], { type: 'conjunction' }))
 
 // ── HONOUR THE PROVIDER SWITCH: this profile builds its map RAW ─────────────
 // Every bundle that goes through useMapInstance gets the switch for free. This one calls
@@ -371,6 +491,10 @@ const ciProvider = resolveMapProvider(inject('profileConfig', null))
 let unmounted = false   // set on unmount; onMounted's awaits check it before building the map
 
 onMounted(async () => {
+  announceInfoPending(true)
+  window.addEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
+  watchLegend()
+  detachEdges = useEdgeScrollAffordance(mapEl.value?.parentElement || null, { enabled: EDGE_SCROLL_AFFORDANCE.value })
   try { await ensureEngineScript(ciProvider) } catch (_) { /* fall through to the notice below */ }
   // THE ENGINE THE PAGE ASKED FOR, OR NONE. This read `engineGlobal(ciProvider) || window.mapboxgl`:
   // engineGlobal already answers for Mapbox, so the fallback only fired when MapLibre was asked for and
@@ -426,7 +550,10 @@ onMounted(async () => {
     // NO attribution at all. It SHADES geoBoundaries polygons, so the geoBoundaries
     // credit + link back is required, and gbOpen is mixed-licence with several
     // countries carrying a real attribution requirement (India CC BY 2.5 IN, etc).
-    addMapAttribution(map, { boundaries: true })
+    // ★ NOW ONE CREDIT, THE ENGINE'S OWN COMPACT CONTROL (plugin-designer 5.8): the basemap credit comes from the
+    // style's own sources and geoBoundaries rides in it as custom attribution, with its link back, so every term
+    // above is still met. An engine without the control keeps the shared credit line.
+    if (!addCompactCredit(map, gl)) addMapAttribution(map, { boundaries: true })
     map.once('load', async () => {
       // The BASEMAP's place names in the reader's language (Mapbox setLanguage / MapLibre name:<lang>),
       // the library's own helper. useMapInstance applies it for every map built through it; this map is
@@ -438,10 +565,22 @@ onMounted(async () => {
       paintGroups(map)
       const geo = await adm1Loaded
       if (geo && !unmounted) paintAdm1(map, geo)
+      // ★ CLEARED HERE, NOT ON 'load'. Measurement showed 7-30s from mount to the first data paint under
+      // SwiftShader: the style fires 'load' early, while the shaded countries, the adm1 provinces and
+      // the 2,105 dots all arrive later. Clearing on 'load' would retire the notice during exactly the
+      // wait it exists to explain, leaving the reader with an empty basemap and no reason for it.
+      loading.value = false
     })
-  } catch (e) { err.value = String(e.message || e) }
+  } catch (e) { err.value = String(e.message || e); loading.value = false }
 })
 onBeforeUnmount(() => {
+  if (creditTimer) { clearTimeout(creditTimer); creditTimer = 0 }
+  if (typeof window !== 'undefined') window.removeEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
+  try { legendRO?.disconnect() } catch (_) {}
+  try { detachEdges?.() } catch (_) {}
+  detachEdges = null
+  if (!mapRef.value) announceInfoPending(false)
+  if (typeof window !== 'undefined') window.removeEventListener('resize', syncNarrow)
   // ★ RELEASE THE TEST HOOKS. Each pins whatever it closes over — a map instance pins its
   // canvas, its sources, and through them the whole app — so every mount that leaves one behind
   // leaks another copy, measured at roughly 10 MB each.
@@ -462,30 +601,73 @@ const fmt = (n) => (Number(n) || 0).toLocaleString()
 const groupOpen = computed(() => !!uiStore?.selectedPeopleGroup)
 
 useShadowStyles(
+  // ⚠ THE MAP MUST FILL ITS HOST, NOT THE VIEWPORT. This element had NO :host rule at all, so a
+  // custom element defaults to display:inline with no height of its own, and .gm's absolute inset:0
+  // resolved against whatever ancestor happened to be positioned. The result was measured in the
+  // /embed-test re-shoot at 1440: a 1198x900 canvas inside a 1198x560 embed card — ~340px, the
+  // attribution among it, drawn below the card and clipped. Same class as the board's, and the same
+  // fix it already carries: height:100% so a height-bounded slot decides, min-height as a floor so an
+  // AUTO-height host still gets a usable map instead of a zero-height one that renders nothing.
+  // ★ position:relative IS LOAD-BEARING, and leaving it out made the rule above only HALF a fix.
+  // .gm below is position:absolute;inset:0, and absolute positioning resolves against the nearest
+  // POSITIONED ancestor — which :host was not. So on a partner page .gm resolved against whatever the
+  // PARTNER happened to have positioned, and the map sized itself to that rather than to this element.
+  // It was measured in a host-box run: the element was CORRECT at 420px in a 420px box,
+  // while the canvas inside it stayed 900px and painted the pill and the attribution 478px below the
+  // box (538px in a 360px box), over the partner's own text. Giving the host a HEIGHT without making it
+  // a CONTAINING BLOCK fixes the box and not what is drawn inside it.
+  // prayer-walk-planner.vue:628 already carries this exact shape.
+  ':host{display:block;position:relative;width:100%;height:100%;min-height:420px}' +
   '.gm{position:absolute;inset:0;overflow:hidden}' +
   '.gm-map{position:absolute;inset:0}' +
+  // THE CREDIT CORNER (plugin-designer 5.8; this map has no footer sheet, its legend panel is at the top). The
+  // engine's compact credit sits at the bottom END corner, opposite the gallery's round ☰ (bottom-right;
+  // bottom-left in Arabic), and is NOT lifted by --map-fab-clearance: lifted, it floated up the page. Where the
+  // round button can show, the corner sits above the scroll-edge strips so a tap on its (i) lands, and the
+  // expanded credit stops 64px short of the far edge, clear of the button.
+  '@media(max-width:767.98px){' +
+  '.gm .maplibregl-ctrl-bottom-right,.gm .mapboxgl-ctrl-bottom-right{inset-inline-end:0 !important;inset-inline-start:auto !important;max-width:calc(100% - 64px);z-index:3}' +
+  '.gm .maplibregl-ctrl-bottom-right .maplibregl-ctrl,.gm .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl{margin:0 0 10px;margin-inline-end:10px}' +
+  '}' +
   // LEGEND: a BOUNDED, left-anchored panel — NOT a full-width strip.
   // It used to be `left:8px;right:8px`, which is a strip spanning the whole map
   // (MEASURED 1264px of a 1280px map, 98.75%). That collided with the floating
   // control rail by construction: MapToolbar is inset-inline-end:3px with 32px
   // buttons, so ANY box reaching right:8px intersects it at every viewport. The
   // rail's z-index:10 beats this z-index:4, so the buttons stayed clickable and
-  // the defect read as "the legend underlaps the controls" — reported 3x.
+  // the defect read as "the legend underlaps the controls".
   // The fix imitates the shared SemanticTreeLegend, which has always done it
   // correctly: `left:8px; width:var(--map-legend-width,380px)`. Bounded and
   // left-anchored cannot reach the right rail, so the two can never overlap
   // again — a geometric guarantee, not a tuned z-index.
   // LOGICAL, not physical: the control rail sits at inset-inline-end, so in Arabic it moves to the
   // LEFT; a legend pinned left:8px then sat under the zoom buttons (measured in the ar gallery tab).
+  '@media(max-width:699px){.gm .map-toolbar.map-toolbar{top:var(--gm-toolbar-top,72px)}}' +
+  // The strips sit at z-index 1: above the canvas, so a vertical drag on them scrolls the page, and UNDER
+  // everything else, including the engine's corner controls (z 2), so the licence credit stays on top.
+  '.map-scroll-edge{position:absolute;top:0;bottom:0;width:40px;z-index:1;touch-action:pan-y;pointer-events:auto;background:transparent}' +
+  '.map-scroll-edge--left{left:0}' +
+  '.map-scroll-edge--right{right:0}' +
   '.gm-legend{position:absolute;top:8px;inset-inline-start:8px;width:var(--map-legend-width,380px);' +
-  'max-width:calc(100% - 16px);box-sizing:border-box;z-index:4;padding:8px 10px;' +
+  'max-width:calc(100% - 16px);box-sizing:border-box;z-index:21;padding:8px 10px;' +
   'border-radius:10px;background:rgba(255,255,255,.94);color:#0f1419;' +
   "font:12px/1.35 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.16)}" +
   // Narrow screens: the rail is still on the right, so the legend must stop short
   // of it rather than run under it. 46px = 32px button + 3px inset + clearance.
   '@media(max-width:480px){.gm-legend{width:auto;inset-inline-end:46px}}' +
+  // THE LEGEND OVERLAPS ITS MAP CONTROLS (the legend's z-index 21 above). It shares one stacking context with the
+  // gallery's ⓘ pointer (z 20; the gallery pane and this map's host form none of their own), and at 4 that pointer
+  // was drawn over the open legend's title; the map's own toolbar is z 10. It never meets the gallery's round ☰
+  // (z 15): the legend hangs from the top and stops at 70% on a phone, and the button sits at the bottom. While a
+  // country or state SHEET is open the legend drops back under it (z 4 < the sheet's 6), so the sheet stays on top
+  // and the round ☰ stays above the sheet; the gallery's drawer and the ⓘ dialog stay above all of it.
+  '.gm.has-sheet .gm-legend{z-index:4}' +
   '.is-dark .gm-legend{background:rgba(19,32,25,.95);color:#e5e7eb}' +
   '.gm-title{font-weight:700;font-size:12.5px;margin-bottom:5px}' +
+  // The phone fold button: Gospel Resources' .gm-fold, with its 44px touch target on a phone.
+  '.gm-fold{width:100%;margin:0 0 6px;border:1px solid #d1d4cd;background:#f3f3f1;color:#3b463d;font:600 11px inherit;padding:6px 10px;border-radius:8px;cursor:pointer;min-height:32px}' +
+  '.gm-fold:hover{background:#e9ebe6}' +
+  '@media(max-width:699px){.gm-fold{min-height:44px;font-size:12px}}' +
   '.gm-keys{display:flex;flex-wrap:wrap;gap:5px 12px}' +
   '.gm-key{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}' +
   '.gm-sw{width:12px;height:12px;border-radius:3px;flex:none}' +
@@ -523,6 +705,9 @@ useShadowStyles(
   '.gm-list ul{margin:0;padding-left:17px;font-size:12px;line-height:1.5}' +
   '.gm-note{margin-top:9px;font-size:11px;line-height:1.5;opacity:.75}' +
   '.gm-err{position:absolute;top:50%;left:0;right:0;text-align:center;font-size:13px;opacity:.7}' +
+  // Same geometry as .gm-err so the two never disagree about where a message belongs. inset-inline,
+  // not left/right: this string is translated, and under ar it reads from the other edge.
+  '.gm-wait{position:absolute;top:50%;inset-inline:0;text-align:center;font-size:13px;opacity:.7}' +
   '.gm-dot{width:10px;height:10px;border-radius:50%;flex:none;box-sizing:border-box;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)}' +
   // The group panel uses Prayer Progress's two wrappers, switched at the same breakpoint.
   '.gm-pg-mobile{display:none}' +
@@ -532,13 +717,23 @@ useShadowStyles(
 </script>
 
 <template>
-  <div class="gm" :class="{ 'is-dark': isDark }">
+  <div class="gm" :class="{ 'is-dark': isDark, 'has-sheet': !!(selected || selectedAdm1) }" :style="narrow && toolbarTop ? { '--gm-toolbar-top': toolbarTop + 'px' } : null">
     <div ref="mapEl" class="gm-map"></div>
+    <!-- The edge scroll strips: direct siblings of the map inside .gm, the wrapper handed to
+         useEdgeScrollAffordance (a strip under any other ancestor renders but stays inert). -->
+    <template v-if="EDGE_SCROLL_AFFORDANCE">
+      <div class="map-scroll-edge map-scroll-edge--left" />
+      <div class="map-scroll-edge map-scroll-edge--right" />
+    </template>
 
     <!-- Shared control rail — MapToolbar self-positions top-right. Zoom/Location/
          Fullscreen gate on the live map instance; ShareButton needs neither and
          always renders so the map is embeddable. -->
+    <!-- The TOP control is "What can this map do?": it opens the gallery's MapInfo for this tab, which then
+         hides its own floating button. It renders only where a MapInfo answers it, so a standalone page
+         has no dead button. Round and spaced, the library default. -->
     <MapToolbar v-if="mapRef">
+      <MapInfoButton    :is-dark="isDark" />
       <ZoomInButton     :map="mapRef"          :is-dark="isDark" />
       <ZoomOutButton    :map="mapRef"          :is-dark="isDark" />
       <LocationButton   :map="mapRef"          :is-dark="isDark" />
@@ -546,8 +741,13 @@ useShadowStyles(
       <ShareButton      :is-dark="isDark"      :embed-path="'cities-internet/connectivity-map/index.html'" />
     </MapToolbar>
 
-    <div v-show="!groupOpen" class="gm-legend">
+    <div v-show="!groupOpen" ref="legendEl" class="gm-legend">
       <div class="gm-title">{{ t('connectivity.title') }}</div>
+      <button v-if="narrow" type="button" class="gm-fold" @click="toggleLegend"
+              :aria-expanded="legendOpen ? 'true' : 'false'">
+        {{ legendOpen ? t('connectivity.ui.hideKey') : t('connectivity.ui.showKey') }}
+      </button>
+      <div v-show="!narrow || legendOpen" class="gm-body">
       <div class="gm-keys">
         <span v-for="b in BANDS" :key="b.id" class="gm-key">
           <i class="gm-sw" :style="{ background: b.color }"></i>{{ t('connectivity.bands.' + b.id) }}
@@ -574,9 +774,14 @@ useShadowStyles(
         <div class="gm-caveat">{{ t('connectivity.adm1.source') }}</div>
         <div v-if="adm1Missing" class="gm-caveat">{{ t('connectivity.adm1.missing', { names: adm1Missing }) }}</div>
       </div>
+      </div>
     </div>
 
+    <!-- An error REPLACES the wait, never stacks on it: v-else-if, so a failed load does not leave
+         "still drawing" sitting under an error message contradicting it. role=status, not alert —
+         this is progress, and a screen reader should hear it without being interrupted. -->
     <div v-if="err" class="gm-err">{{ err }}</div>
+    <div v-else-if="loading" class="gm-wait" role="status">{{ t('connectivity.loading') }}</div>
 
     <!-- A tapped people-group dot: the same PeopleGroupDetail panel Prayer Progress opens. -->
     <div v-if="groupOpen" class="gm-pg-desktop">

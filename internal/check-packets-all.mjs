@@ -83,9 +83,19 @@ if (!files.length) {
   const CLUSTERS = resolve(REPO, 'plugin-designs/my-upg-100-list/data/clusters.json')
   if (existsSync(CLUSTERS)) {
     const z = JSON.parse(readFileSync(CLUSTERS, 'utf8'))
-    const zones = [...(z.lists || []), ...(z.asia_lists || []), ...(z.uncovered_lists || [])].map((l) => l.id)
+    // ★ THE LEGEND'S 28, NOT THE THREE BUCKETS' 27: spreading lists/asia_lists/uncovered_lists drops
+    // `deaf`, the one zone the legend shows as a single row, so this never required a Deaf packet.
+    const { buildLegendNodes, leafZones } = await import(pathToFileURL(resolve(REPO, 'plugin-designs/my-upg-100-list/data/legend-tree.js')).href)
+    const zones = leafZones(buildLegendNodes(z, { records: null })).map((l) => l.id)
     const have = new Set(all.map((f) => f.replace(/\.html$/, '')))
-    for (const id of zones) if (!have.has(id)) failures.push(`zone '${id}' has NO generated packet at all`)
+    // ★ COVERAGE IS ASSERTED WHERE ZONES WERE GENERATED. gates:pre's check:packet-offline writes the four
+    // fixture-* packets into this directory, so after gates:pre it is never empty, and a tree that had
+    // generated no zone failed here on all 28: gates:post was red on every landing, for nothing anyone
+    // could fix. Fixtures exercise the renderer, not a zone. One zone packet here and all 28 are required.
+    if (!zones.some((id) => have.has(id))) {
+      console.log(`PACKETS-ALL (headless): coverage not asserted — no zone packet here, only ${all.length} fixture/variant packet(s)`)
+      console.log('  ONLY=<zone> node library/scripts/posters/packet.mjs generates one; then every zone is required.')
+    } else for (const id of zones) if (!have.has(id)) failures.push(`zone '${id}' has NO generated packet at all`)
   }
   // 2. PER PACKET: a non-empty map page and N > 0 groups. The map page is the FIRST sheet; without
   // the lifted poster it holds only the kicker/title/subtitle, so "contains an <img or <svg" is the
@@ -95,7 +105,8 @@ if (!files.length) {
     const html = readFileSync(join(DIR, f), 'utf8')
     const firstSheet = html.slice(html.indexOf('class="sheet'), html.indexOf('class="sheet', html.indexOf('class="sheet') + 1))
     const hasMap = /<img|<svg/.test(firstSheet)
-    const groups = (html.match(/class="card"/g) || []).length
+    // People are profile CARDS in the full packet and worksheet ROWS in the lightweight one.
+    const groups = (html.match(/class="card"/g) || []).length + (html.match(/class="ws-row"/g) || []).length
     const sets = /sheet-sets/.test(html)
     // ★ THE TRIANGLE, asserted per zone because it went missing from ALL 28 packets once and
     // nothing failed: funnelPage omits when its data is null, and the builder that supplies that
@@ -121,7 +132,7 @@ const gate = join(HERE, 'check-packet-render.mjs')
 
 // ★ THE FUNNEL PAGE IS REQUIRED HERE, and this line is the half of the fix that was missing.
 // check-packet-render gained --expect-funnel after a merge deleted the call site supplying the funnel
-// data and every gate stayed green (regions-plugin, 2026-09-26). But a DECLARABLE expectation that
+// data and every gate stayed green (2026-09-26). But a DECLARABLE expectation that
 // nothing declares is not a closed hole — it is an invisible defect traded for a visible obligation.
 // I said as much to regions and then owed the second half.
 //

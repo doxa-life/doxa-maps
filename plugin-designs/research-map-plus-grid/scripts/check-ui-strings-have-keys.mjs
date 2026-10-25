@@ -17,7 +17,7 @@
  * spot was exactly the readers who most need the words.
  *
  * TWO CLASSES, because they are different defects with different fixes:
- *   NO KEY         wording must be written and translated — a decision, sometimes the Driver's.
+ *   NO KEY         wording must be written and translated — a decision, sometimes a product decision.
  *   HAS A KEY      the translation already ships in eleven locales and the reader is shown English
  *                  anyway. The cheapest defect in the catalogue: the work was done and wasted.
  *
@@ -159,7 +159,7 @@ if (fresh.noKey.length || fresh.hasKey.length) {
   for (const [f, t] of fresh.noKey) console.log(`  ✗ no key      ${f}  ${JSON.stringify(t)}`)
   for (const [f, t] of fresh.hasKey) console.log(`  ✗ has a key   ${f}  ${JSON.stringify(t)}  — the translation already ships; read it instead of typing it`)
   console.log('\n  A string with NO key needs wording and eleven translations, which is sometimes the')
-  console.log('  Driver\'s call. A string that HAS a key needs one edit: the work is already done.')
+  console.log('  A product decision. A string that HAS a key needs one edit: the work is already done.')
   process.exit(1)
 }
 console.log(`${TAG}: PASS — no new English has appeared in a template since the baseline.`)

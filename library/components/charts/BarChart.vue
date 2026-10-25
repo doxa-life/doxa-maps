@@ -95,7 +95,7 @@ const labelW = computed(() => {
   return Math.max(96, Math.min(260, Math.round((width.value || 640) * 0.34)))
 })
 // Room on the right for the printed value when a bar runs long.
-// The value column fits the LONGEST value label (rega, row 82: a fixed 74px clipped "10,160,000" at the edge
+// The value column fits the LONGEST value label (row 82: a fixed 74px clipped "10,160,000" at the edge
 // of a 335px card). ~7px per character at the value font, plus the 8px gap and a margin; never under 74.
 const VALUE_GUTTER = computed(() => {
   const longest = Math.max(0, ...rows.value.filter((r) => !r.unknown).map((r) => String(props.format(total(r))).length))
@@ -199,7 +199,7 @@ useShadowStyles(
 
     <!-- direction:ltr on the SVG: its geometry is left-to-right by construction (labels at x=0, values after
          the bar end). Under an inherited rtl, text-anchor start flips, so labels ran off the left edge and
-         values back over their bars (rega, row 82, ar). Each label's own text still shapes as Arabic. -->
+         values back over their bars (row 82, ar). Each label's own text still shapes as Arabic. -->
     <svg v-else :width="width || 640" :height="svgH" role="img" :aria-label="ariaLabel" direction="ltr" style="direction:ltr">
       <defs>
         <!-- Hatching means NOT MEASURED. It must not look like a small bar. -->

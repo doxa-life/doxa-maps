@@ -117,7 +117,7 @@ if (adopted !== true) {
   // Ephemeral port so two gates running at once cannot collide on 4173.
   const port = 5100 + Math.floor(Math.random() * 800)
   base = `http://127.0.0.1:${port}`
-  server = spawn(process.execPath, [resolve(HERE, 'serve-strict.mjs'), '--port', String(port), '--directory', resolve(REPO, 'public')], { stdio: 'ignore', detached: false })
+  server = spawn(process.execPath, [resolve(HERE, 'serve-strict.mjs'), '--port', String(port), '--directory', resolve(REPO, 'public'), '--exit-with-parent'], { stdio: 'ignore', detached: false })
   const until = Date.now() + 15000
   while (Date.now() < until && !(await alive(base))) await new Promise((r) => setTimeout(r, 250))
   if (!(await alive(base))) {

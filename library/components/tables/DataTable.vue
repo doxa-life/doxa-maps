@@ -6,8 +6,8 @@
  * a `{ meta, columns, rows }` document where `columns` IS the Tabulator column
  * model and every row value is a scalar.
  *
- * > design note 2026-08-01: "store all your findings into tabulator tables for the list
- * > view of these apps… all organized in list format with full granularity."
+ * Every research finding is stored as a Tabulator table for the apps' list views,
+ * organized as lists at full granularity.
  *
  * PROMOTED TO library/ ON PURPOSE. Gospel Resources, Cities with Internet and Key
  * City Posters all need the same list; three copies would drift. Same rule the
@@ -62,8 +62,8 @@ const emit = defineEmits(['row-click'])
 // MEASURED on a 390px viewport: 3,747px of content in a 352px table, first column
 // FROZEN at 153px, one column 576px wide. The frozen column ate 43% of the screen
 // and everything else was off-canvas — you could see a name and nothing else.
-// Brief: "your tables are not mobile friendly because their first columns are
-// frozen so I cannot see the other columns."
+// On a phone a frozen first column hides every other column, so the table is not
+// usable there.
 // So on a phone: NO frozen column (it is the thing blocking the view), fewer
 // columns, and every row opens a detail sheet carrying the full record.
 const isMobile = ref(false)
@@ -157,9 +157,8 @@ function build(Tabulator) {
     movableColumns: true,
     placeholder: 'No rows',
   })
-  // GRANULARITY. Brief: "we want to click on rows and be able to see more data
-  // like the name of service providers or the actual list of the gospel
-  // resources." The table flattens nested detail to scalars so Tabulator can sort
+  // GRANULARITY. A row click must reveal the detail behind it (the service providers'
+  // names, the actual list of gospel resources). The table flattens nested detail to scalars so Tabulator can sort
   // and filter; the FULL record is still on the row object, so the detail sheet
   // shows every field including the ones the list had to drop.
   tab.value.on('rowClick', (e, row) => {
@@ -234,10 +233,10 @@ useShadowStyles(
   '.dt .tabulator .tabulator-row.tabulator-row-even{background:#faf9f7}' +
   '.dt .tabulator .tabulator-row:hover{background:#e9ebe6}' +
   // unicode-bidi:plaintext: each cell takes its direction from its own first strong character, so an English
-  // title in an Arabic page keeps its brackets and numbers where they belong (gospel-plugin / rega row 86).
+  // title in an Arabic page keeps its brackets and numbers where they belong (row 86).
   '.dt .tabulator .tabulator-row .tabulator-cell{border-inline-end:1px solid #e6e8e3;color:#3b463d;unicode-bidi:plaintext}' +
   // plaintext also resolves a cell's ALIGNMENT from its own text, so English cells left-aligned in an rtl
-  // table and clipped at its left edge (rega, L20). Align by the page's direction; the text stays isolated.
+  // table and clipped at its left edge (L20). Align by the page's direction; the text stays isolated.
   // ⚠ STAYS PHYSICAL ON PURPOSE — do not "fix" this to text-align:end. It is already scoped to
   // :dir(rtl), so it only ever applies where right IS the trailing edge; and `end` would be resolved
   // by unicode-bidi:plaintext PER CELL, from that cell's own first strong character, which is the
@@ -327,7 +326,7 @@ useShadowStyles(
     <div v-if="detail" ref="scrimRef" :style="scrimStyle" class="dt-scrim" @click.self="detail = null">
       <div class="dt-sheet" role="dialog" :aria-label="T('aria.rowDetail', 'Row detail')">
         <div class="dt-sheet-head">
-          <strong>{{ detail[(table?.columns || [])[0]?.field] || 'Detail' }}</strong>
+          <strong>{{ detail[(table?.columns || [])[0]?.field] || T('aria.rowDetail', 'Row detail') }}</strong>
           <button type="button" class="dt-close" @click="detail = null">{{ T('buttons.close', 'Close') }}</button>
         </div>
         <dl class="dt-dl">

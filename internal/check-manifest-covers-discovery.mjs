@@ -8,8 +8,8 @@
  *     discovered but MISSING .... 1  key-cities
  *     in manifest, not real ..... 1  template-bundle
  * `key-cities` had its compiled key-cities.js on disk but ZERO profile leaf directories, so its four
- * profiles vanished from manifest.json and from the studio's tab list. The Driver was reviewing a tree
- * that silently omitted a whole plugin.
+ * profiles vanished from manifest.json and from the studio's tab list. A tree under review
+ * silently omitted a whole plugin.
  *
  * ★ WHY EVERY EXISTING GATE PASSED — this is the interesting part, and the reason for a new file:
  *   - the settled-tree LEAF FLOOR counts index.html recursively (44, floor 40). A bundle that loses

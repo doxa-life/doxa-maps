@@ -26,7 +26,7 @@
  *
  * NOT A SUBSTITUTE FOR A BROWSER. Both ends existing is necessary, not sufficient: UPG-100's
  * select-zone listener exists and still loses the first click, because the lazy Map pane attaches it
- * too late (rega, 2026-09-26). The runtime half is check:gallery-embed's `linked` phase.
+ * too late (measured 2026-09-26). The runtime half is check:gallery-embed's `linked` phase.
  *
  * NEGATIVE-TESTED (2026-09-26, main 521f8b18, PASS with 17 links and the 3 LATE_KNOWN sites), each FAILS:
  *   a receiver renamed in source ('map-filtered' -> 'map-filter' in research-map-plus-grid.vue);
@@ -126,6 +126,7 @@ const LINKS = [
 // Composites whose children deliberately exchange nothing. The reason is printed on every run.
 const NO_LINKS = {
   'stack-demo': 'a demonstration stack: page knobs only; dashboard-plus-grid is the linked version',
+  'poster-design': 'two independent views of the poster templates (Styles, Sizes); neither pane drives the other',
 }
 
 // ── D: late getCurrentInstance() sites already routed to an owner ─────────────────────────────

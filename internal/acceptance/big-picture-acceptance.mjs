@@ -19,7 +19,7 @@ const API = 'https://pray.doxa.life/api/people-groups/list?fields=name,slug,wagf
 
 // ── mirror of people-groups-grid.vue applyDropdownFilters + the Fuse-ish search keys ──────
 // Dropdown axes match by VALUE (u[field].value === selection) — the exact contract the header
-// dropdown -> grid prop coupling relies on. Country is excluded per Driver.
+// dropdown -> grid prop coupling relies on. Country is excluded by decision.
 function dropdownFilter(recs, { wagfRegion = '', wagfBlock = '', rop1 = '', religion = '' } = {}) {
   let out = recs
   for (const [f, sel] of Object.entries({ wagf_region: wagfRegion, wagf_block: wagfBlock, rop1, religion })) {

@@ -4,12 +4,12 @@
   "instances": [
     {
       "id": "app",
-      "title": "Research Gallery — Big Picture + every research map (app-shell)",
+      "title": "Deep Research — Big Picture + every research map (app-shell)",
       "props": {
         "profile": "doxa-maps-spa",
         "provider": "maplibre",
         "instanceId": "doxa-maps-spa-app",
-        "title": "Research Gallery"
+        "title": "Deep Research"
       }
     }
   ]

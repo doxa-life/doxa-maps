@@ -17,7 +17,8 @@
     "failed": "The neighbour table could not be loaded, so this chart is not drawn.",
     "reached": "Already reached, so at the centre:",
     "unmatched": "Not in the neighbour table at all, so not drawn:",
-    "unplaced": "No relation found, so not placed:"
+    "unplaced": "No relation found, so not placed:",
+    "shown": "People groups on the rings:"
   },
   "centre": {
     "aria": "Show",
@@ -150,7 +151,7 @@
     "messaging": "Top messaging app (country)",
     "messagingNote": "Most downloaded in the country's Apple App Store: iOS only, a download rank, not use.",
     "province": "India and China: state or province",
-    "provinceNote": "Approximate: placed from where a people is found, not a town.",
+    "provinceNote": "Approximate: taken from the group's dot on the map, not from a town.",
     "region": "Region",
     "religion": "Religion",
     "wayIn": "Way in when nothing is in their language"
@@ -199,11 +200,11 @@
     "aria": "Map of people groups, shaded by how much of each country uses the internet"
   },
   "notice": {
-    "pin": "The dot marks where this people is found in {country}, not a town.",
-    "pins": "A dot marks where a people is found in its country, not a town. {n} groups share a point with another group.",
+    "pin": "The dot marks this people group, not a town.",
+    "pins": "A dot marks a people group, not a town. {n} groups share a point with another group.",
     "shares": "It shares its point with {n} other group(s).",
     "sources": "Sources:",
-    "standing": "Dots are approximate (where a people is found in its country, not a town). Internet figures are the country's, or the Indian state's, never the group's. \"Found\" means found in the sources checked."
+    "standing": "Dots are approximate: a dot marks a people group, not a town. Internet figures are the country's, or the Indian state's, never the group's. \"Found\" means found in the sources checked."
   },
   "panel": {
     "charts": "Charts",
@@ -284,7 +285,6 @@
     "posterOmitted": "{n} names left off where they would overlap another; every circle is drawn.",
     "posterPrint": "Print",
     "posterSizeAria": "Poster size",
-    "posterSvg": "Download SVG",
     "posterTitle": "Gospel access, language family by language family",
     "sources": "Tree: Glottolog (CC BY 4.0). Resources: eBible, Faith Comes By Hearing, Scripture Earth, PNG.Bible, JESUS Film, Global Recordings and others, keyed by ISO 639-3.",
     "st": {

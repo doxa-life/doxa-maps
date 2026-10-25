@@ -48,7 +48,9 @@
 import { watch, effectScope } from 'vue'
 import { createI18n } from 'vue-i18n'
 
-// Eager glob — all locale subfolders inlined at build time
+// Eager glob — the locale subfolders the build leaves in. vite.config's i18nAreasPlugin narrows
+// this to the areas one bundle uses, and (when SHIP_ONE_LOCALE is on) to `en` alone; the other ten
+// are emitted as assets beside the bundle and fetched by loadLocale() below.
 const rawModules = import.meta.glob('./locales/*/*.json', { eager: true, import: 'default' })
 // rawModules keys look like './locales/ar/legend.json', './locales/ar/detail.json'
 const messages = {}
@@ -58,6 +60,91 @@ for (const [path, subtree] of Object.entries(rawModules)) {
   const [, locale, area] = match
   messages[locale] ??= {}
   messages[locale][area] = subtree
+}
+
+// ★ THE BASE URL IS CAPTURED AS THIS SCRIPT EVALUATES, AND IT HAS TO BE. Rollup shims
+// import.meta.url to document.currentScript in IIFE output, and currentScript is null the moment
+// the script finishes running — so a base read at mount, or on a later locale switch, resolves
+// against document.baseURI instead: right on our own pages, wrong on every host that serves the
+// bundle from a different path. deriveTreeBase() already exists for exactly this and already
+// carries the warning; this is the one call, at the top, on purpose.
+// deriveTreeBase() is the same capture at the same moment, but it returns the TREE root — it strips
+// "<bundle>/<bundle>.js" — and these assets live in the bundle's OWN directory one level deeper, so
+// each bundle carries only the areas it uses. One less path segment removed, same rule.
+const LOCALE_BASE = (() => {
+  try {
+    const cur = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || ''
+    if (!cur) return ''
+    return cur.split(/[?#]/)[0].replace(/[^/]+$/, '')   // …/<bundle>/  (trailing slash kept)
+  } catch { return '' }
+})()
+
+// Filled by the build (i18nAreasPlugin) with { ar: 'sha384-…', … } for the locales it emitted as
+// assets. Embeds are SRI-pinned, and a fetched catalogue would not be unless its hash travels with
+// the bundle — so a swapped file fails closed to English rather than injecting text into the page.
+// Empty when every locale is inlined, which is also why loadLocale() is a no-op in that build.
+const LOCALE_SRI = (typeof __DX_LOCALE_SRI__ !== 'undefined' ? __DX_LOCALE_SRI__ : {})
+
+const _loaded = new Map()   // code -> Promise, so concurrent instances share one request
+
+// ★ THE REQUEST STARTS NOW, NOT AT MOUNT. Kicked off as the script evaluates so it overlaps the
+// bundle's own startup instead of queueing behind it — the catalogue is ~13 KB gzipped and the
+// bundle is an order of magnitude more, so in practice it lands first. Nothing awaits this here;
+// createAppI18n() picks up the same promise from _loaded.
+let PRELOAD = null
+// How long an RTL locale may hold its text chrome. For ar the flash is a LAYOUT change — English
+// LTR, then a flip to RTL — which is visibly worse than the plain re-render the other locales get,
+// so the chrome waits. The map never waits, and the timeout means a failed fetch degrades to
+// English rather than to a blank panel.
+const RTL_HOLD_MS = 1500
+
+/**
+ * Fetch a locale that was emitted beside the bundle rather than inlined, and install it.
+ *
+ * Resolves to true when the locale is usable (already present, or fetched and installed) and false
+ * when it is not — the caller then simply stays on the English fallback, which is what a reader
+ * gets today for a locale with no catalogue. Never throws: a failed catalogue must not take the map
+ * down with it.
+ *
+ * ⚠ CALLED AFTER THE INSTANCE EXISTS, NEVER DURING createI18n. setLocaleMessage() touches no effect
+ * scope, so this stays clear of the stopped-scope failure that createGlobal() has (see below).
+ */
+export function loadLocale(i18n, code) {
+  const c = String(code || '').split('-')[0].toLowerCase()
+  if (!c || c === 'en' || !SUPPORTED_LOCALES.includes(c)) return Promise.resolve(c === 'en')
+  // Already here — inlined by this build, or fetched for an earlier instance. Still install it into
+  // THIS instance: vue-i18n copied `messages` when it was constructed, so a catalogue that arrived
+  // afterwards is in the shared map and not in this one.
+  if (messages[c]) { i18n?.global?.setLocaleMessage?.(c, messages[c]); return Promise.resolve(true) }
+  // One request per locale, however many instances ask — but each caller still installs the result.
+  if (_loaded.has(c)) {
+    return _loaded.get(c).then((okEarlier) => {
+      if (okEarlier && messages[c]) i18n?.global?.setLocaleMessage?.(c, messages[c])
+      return okEarlier
+    })
+  }
+  // ★ NO PIN, NO FETCH (studio). The hash map is written by the build ONLY for locales it actually
+  // emitted, so its presence is the one reliable statement that a file is there to fetch. Without
+  // this guard the flag-OFF build still reaches the network: a bundle with no areas inlines nothing,
+  // so messages[c] is empty and the preload requests locales/<lc>.json on every non-English page —
+  // a 404 per reader, and fetched with no integrity because there was no hash to pass. Keying on the
+  // pin makes the flag-off build inert and the flag-on build fail closed to English.
+  if (!LOCALE_SRI[c]) return Promise.resolve(!!messages[c])
+  const run = (async () => {
+    try {
+      if (!LOCALE_BASE) return false                     // base unknown: stay on English
+      const url = new URL(`locales/${c}.json`, LOCALE_BASE).href
+      const res = await fetch(url, { integrity: LOCALE_SRI[c] })
+      if (!res.ok) return false
+      const tree = await res.json()
+      if (!tree || typeof tree !== 'object') return false
+      messages[c] = tree
+      i18n?.global?.setLocaleMessage?.(c, tree)
+      return true
+    } catch { return false }
+  })()
+  _loaded.set(c, run)
+  return run
 }
 
 /**
@@ -121,6 +208,30 @@ export function detectLocale() {
   return SUPPORTED_LOCALES.includes(code) ? code : 'en'
 }
 
+// Start the fetch as this module evaluates. Deliberately not awaited and deliberately not inside
+// createAppI18n: the request overlaps the rest of the bundle's startup, and every instance that
+// mounts later joins the same promise instead of issuing its own.
+try { PRELOAD = loadLocale(null, detectLocale()) } catch { PRELOAD = null }
+
+/**
+ * Resolves when the active locale's text is ready to paint, or when the hold expires.
+ *
+ * Only an RTL locale actually waits. For the others a late catalogue is a re-render — vue-i18n is
+ * reactive, so the words simply change — but for ar it is a LAYOUT flip, and painting English LTR
+ * and then mirroring is the one outcome worth a short hold. Always resolves; never rejects.
+ *
+ * @returns {Promise<boolean>} true when the catalogue landed in time
+ */
+export function localeChromeReady(code = detectLocale()) {
+  const c = String(code || '').split('-')[0].toLowerCase()
+  if (!RTL_LOCALES.has(c) || messages[c]) return Promise.resolve(true)
+  const pending = _loaded.get(c) || PRELOAD || Promise.resolve(false)
+  return Promise.race([
+    pending.then((ok) => !!ok).catch(() => false),
+    new Promise((r) => setTimeout(() => r(false), RTL_HOLD_MS)),
+  ])
+}
+
 /**
  * Build a fresh i18n instance. Called once per <doxa-map> element.
  */
@@ -149,7 +260,7 @@ export function createAppI18n() {
   // dir on .profile-loader from effectiveLocale (0f6d5049), so the plugin mirrors correctly
   // whether or not it owns the document. This is only about the page around it.
   //
-  // LANG TRAVELS WITH DIR (rega, research.nuxtbase.app/?lang=ar): an owned page flipped to dir=rtl but
+  // LANG TRAVELS WITH DIR (measured on a research page with ?lang=ar): an owned page flipped to dir=rtl but
   // kept the generator's <html lang="en">, so a screen reader read the Arabic with an English voice (and
   // ?lang=fr left lang="en" too). The page is ours, so its lang is the locale in force.
   try {
@@ -159,7 +270,7 @@ export function createAppI18n() {
       if (RTL_LOCALES.has(locale)) document.documentElement.dir = 'rtl'
     }
   } catch { /* no document (SSR/tests) — nothing to reflect */ }
-  // ★ A DETACHED EFFECT SCOPE (P0, the Driver's console, 2026-09-27). vue-i18n's createGlobal() runs
+  // ★ A DETACHED EFFECT SCOPE (P0, seen in a live console, 2026-09-27). vue-i18n's createGlobal() runs
   // inside scope.run() and throws UNEXPECTED_ERROR ("SyntaxError: Unexpected error") when that returns
   // undefined; Vue 3.5 creates a new EffectScope INACTIVE when the currently active scope is STOPPED.
   // A custom element's connectedCallback -> configureApp -> here can run while a released tab's stopped
@@ -176,6 +287,15 @@ export function createAppI18n() {
     fallbackWarn: false,
     pluralRules: CLDR_PLURAL_RULES,
   }))
+
+  // ★ THE CATALOGUE MAY ARRIVE AFTER THIS INSTANCE DOES. vue-i18n copies `messages` at
+  // construction, so a fetch that lands later has to be installed per instance — the preload above
+  // fills the shared `messages` map, which is enough for instances created afterwards and not for
+  // the ones already built. Outside createI18n() on purpose: setLocaleMessage touches no effect
+  // scope, while createGlobal() is the call that throws inside a stopped one.
+  if (locale !== 'en' && !messages[locale]) {
+    loadLocale(i18n, locale).catch(() => { /* stays on the English fallback */ })
+  }
 
   // ★ INSTALLING i18n ALSO PROVIDES IT, so a bundle CANNOT forget. This is the durable half of a
   // bug that is invisible by construction.
@@ -282,7 +402,7 @@ export function setRuntimeLocale(code) {
  */
 const CLDR_CATEGORY_ORDER = ['zero', 'one', 'two', 'few', 'many', 'other']
 
-function cldrChoiceIndex(choice, choicesLength, locale) {
+export function cldrChoiceIndex(choice, choicesLength, locale) {
   let rules
   try { rules = new Intl.PluralRules(locale) } catch (_) { return choice === 1 ? 0 : 1 }
   const category = rules.select(choice)
@@ -330,4 +450,37 @@ export function tStatic(path, locale) {
   // Explicit argument first, then the locale a host set at runtime, then what the page itself says.
   const want = locale || getRuntimeLocale() || detectLocale()
   return tryTree(want) ?? tryTree('en')
+}
+
+/**
+ * A list of items in the reader's language: formatList(['A', 'B', 'C']) is "A, B, and C" in English,
+ * "A وB وC" in Arabic, "A、B和C" in Chinese, "A, B und C" in German. `join(', ')` is wrong in every
+ * locale but English, and no catalogue key can fix it: the separator and the final conjunction ARE the
+ * grammar, and a key-built sentence like pins.sharedPoint still carried English commas inside Arabic prose
+ * (measured by gospel, 2026-09-29; 31 such joins across library and plugins). Intl.ListFormat knows every
+ * locale's list grammar, so this is only the locale resolution tStatic already uses: the explicit
+ * argument, then the host's runtime locale, then the page's own.
+ *
+ *   type   'conjunction' (and, the default) · 'disjunction' (or) · 'unit' (no conjunction)
+ *   style  'long' (default) · 'short' · 'narrow'
+ * Items are stringified. Where a browser has no Intl.ListFormat it falls back to ', ', today's behaviour.
+ * PICK THE TYPE FROM WHAT THE LIST MEANS. Several values on one filter facet are alternatives, so 'disjunction'
+ * (the chip bar: the bus matches with includes()). Things that all hold are a 'conjunction'. If a facet ever needs
+ * ALL its values, the type belongs in that facet's config, not fixed at the call site. Never 'unit' for names:
+ * in zh it joins them with no separator at all.
+ */
+const listFormats = new Map()
+export function formatList(items, { type = 'conjunction', style = 'long', locale } = {}) {
+  const list = Array.from(items || [], (x) => String(x))
+  // The page's own locale only as the last resort, and never allowed to throw: outside a browser (a
+  // server render, a Node gate) there is no document to read it from.
+  const page = () => { try { return detectLocale() } catch { return '' } }
+  const want = locale || getRuntimeLocale() || page() || 'en'
+  const key = `${want}|${type}|${style}`
+  try {
+    if (!listFormats.has(key)) listFormats.set(key, new Intl.ListFormat(want, { type, style }))
+    return listFormats.get(key).format(list)
+  } catch {
+    return list.join(', ')
+  }
 }

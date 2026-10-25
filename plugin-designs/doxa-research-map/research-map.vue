@@ -16,7 +16,7 @@
  * profile-config shape (minimal for research-map):
  *   {
  *     "profile":   "research-map",
- *     "tk":        "pk.eyJ...",
+ *     "tk":        "MAPBOX_PUBLIC_TOKEN",
  *     "dataSource": "pray-tools",
  *     "instanceId": "any-stable-id"
  *   }
@@ -37,6 +37,8 @@
  */
 
 import { getCurrentInstance, inject, provide, ref, computed, onMounted, onBeforeUnmount, watch, markRaw, toRaw, nextTick, toRef } from 'vue'
+import MapPrintProgress from '@map/components/poster/MapPrintProgress.vue'
+import { resolveAssetsBase } from '@map/utils/embedBase.js'
 import { retryableAsyncComponent } from '@map/composables/retryableAsyncComponent.js'
 
 // ─── Composables (framework) ─────────────────────────────────────────────────
@@ -95,27 +97,15 @@ function _syncHitboxFilter(m, filter) {
 // document itself scroll? Either one means release scroll-zoom back to the page; neither
 // means keep it (the standalone fixed-viewport leaf, where wheel-zoom is expected). Nothing
 // is lost either way — the toolbar zoom buttons and double-click/pinch zoom still work.
-function _findScrollportAncestor(el) {
-  let node = el && el.parentNode
-  while (node) {
-    if (node.nodeType === 1) {
-      const cs = getComputedStyle(node)
-      if (/auto|scroll/.test(cs.overflowY) && node.scrollHeight > node.clientHeight + 4) return node
-    }
-    node = node.parentElement || node.parentNode?.host || (node.parentNode !== node ? node.parentNode : null)
-    if (node && node.nodeType === 9) break
-  }
-  return null
-}
 function _syncScrollZoomToHost(m) {
   if (!m || !m.scrollZoom) return
   try {
     const doc = document.documentElement
     const docScrolls = doc.scrollHeight > window.innerHeight + 4
     const host = (m.getContainer && m.getContainer()) || null
-    const ancestorScrolls = host ? !!_findScrollportAncestor(host) : false
+    const ancestorScrolls = host ? !!findScrollportAncestor(host) : false
     // ★ THE MAP KEEPS THE GESTURE. THE EDGE STRIPS ARE THE WAY PAST IT.
-    // Driver, 2026-09-24: "two finger scrolling on the map should allow me to interact with the
+    // Required 2026-09-24: "two finger scrolling on the map should allow me to interact with the
     // map, but instead it just scrolls down past the map and does not interact with the map —
     // that's what the scroll side bars are there for, to let me interact with the map AND have a
     // way to scroll down past the map."
@@ -135,9 +125,16 @@ function _syncScrollZoomToHost(m) {
     // non-interactive and left the strips redundant. Two fixes for one bug, and the second one
     // silently undid the feature.
     //
-    // So: keep scroll-zoom ON, and let the strips carry the page. `docScrolls`/`ancestorScrolls`
-    // are still computed because the edge affordance below keys its gray indicator off the same
-    // question — a map with nothing stacked under it should not advertise a scroll lane.
+    // So: keep scroll-zoom ON, and let the strips carry the page.
+    //
+    // ★ THE TWO SCROLL PROBES THAT USED TO SIT HERE ARE GONE, AND THE COMMENT THAT KEPT THEM WAS
+    // WRONG. It said docScrolls/ancestorScrolls were still computed because "the edge affordance
+    // keys its gray indicator off the same question". This profile has no such indicator and never
+    // calls useEdgeScrollAffordance: its .map-scroll-edge strips are background:transparent lanes
+    // that are always present (see the rules near the bottom of this stylesheet). They were
+    // function-local consts, computed and discarded — the comment described a consumer that does
+    // not exist here, which is worse than no comment, because it makes dead code look load-bearing.
+    // _findScrollportAncestor STAYS: it is still used to pick a second ResizeObserver target below.
     m.scrollZoom.enable()
   } catch (_) { /* an engine without scrollZoom must never break the panel */ }
 }
@@ -182,6 +179,9 @@ import HamburgerButton   from '@map/components/map-controls/HamburgerButton.vue'
 import GeocoderComponent from '@map/components/map-controls/GeocoderComponent.vue'
 import ShareButton       from '@map/components/map-controls/ShareButton.vue'
 import MapControlButton  from '@map/components/map-controls/MapControlButton.vue'
+// "What can this map do?", as the top control. By path like the rest: the map-controls barrel would pull
+// the whole 'mapInfo' catalogue area into this bundle.
+import MapInfoButton     from '@map/components/map-controls/MapInfoButton.vue'
 
 // PERF: SideMenuDrawer is unused in the current research-map template (the
 // ResearchMapSideMenu sibling renders the actual menu). Removed entirely from
@@ -211,8 +211,10 @@ import { useLanguageFamilyLegendData } from '@map/composables/legends/useLanguag
 // SemanticTreeLegend instance can render either depending on activeLegendType.
 import { useAffinityBlockLegendData } from '@map/composables/legends/useAffinityBlockLegendData.js'
 import { useWagfRegionsLegendData }   from '@map/composables/legends/useWagfRegionsLegendData.js'
+import { useLegendMapBridge, findNodeInTree, buildFlatLegendMatchExpr, regionIdle } from '@map/composables/legends/useLegendMapBridge.js'
 import { useLegendData as useFlatLegendData } from '@map/composables/legends/useLegendData.js'
 import { RESEARCH_LEGEND_OPTIONS } from '@map/composables/legends/researchLegendOptions.js'
+import { findScrollportAncestor } from '@map/utils/scrollport.js'
 
 
 
@@ -225,7 +227,7 @@ useShadowStyles(`
        / --map-font-sm CSS vars are set by applyContainerScale() below. ── */
   /* Geocoder column matches the SemanticTreeLegend's .stl-panel — inset-inline-start:8px,
      width:380px — so the search bar and the legend stack as one column at
-     the same x-edge (PPLR alignment, qa: 2026-05-02). */
+     the same x-edge (PPLR alignment). */
   /* The search pill is exactly as wide as the legend below it: both follow --map-legend-width. */
   /* ★ LOGICAL, so the search bar and the legend mirror TOGETHER (studio's legend sweep).
      This column exists to sit at the same x-edge as SemanticTreeLegend's .stl-panel — that is the
@@ -237,7 +239,7 @@ useShadowStyles(`
      container, which would otherwise stretch the column across the map once the start edge moves. */
   .mapboxgl-ctrl-top-left { top:12px!important;inset-inline-start:8px!important;inset-inline-end:auto!important;width:var(--map-legend-width,380px)!important;max-width:var(--map-legend-width,380px)!important;z-index:1200!important; }
   .mapboxgl-ctrl-top-left .mapboxgl-ctrl { margin:0!important;float:none!important; }
-  /* Pill geometry + PPLR-matched focus ring (qa: 2026-05-02). border-radius
+  /* Pill geometry + PPLR-matched focus ring. border-radius
      999px matches PPLR's .pgc-input-wrap; focus-within ring uses PPLR's
      accent rgba(59,70,61,0.18) so the search bar reads as one column with
      the SemanticTreeLegend below it. Input font-size:13px / placeholder
@@ -313,8 +315,8 @@ useShadowStyles(`
   /* isolation:isolate forces .rm-root to form its own stacking context so
      internal z-indexes (geocoder 1200, legend 1000, toolbar 10) compare only
      against each other and do NOT leak out to compete with page-level
-     elements like the site nav / hamburger menu (qa: 2026-05-04 user
-     reported the geocoder pill rendering above the page menu). Without
+     elements like the site nav / hamburger menu (the geocoder pill otherwise
+     rendered above the page menu). Without
      this, the host element doesn't establish a stacking context and the
      internal 1200 wins against any page elements with z-index < 1200. */
   .rm-root { position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;background:#ffffff;color:#1f2937;isolation:isolate; }
@@ -340,7 +342,7 @@ useShadowStyles(`
        top-left corner than the standard 16px gutter; end side stays 16px.
        Mobile @media block below resets both sides back to 16px since the
        mobile slot uses a smaller radius and the existing 16px is correct
-       there (qa: 2026-05-04 user feedback — desktop only). Active-tab
+       there (desktop only). Active-tab
        scrollIntoView still uses 16px scroll-padding which is fine — the
        tab is already visible, just nudged by the static padding. */
     padding-inline-start:36px;
@@ -414,7 +416,44 @@ useShadowStyles(`
   /* Clip the map AREA only. Clipping the canvas or its container breaks Mapbox's own
      transforms and the map renders grey, so the rounding stops one level above it. */
   .rm-map-area { clip-path: inset(0 round var(--map-radius-corners, var(--map-radius, 0px))); }
+
+  /* ★ PRINTING THE PAGE COLLAPSED THE MAP AND THREW ITS CHROME UPWARD (DRV1650-SR-POSTER-EXPORT:
+     "clicking print breaks the CSS: the map controls + legend jump upward").
+     NOT the Export->poster path — that prints an off-screen iframe whose body is one <img> with its own
+     @page, which this plugin's CSS cannot reach. This is the BROWSER's own print of the live page.
+     THE MECHANISM, from the cascade rather than a screenshot: .rm-root is position:absolute;inset:0 with
+     no positioned ancestor, so its containing block is the INITIAL one -- the viewport on screen, the PAGE
+     BOX in print. .rm-map-area takes all its height from that root via flex:1 1 0, and .rm-map-canvas plus
+     every overlay (legend, badges, scroll edges) is absolute;inset:0 inside it. In a paged medium the root
+     no longer resolves to a viewport height, the flex child collapses toward zero, and everything pinned
+     inside it stacks at the top. That is the jump.
+     THE FIX IS TO STOP BEING ABSOLUTE WHEN THERE IS NO VIEWPORT: in print the root flows in normal
+     document order and the map area is given an explicit height, so its absolutely-positioned children
+     have a real box to sit in. The map keeps a printable size instead of a sliver.
+     Overlays that describe INTERACTION rather than content are hidden: a scroll affordance, a provider
+     badge and a loading veil mean nothing on paper, and the scroll edges would print as grey bars.
+     The legend STAYS -- it is the key to what the map shows, and printing a choropleth without it prints
+     an unreadable picture. */
+  @media print {
+    .rm-root { position:static; inset:auto; overflow:visible; height:auto; }
+    .rm-map-area { flex:0 0 auto; height:60vh; min-height:0; overflow:visible; clip-path:none; }
+    .map-scroll-edge, .rm-provider-badge, .rm-loading { display:none !important; }
+  }
   .rm-map-canvas { position:absolute;inset:0; }
+
+  /* ★ PRINT: GIVE THE MAP AREA A HEIGHT, OR EVERYTHING ANCHORED TO IT RISES.
+     .rm-map-area is flex:1 1 0 — it has no height of its own and fills a viewport-height ancestor.
+     Print layout has no viewport height, so that box collapses toward its content height, and the
+     toolbar and legend (position:absolute against it) move UP with its top edge. That is the reported
+     print breakage (the map controls and legend jump upward), and it needs no print
+     stylesheet to cause — the browser's DEFAULT print styles are enough, because nothing here declared
+     one. A profile with no @media print rules is not neutral in print; it is unspecified.
+     A definite height restores the anchor. This does not change what the poster prints — that is a
+     separate document in its own frame (printInPlace) — it stops the LIVE page deforming while the
+     dialog is open. */
+  @media print {
+    .rm-map-area { flex: 0 0 auto; height: 100vh; min-height: 0; }
+  }
   /* MATERIAL LIGHT (2026-09-21). Was background #0f1216 / color #7c8cf8 — same unconditional
      loading overlay as .dsm-loading, .apg-loading and countries-map's .rm-loading. Rendered on
      every load via v-if="!appReady", so it was the first surface a visitor saw.
@@ -424,6 +463,9 @@ useShadowStyles(`
      map did manage to render stays visible around it. A spinner that outlives the
      failure reads as "slow" and the user just waits; this says the map is gone. */
   .rm-error { position:absolute;top:50%;left:12px;right:12px;z-index:7;transform:translateY(-50%);text-align:center;font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#fecaca;background:rgba(15,18,22,.95);border:1px solid rgba(254,202,202,.28);border-radius:10px;padding:12px 14px;box-shadow:0 2px 10px rgba(0,0,0,.4); }
+  /* inset-inline-end, not right: this badge is pinned to the READING edge, so under ar it belongs on
+     the left. .map-scroll-edge--left/right below stay physical on purpose — those are literal screen
+     edges for a scroll affordance and do not mirror. */
   .rm-badge { position:absolute;top:10px;inset-inline-end:10px;background:rgba(124,140,248,0.12);color:#7c8cf8;border:1px solid rgba(124,140,248,0.3);padding:3px 9px;border-radius:4px;font-size:11px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;pointer-events:none;z-index:50; }
   /* Engine badge — bottom-left, unobtrusive. Colour differs per engine so a
      side-by-side comparison is readable at a glance. */
@@ -435,6 +477,9 @@ useShadowStyles(`
   @media(max-width:767px){
     .rm-legend-mobile-slot { display:block; }
     .rm-legend-desktop-slot { display:none; }
+    /* The engine badge stays off phones. The legend sheet there spans the map's bottom edge and
+       covered the end of the badge (it read "MapLibr"), and the map's credit already names the engine. */
+    .rm-provider-badge { display:none; }
   }
   /* Exactly as wide as the control column: button + its 3px edge margin on both sides. */
   .map-scroll-edge { position:absolute;top:0;bottom:0;width:calc(var(--map-btn-size,32px) + 6px);z-index:2;touch-action:pan-y;pointer-events:auto;background:transparent; }
@@ -449,7 +494,7 @@ const mapboxToken   = inject('mapboxToken')
 const mapProvider     = resolveMapProvider(profileConfig)
 
 // ── SEARCH BAR + FLY/CLUSTER TOOLS ARE PROVIDER- AND HOST-DEPENDENT ──────────
-// ★ WHY MAPLIBRE GETS NO SEARCH BAR AT ALL (Driver, 2026-09-23).
+// ★ WHY MAPLIBRE GETS NO SEARCH BAR AT ALL (decided 2026-09-23).
 // The point of the maplibre provider is to run KEYLESS — a partner with thousands of sites swaps
 // one prop and stops paying for a Mapbox key. But GeocoderComponent's maplibre path still calls
 // makeMapboxForwardGeocode(accessToken) (GeocoderComponent.vue:526): the geocoding REQUEST goes to
@@ -464,7 +509,7 @@ const hasGeocoder = computed(() => {
 
 // ★ NO SEARCH BAR MEANS THE LEGEND RISES, NOT A DEAD GAP.
 // SemanticTreeLegend's --stl-top defaults to 60px, and that 60px exists ONLY to reserve room for a
-// search bar above it. Leaving it when the bar is gone is the empty band the Driver called out.
+// search bar above it. Leaving it when the bar is gone is the empty band that was reported.
 // 14px matches .lt-root's own top, so the legend lands where the search bar's top edge was.
 // How far the legend may rise depends on WHAT ELSE is in the strip the search bar vacated.
 // LegendTools sits at top:14px on the tabs its predicate allows, so raising the legend to 14 there
@@ -483,8 +528,8 @@ const legendTopVar = computed(() => {
   // Fly + Clusters are a leaf-only tool (see the note on showLegendTools). So on the Regions and
   // Languages tabs it reserved 56px for a toolbar it never draws, and only those two tabs, because
   // they are exactly the set showsFlyTools() returns true for. Every other tab took the 14px branch
-  // and looked right, which is why the Driver reported it as two tabs misbehaving.
-  // MEASURED by rega at 1440x900 on main e1d0bc20: the band from the map's top edge (y 44) to the
+  // and looked right, which is why it was reported as two tabs misbehaving.
+  // MEASURED at 1440x900 on main e1d0bc20: the band from the map's top edge (y 44) to the
   // legend card (y 100) is 56px of EMPTY map on both tabs, with no LegendTools anywhere in the strip.
   // So the gap was dead space, not a toolbar the reader had not registered.
   const toolsShown = showLegendTools.value && showsFlyTools(activeLegendType?.value ?? activeLegendType)
@@ -558,17 +603,20 @@ const FEATURES = {
 }
 
 // Tab order: Prayer → Adoption → Engagement → Language Families
-// (qa: 2026-05-04 user feedback — Adoption swapped before Engagement so
+// Adoption swapped before Engagement so
 // the order reads as the user-flow ladder Prayer → Adopt → Engage rather
 // than the previous alphabetical Engagement-before-Adoption.)
+// No `label:` here: tabLabel() reads tabs.<i18nKey|id> behind a te() guard, and all seven keys
+// resolve in all eleven locales, so an English label could never render — it was a second copy of
+// each name that could only drift from the catalogue. The sub-tab tables lost theirs the same way.
 const ALL_TABS = [
-  { id: 'prayer',            label: 'Prayer',            colorStrategy: 'prayerProgress', legend: 'prayer',            popup: 'pray',  feature: null            },
-  { id: 'adoption',          label: 'Adoption',          colorStrategy: 'adoption',       legend: 'adoption',          popup: 'adopt', feature: 'adoption'      },
-  { id: 'engagement',        label: 'Engagement',        colorStrategy: 'engagement',     legend: 'engagement',        popup: 'pray',  feature: null,           sepAfter: true },
-  { id: 'affinity-blocks',   label: 'People Groups (Affinity)',     colorStrategy: 'affinityBlock',  legend: 'affinity-block',    popup: 'pray',  feature: null            },
-  { id: 'doxa-regions',      label: 'Regions',            colorStrategy: 'doxaRegion',     legend: 'doxa-regions',      popup: 'pray',  feature: 'doxaRegions',  i18nKey: 'regions' },
-  { id: 'language-families', label: 'Languages',         colorStrategy: 'languageFamily', legend: 'language-family',   popup: 'pray',  feature: null            },
-  { id: 'religion',          label: 'Religions',         colorStrategy: 'religion',       legend: 'religion',          popup: 'pray',  feature: null            }
+  { id: 'prayer',            colorStrategy: 'prayerProgress', legend: 'prayer',            popup: 'pray',  feature: null            },
+  { id: 'adoption',          colorStrategy: 'adoption',       legend: 'adoption',          popup: 'adopt', feature: 'adoption'      },
+  { id: 'engagement',        colorStrategy: 'engagement',     legend: 'engagement',        popup: 'pray',  feature: null,           sepAfter: true },
+  { id: 'affinity-blocks',   colorStrategy: 'affinityBlock',  legend: 'affinity-block',    popup: 'pray',  feature: null            },
+  { id: 'doxa-regions',      colorStrategy: 'doxaRegion',     legend: 'doxa-regions',      popup: 'pray',  feature: 'doxaRegions',  i18nKey: 'regions' },
+  { id: 'language-families', colorStrategy: 'languageFamily', legend: 'language-family',   popup: 'pray',  feature: null            },
+  { id: 'religion',          colorStrategy: 'religion',       legend: 'religion',          popup: 'pray',  feature: null            }
 ]
 const TABS = ALL_TABS.filter(t => !t.feature || FEATURES[t.feature])
 const tabs       = computed(() => TABS)
@@ -583,23 +631,19 @@ watch(() => activeTab.value?.colorStrategy, (strategy) => mapTheme.setLook(mapTh
 const activeLegendType = computed(() => activeTab.value?.legend ?? 'default')
 const activePopupAction = computed(() => activeTab.value?.popup ?? 'pray')
 
-// Per-tab geocoder placeholder. The Language Families tab makes the search
-// scope explicit ("Search language family, language, dialect/variety") so users
-// know the search is wired to the legend's hierarchy. Other tabs use the
-// default i18n placeholder ("Search people, place, language, religion").
+// Per-tab geocoder placeholder. The four tiered tabs name their own tiers, so the reader can see
+// the search is wired to the legend's hierarchy rather than to the map at large; the flat tabs fall
+// through to the default placeholder. Empty string means "no opinion" — GeocoderComponent then uses
+// its own i18n default, which is why an unresolved key returns '' rather than English.
+const GEOCODER_PLACEHOLDER_KEY = {
+  'language-families': 'search.tabPlaceholder.languageFamilies',
+  'affinity-blocks':   'search.tabPlaceholder.affinityBlocks',
+  'doxa-regions':      'search.tabPlaceholder.regions',
+  'religion':          'search.tabPlaceholder.religion',
+}
 const geocoderPlaceholder = computed(() => {
-  if (activeTab.value?.id === 'language-families') {
-    return 'Search language family, language, dialect/variety'
-  }
-  if (activeTab.value?.id === 'affinity-blocks') {
-    return 'Search affinity bloc, cluster, people group'
-  }
-  if (activeTab.value?.id === 'doxa-regions') {
-    return 'Search region, country, people group'
-  }
-  if (activeTab.value?.id === 'religion') {
-    return 'Search religion, people group'
-  }
+  const key = GEOCODER_PLACEHOLDER_KEY[activeTab.value?.id]
+  if (key && te(key)) return t(key)
   return ''  // empty → GeocoderComponent falls back to i18n default
 })
 
@@ -638,7 +682,7 @@ const geocoderRef  = ref(null)
 // 'collapsed' on first visit). Replaces the iter-3 always-collapse-on-
 // switch behavior, which the user found jarring — they want returning
 // to a tab to restore whatever tier (collapsed / open / fullyOpen) they
-// last had it at. qa: 2026-05-02.
+// last had it at.
 const _tabLegendState = new Map()
 watch(() => activeTabId?.value, async (newTabId, oldTabId) => {
   if (oldTabId !== undefined && newTabId !== oldTabId) {
@@ -654,7 +698,7 @@ watch(() => activeTabId?.value, async (newTabId, oldTabId) => {
   // ★ SCROLL THE TAB BAR, NOT THE PAGE. This was
   //     btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
   // and 'nearest' does not mean "do not scroll the page" — it means "scroll every scrollable
-  // ancestor the least amount needed", and the HOST PAGE is an ancestor. MEASURED by rega's embed
+  // ancestor the least amount needed", and the HOST PAGE is an ancestor. MEASURED in the embed
   // sweep: a partner page carrying this map below the fold jumps to y≈640 the moment it mounts, on
   // a phone, where Simple Research is the default tab. The reader asked for nothing; the page moved
   // under them.
@@ -744,12 +788,13 @@ const mapData = useMapData({
 // then force it visible (country search stays on the current tab — d7e741b — so
 // the polygon layers, normally hidden off the Regions tab, must be shown here).
 // ★ EVERY region paint write goes through this, or the pre-warm above is undone the first time a
-// highlight is cleared. Found by cross-reading exp-shepherd's country-posters port (73438b43b), which
+// highlight is cleared. Found by cross-reading the country-posters port (73438b43b), which
 // wraps all eighteen of its clears while mine still wrote nine RAW constants — a raw value makes the
 // property constant again, so the next highlight recompiles the shader variant the pre-warm exists to
-// have already compiled. rega measured 0 ms on a fresh tab; a reader who clears a selection first was
+// have already compiled. Measurement showed 0 ms on a fresh tab; a reader who clears a selection first was
 // paying it again, which no run so far has exercised.
-const regionIdle = (v) => ['case', ['has', 'iso_3166_1_alpha_3'], v, v]
+// regionIdle now comes from the library (useLegendMapBridge), which already called it — this file
+// was defining a copy and then passing it in. See check:region-paint-single-source.
 
 async function highlightCountryByIso(iso3) {
   const code = String(iso3 || '').trim().toUpperCase()
@@ -776,23 +821,6 @@ async function highlightCountryByIso(iso3) {
 // Reverse highlightCountryByIso: reset the regions polygon paint to default and
 // re-hide it when we're not on the Regions tab (a country search may have shown
 // it cross-tab). Used when the user picks a non-country result or clears search.
-function clearCountryHighlight() {
-  // Always drop the country boundary outline first — it's independent of
-  // regions-fill, so it must clear even when that layer isn't present (tabs
-  // that never loaded the WAGF regions source).
-  countryOutline.clearCountry()
-  const m = map.value
-  if (!m || !m.getLayer('regions-fill')) return
-  m.setPaintProperty('regions-fill', 'fill-opacity', regionIdle(0.20))
-  m.setPaintProperty('regions-fill', 'fill-outline-color', null)
-  m.setPaintProperty('regions-border', 'line-color', regionIdle('rgba(60,60,80,0.35)'))
-  m.setPaintProperty('regions-border', 'line-width', regionIdle(0.6))
-  if (activeTab.value?.id !== 'doxa-regions') {
-    m.setLayoutProperty('regions-fill',   'visibility', 'none')
-    m.setLayoutProperty('regions-border', 'visibility', 'none')
-  }
-}
-
 // ─── Layers composable ───────────────────────────────────────────────────────
 const mapLayers = useMapLayers({
   getMap: () => map.value,
@@ -901,7 +929,13 @@ const legend = useLegendData({
   dataStore,
   legendType: activeLegendType
 })
-provide('legendRows', legend.rows)
+// ★ REMOVED: provide('legendRows', legend.rows). useLegendData returns `items`, never `rows`, so
+// this provided undefined from the day it was written, and nothing in the repo injects 'legendRows'
+// — LegendDesktop and LegendMobile read the `legend` key instead, which is what the comment above
+// used to claim was happening. the same line was found in countries-map, where it was not
+// merely dead: it made Export poster throw (NE-17, their d6916e05e). A provide that is undefined and
+// a comment that describes a contract nobody implements are worse together than either alone, so
+// both go. If a consumer ever needs these rows, it should provide legend.items and say so then.
 // SemanticTreeLegend (and LegendFamilyTree.legacy) need raw normalized
 // people-groups, not pre-aggregated legendRows. mapData owns the normalized
 // array; expose to descendants.
@@ -919,6 +953,20 @@ const countryOutline = useCountryOutline(() => map.value)
 // via inject.
 const pplrInstance = createPplrInstance(mapId)
 provideInstance(pplrInstance)
+
+// ── legend ↔ map bridge (shared with country-posters) ────────────────────────
+// The four handlers below were byte-identical in both 811-line twins. They now live in the library,
+// so a fix reaches both maps instead of one — three defects had already landed in one twin and not
+// the other before this existed. Everything is PASSED IN, so this call has to sit after
+// countryOutline and pplrInstance: the declarations it replaces were hoisted and ran before either
+// existed, which a composable call cannot do.
+const _legendBridge = useLegendMapBridge({
+  map, activeTab, countryOutline, regionIdle, mapFly, pplrInstance, mapId,
+})
+const clearCountryHighlight = _legendBridge.clearCountryHighlight
+const _flatItemsToStlNodes = _legendBridge.flatItemsToStlNodes
+const onLegendRowClick = _legendBridge.onLegendRowClick
+const _bridgeSelection = _legendBridge.bridgeSelection
 
 // ── Geocoder → map search (shared composable) ────────────────────────────────
 // The kind-switch, the per-kind Mapbox filter-expression builder, the 6 byte-
@@ -943,7 +991,6 @@ const {
 // Default the SemanticTreeLegend internal tab per outer-tab (legend type):
 //   • language-families → 1 (Language)  — users know "Language" better than "Language Family"
 //   • affinity-blocks   → 0 (Bloc)      — users know affinity blocks better than clusters
-//   (qa: 2026-05-08 user feedback)
 // Reset on every outer-tab change so switching between Languages and Affinity
 // Blocks lands on the right inner tab regardless of where the previous tab left it.
 pplrInstance.activeTab.value = 1
@@ -962,26 +1009,34 @@ watch(activeLegendType, (t) => {
 // the langTree directly here instead of routing through LegendDesktop.
 const _langPgRef = { get value() { return mapData.normalizedPeopleGroups.value || [] } }
 const { langTree } = useLanguageFamilyLegendData(_langPgRef)
+// ★ THE TAB TEXT LIVES IN THE CATALOGUE, NOT HERE. SemanticTreeLegend renders these through
+// tabLabel()/tabInfo(), which read `tabs.<id>` and `legend.tabInfo.<id>` behind a te() guard. The
+// labels resolved in all eleven locales, but not one legend.tabInfo key existed — so every
+// non-English reader got a translated tab chip beside an English explanation of what that chip
+// means, which is the one sentence a reader who does not read English cannot do without. The keys
+// are now written, so the English explanations are gone from here rather than kept as fallbacks
+// that can never fire: a second copy of a string drifts from the catalogue silently.
+//
+// `info: true` still marks WHICH tabs carry an explanation — the legend gates the little "i" button
+// on that flag, so dropping the field outright would remove the affordance instead of translating it.
 const LANG_TABS = [
-  { id: 'family',   label: 'Lang Family',
-    info: 'A language family is a group of languages descended from a common ancestor (e.g. Indo-European, Afro-Asiatic).' },
-  { id: 'language', label: 'Language',
-    info: 'A language is a system of communication used by a people (e.g. Arabic, Bengali, Hindi).' },
-  { id: 'dialect',  label: 'Dialect/Variety',
-    info: 'A dialect/variety is a regional or social form of a language (e.g. Arabic, Sudanese; Pakistan Sign Language).' },
+  { id: 'family',   info: true },
+  { id: 'language', info: true },
+  { id: 'dialect',  info: true },
 ]
 
 // Affinity-block tab — mirrors PPLR's pplr-rop-tree.vue hierarchy (Affinity Block → Cluster → PG).
 const { affinityTree } = useAffinityBlockLegendData(_langPgRef)
+// The source fields behind each tier, kept here because the reader-facing text in the catalogue
+// deliberately drops them: bloc = rop1 (16 blocks); cluster = imb_reg_of_people_2, ROP 2 (194);
+// group = imb_reg_of_people_25, ROP 2.5 (1,736 PGs, 131 of them in more than one country);
+// pgic = imb_reg_of_people_3 + country_code (2,106 rows). Row suffixes "(Cluster)"/"(PG)"/"(PGIC)"
+// come from the legend data, not from these labels.
 const AFFINITY_TABS = [
-  { id: 'bloc',    label: 'Affinity Block',
-    info: 'Affinity Block (field: rop1) — broadest grouping by cultural/linguistic/geographic kinship. 16 blocks total. Examples: Malay Peoples, South Asian Peoples, Deaf, Arab World.' },
-  { id: 'cluster', label: 'Cluster',
-    info: 'Cluster (field: imb_reg_of_people_2, ROP 2) — finer-grained grouping inside a bloc. 194 clusters total. Suffix "(Cluster)" appears on each row to distinguish from PG/PGIC. Example: Borneo-Kalimantan within Malay Peoples.' },
-  { id: 'group',   label: 'People Group',
-    info: 'People Group (field: imb_reg_of_people_25, ROP 2.5) — abstract ethnolinguistic identity, country-agnostic. Suffix "(PG)" on each row. 1,736 PGs total; 131 of them have rows in multiple countries (e.g. Deaf in 123 countries). Example: Abai Sungai (PG) is one ROP25 code regardless of where its people live.' },
-  { id: 'pgic',    label: 'PG in Country',
-    info: 'PGIC = People Group In Country (field: imb_reg_of_people_3 + country_code) — one row per (people group, country) pair. Suffix "(PGIC)" on each row. 2,106 rows total. Example: "Abai Sungai, Malaysia (PGIC)" is the Abai Sungai PG specifically as it exists in Malaysia.' },
+  { id: 'bloc',    info: true },
+  { id: 'cluster', info: true },
+  { id: 'group',   info: true },
+  { id: 'pgic',    info: true },
 ]
 
 // WAGF Regions tab — Region → Block → Country (3-tier). Each region has a unique color;
@@ -989,44 +1044,20 @@ const AFFINITY_TABS = [
 // highlights the matching country polygons on the map.
 const { regionsTree } = useWagfRegionsLegendData(_langPgRef)
 const REGIONS_TABS = [
-  { id: 'region',  label: 'WAGF Region',
-    info: 'WAGF macro-region (e.g. "Asia", "Africa"). Color-coded on the map.' },
-  { id: 'block',   label: 'WAGF Bloc',
-    info: 'WAGF bloc — the organizational sub-grouping within each region (e.g. "South East Asia", "West Africa").' },
-  { id: 'country', label: 'Country',
-    info: 'Individual countries, listed by unreached-population size within their bloc.' },
+  { id: 'region',  info: true },
+  { id: 'block',   info: true },
+  { id: 'country', info: true },
 ]
 
 // Flat legend data for prayer/adoption/engagement/religion tabs — converted to
 // STL-compatible tree nodes so ALL tabs render through the same SemanticTreeLegend.
 const flatLegend = useFlatLegendData(toRef(() => activeLegendType.value), RESEARCH_LEGEND_OPTIONS)
-// Prayer progress bar (header of the Prayer tab's legend; Driver 2026-09-16). null on
+// Prayer progress bar (header of the Prayer tab's legend; added 2026-09-16). null on
 // every other tab → no bar. Passed as a prop to the desktop STL AND provide()d so the
 // MOBILE sheet's embedded <SemanticTreeLegend> (LegendMobile.vue, untouched) picks it
 // up via inject('legendProgress'). STL also retitles itself "Progress" when present.
 const legendProgress = flatLegend.progress
 provide('legendProgress', legendProgress)
-function _flatItemsToStlNodes(items) {
-  const out = []
-  for (const item of items) {
-    out.push({
-      id: item.key, label: item.label, color: item.color,
-      count: item.count ?? 0, pop: item.population ?? 0,
-      filter: item.filterKey ? ['==', ['get', '_flat_filter'], item.filterKey] : null,
-      children: [],
-    })
-    for (const c of (item.children || [])) {
-      out.push({
-        id: c.key, label: c.label, color: c.color,
-        count: c.count ?? 0, pop: c.population ?? 0,
-        filter: c.filterKey ? ['==', ['get', '_flat_filter'], c.filterKey] : null,
-        children: [],
-      })
-    }
-  }
-  return out
-}
-
 // Computed bindings the template feeds into the single <SemanticTreeLegend>.
 // ALL tabs (flat + semantic) now render through STL.
 const _isFlatTab = computed(() => ['prayer', 'engagement', 'adoption', 'religion'].includes(activeLegendType.value))
@@ -1062,16 +1093,6 @@ const legendTitle = computed(() => {
   if (activeLegendType.value === 'doxa-regions')   return t('legend.titleBar.wagfRegions')
   return t('legend.titleBar.languages')
 })
-function _findNodeInTree(nodes, predicate) {
-  for (const n of nodes) {
-    if (predicate(n)) return n
-    if (n.children?.length) {
-      const f = _findNodeInTree(n.children, predicate)
-      if (f) return f
-    }
-  }
-  return null
-}
 // PPLR's onLegendSelect verbatim semantics: setFilter(node.filter) on select,
 // setFilter(null) on null. Plus mirror to mapStore for back-compat with the
 // rest of the app (geocoder, popup, fly-to all read mapStore.selected*).
@@ -1079,11 +1100,11 @@ function _findNodeInTree(nodes, predicate) {
 // @select to the same handler as the desktop instance — without this,
 // mobile row-clicks updated only instance.selection (shared via inject)
 // and never reached mapStore.selectFamily → applyDimFilter, so the
-// dim-on-select / restore-on-deselect path never ran (qa: 2026-05-03 iter-18).
+// dim-on-select / restore-on-deselect path never ran.
 provide('onSemanticTreeSelect', (node) => onSemanticTreeSelect(node))
 // Resolves the active tab's strategy → color for a given feature, used by
 // useSelectedPin.js so the selection-pin matches the underlying dot color
-// (qa: 2026-05-06 user feedback). research-mfe tab strategyKeys already
+// research-mfe tab strategyKeys already
 // match COLOR_MODES values directly, so no mapping needed.
 provide('getActivePinColor', (properties) => {
   const strat = getColorStrategy(activeTab.value?.colorStrategy ?? 'languageFamily')
@@ -1094,35 +1115,15 @@ provide('getActivePinColor', (properties) => {
 // expression for the camera here. Tree-tab nodes carry usable Mapbox filters
 // already (fam:/lang:/dial: + region:/block:/country: + bloc:/cluster:/pg:/pgic:),
 // so this returns null for them and zoomToLegendRow falls back to node.filter.
-function _buildFlatLegendMatchExpr(node, legendType) {
-  if (!node || !legendType) return null
-  const key = node.id
-  if (legendType === 'prayer') {
-    const v = ['to-number', ['get', 'peoplePraying']]
-    if (key === 'noPrayer')   return ['==', v, 0]
-    if (key === 'fullPrayer') return ['>=', v, FULL_PRAYER_THRESHOLD]
-    if (key === 'hasPrayer')  return ['all', ['>', v, 0], ['<', v, FULL_PRAYER_THRESHOLD]]
-  } else if (legendType === 'engagement') {
-    if (key === 'hasEngagement') return ['==', ['get', 'engagementStatus'], true]
-    if (key === 'notEngaged')    return ['==', ['get', 'engagementStatus'], false]
-  } else if (legendType === 'adoption') {
-    if (key === 'hasAdoption') return ['==', ['get', 'adoptionStatus'], true]
-    if (key === 'notAdopted')  return ['==', ['get', 'adoptionStatus'], false]
-  } else if (legendType === 'religion') {
-    // expectedValue is a family letter (C/M/H/B/E/J/S/N/O/U). Match first char.
-    return ['==', ['slice', ['coalesce', ['get', 'religion'], ''], 0, 1], key]
-  }
-  return null
-}
 // ─── ONE WRITER FOR THE REGION POLYGONS ──────────────────────────────────────
-// ★ MEASURED (rega, main 373b7979b): a single WAGF row click produced NINE regions-* paint writes —
+// ★ MEASURED (main 373b7979b): a single WAGF row click produced NINE regions-* paint writes —
 // fill-opacity, line-color and line-width, three times each inside ~110 ms — because two paths painted
 // the same highlight from DIFFERENT sources: onSemanticTreeSelect from node.isoCodes, applyDimFilter
 // from mapLayers.regionIsoMap, each triggering the other through mapStore. Two sources for one visual
 // is not just wasted work; it is how they drift, and it already cost a debugging cycle when we had to
 // establish WHICH of them had cleared the highlight.
 //
-// ★ AND THE IDLE STATE IS DATA-DRIVEN ON PURPOSE. rega measured the row click compiling a new shader
+// ★ AND THE IDLE STATE IS DATA-DRIVEN ON PURPOSE. Measurement showed the row click compiling a new shader
 // variant: 5.5 s on MapLibre, 11.1 s on Mapbox (SwiftShader), because that click was the first moment
 // these three properties stopped being constants. Same defect as the pins, same fix: the idle value is
 // ['case', ['has', 'iso_3166_1_alpha_3'], x, x] — both branches identical, so not one pixel changes —
@@ -1138,8 +1139,10 @@ const REGION_IDLE_WIDTH = ['case', ['has', 'iso_3166_1_alpha_3'], 0.6, 0.6]
 // does not define is skipped rather than invented, and one already wrapped is left alone.
 function prewarmRegionPaint(m) {
   if (!m || !m.getLayer('regions-fill')) return
-  const wrap = (v) => ['case', ['has', 'iso_3166_1_alpha_3'], v, v]
-  // ★ SKIP WHAT IS ALREADY DATA-DRIVEN, and note the test is not "is it an array". exp-shepherd wrote
+  // Was a THIRD local copy of the idle expression, under a different name — byte-identical body.
+  // The library's regionIdle replaces it exactly.
+  const wrap = regionIdle
+  // ★ SKIP WHAT IS ALREADY DATA-DRIVEN, and note the test is not "is it an array". The country-posters port wrote
   // their copy to skip any array, reasoning that an expression is already data-driven so there is no
   // variant to warm. That is right for this layer — line-color arrives as a match on a feature property
   // — but it is right by accident: a ZOOM expression like ['interpolate',['linear'],['zoom'],…] is also
@@ -1159,10 +1162,10 @@ function prewarmRegionPaint(m) {
   // exactly that reverse. Mapbox then classifies the property as composite and reaches for an
   // interpolation factor the expression cannot supply — the class of
   //   this.expression.interpolationFactor is not a function
-  // rega saw once on Mapbox at L54, on the clear → other-row path. A missed pre-warm costs a frame; an
+  // a run saw it once on Mapbox at L54, on the clear → other-row path. A missed pre-warm costs a frame; an
   // illegal paint costs the layer, so when the two rules disagree this one wins.
   //
-  // exp-shepherd's port skips ANY array and is immune to this by accident; the difference between us
+  // the country-posters port skips ANY array and is immune to this by accident; the difference between us
   // was never about zoom expressions being data-driven, it was about which mistake is recoverable.
   const readsZoom = (e) => Array.isArray(e) && (e[0] === 'zoom' || e.some(readsZoom))
   const warm = (layer, prop) => {
@@ -1181,9 +1184,9 @@ function prewarmRegionPaint(m) {
 
 function paintRegionScope(m, isoCodes) {
   if (!m || !m.getLayer('regions-fill')) return
-  // ★ CANONICAL FIRST, OR THE COMPARE BELOW IS A LIE (rega, L43: still 9 writes per click, not 3).
+  // ★ CANONICAL FIRST, OR THE COMPARE BELOW IS A LIE (measured at L43: still 9 writes per click, not 3).
   // The two sources build the same region from different lists — node.isoCodes and
-  // mapLayers.regionIsoMap[slug] — and they do not agree on ORDER. rega had already told me that in
+  // mapLayers.regionIsoMap[slug] — and they do not agree on ORDER. The measurement had already shown that in
   // the very first stack trace ("a case over ['IND',…]" then "a case over ['MYS',…], a different
   // literal order") and I wrote a JSON-string compare anyway, which can never match two orderings of
   // the same set. Sorting and de-duplicating makes the expression a function of the SET, which is what
@@ -1217,7 +1220,7 @@ function onSemanticTreeSelect(node) {
   // _flat_filter placeholder); tree-tab nodes use node.filter directly.
   if (node) {
     const flatExpr = _isFlatTab.value
-      ? _buildFlatLegendMatchExpr(node, activeLegendType.value)
+      ? buildFlatLegendMatchExpr(node, activeLegendType.value)
       : null
     // doxa-regions tab → fit polygon (sparse regions like Oceania should
     // zoom TO the region, not OUT to span its few scattered pins).
@@ -1347,29 +1350,9 @@ watch(() => uiStore.theme, (t) => { pplrInstance.theme.value = (t === 'dark' ? '
 // legend:highlight → research-map.applyDimFilter → mapStore.selectXxx (no-op
 // if already set). The bridge watcher then fires with the same selection,
 // but the SemanticTreeLegend's _lastInternalId guard catches the round-trip.
-function _bridgeSelection(kind, fullNode) {
-  if (!fullNode) {
-    const cur = pplrInstance.selection.value
-    if (cur && cur.id?.startsWith(kind + ':')) pplrInstance.selection.value = null
-    return
-  }
-  // If the legend already holds a selection of the same kind+label, skip the
-  // overwrite — the user's click landed on a specific node (with its exact
-  // family prefix in the id). A label-matched lookup here may pick a DIFFERENT
-  // family bucket if the same label appears in two families (e.g. Bengali
-  // under Indo-European AND under "Unknown" if some pins have null
-  // imb_language_family + no lookup hit). Overwriting with the wrong id
-  // breaks the legend's _lastInternalId guard and triggers an unwanted
-  // depth-based tab switch on what should be a same-tab row click.
-  const cur = pplrInstance.selection.value
-  if (cur && cur.id?.startsWith(kind + ':') && cur.label === fullNode.label) return
-  // Full node from langTree carries color/children/filter — needed for the
-  // legend's row highlight, descendant-dim exemption, and parent breadcrumb.
-  pplrInstance.selection.value = fullNode
-}
 watch(() => mapStore.selectedFamily, (key) => {
   if (!key) return _bridgeSelection('fam', null)
-  const node = _findNodeInTree(langTree.value, n => n.id.startsWith('fam:') && n.label === key)
+  const node = findNodeInTree(langTree.value, n => n.id.startsWith('fam:') && n.label === key)
   if (node) _bridgeSelection('fam', { ...node, depth: 0 })
 })
 watch(() => mapStore.selectedLanguage, (key) => {
@@ -1377,7 +1360,7 @@ watch(() => mapStore.selectedLanguage, (key) => {
   // Match by label across all language nodes — the geocoder gives us "Arabic"
   // without a family prefix, so we look up the first matching language node
   // (sorted by population, so the most-populated family wins; usually correct).
-  const node = _findNodeInTree(langTree.value, n => n.id.startsWith('lang:') && n.label === key)
+  const node = findNodeInTree(langTree.value, n => n.id.startsWith('lang:') && n.label === key)
   if (node) _bridgeSelection('lang', { ...node, depth: 1 })
 })
 watch(() => mapStore.selectedDialect, (dialect) => {
@@ -1385,7 +1368,7 @@ watch(() => mapStore.selectedDialect, (dialect) => {
   // Dialect mapStore keys already include the family prefix
   // ("family__baseLang__dialect"); langTree dialect ids prepend "dial:".
   const fullId = `dial:${dialect.key}`
-  const node = _findNodeInTree(langTree.value, n => n.id === fullId)
+  const node = findNodeInTree(langTree.value, n => n.id === fullId)
   if (node) _bridgeSelection('dial', { ...node, depth: 2 })
 })
 // WAGF Regions — bridge mapStore.selectedRegion → SemanticTreeLegend.
@@ -1393,7 +1376,7 @@ watch(() => mapStore.selectedDialect, (dialect) => {
 // 'region:south_asia' node id in regionsTree.
 watch(() => mapStore.selectedRegion, (key) => {
   if (!key) return _bridgeSelection('region', null)
-  const node = _findNodeInTree(regionsTree.value, n => n.id === `region:${key}`)
+  const node = findNodeInTree(regionsTree.value, n => n.id === `region:${key}`)
   if (node) _bridgeSelection('region', { ...node, depth: 0 })
 })
 
@@ -1401,7 +1384,7 @@ watch(() => mapStore.selectedRegion, (key) => {
 // Instantiated only when the user opens the poster dialog. The composable +
 // off-screen Mapbox instance + PDF pipeline are ~117 KB; keep them off the
 // critical boot path.
-// ★ ONE CLICK, ONE FILE (BUILD-SIMPLE-RESEARCH-EXPORT-ZERO-CLICK). The Driver: "there's an export
+// ★ ONE CLICK, ONE FILE (BUILD-SIMPLE-RESEARCH-EXPORT-ZERO-CLICK). The report: "there's an export
 // button on the simple dashboard ... get it working". Measured 2026-09-25, leaf AND gallery: clicking
 // "Export poster…" produced NOTHING — no dialog, no file in 60s, no error. Two bugs stacked: the
 // template passed the poster dialog a `poster` prop it does not have and omitted its v-model and
@@ -1410,60 +1393,76 @@ watch(() => mapStore.selectedRegion, (key) => {
 // Now the button does the export itself, through the SHARED poster path (useMapPoster → render →
 // print), with a sensible print default: the current view on US Letter portrait at 200 DPI, the
 // legend title and rows, and a source/date footer. One click, one dialog, the poster in the preview.
+// The legend rows a poster prints, from the ONE composable that actually has them.
+//
+// ★ useLegendData RETURNS `items`, NOT `rows`. Both poster paths below read `legend.rows.value`,
+// which is undefined, so `|| []` silently handed the renderer an empty list — and useMapPoster skips
+// the legend slot entirely when there are no rows. That is why the exported poster had no legend:
+// not a layout problem but an empty array, arriving through a fallback that could never be anything
+// else. The booklet path had no second source at all, so ITS legend was empty unconditionally.
+//
+// Children are flattened in because a prayer legend is a parent plus two child tiers, and a printed
+// legend that shows only the parents describes bands the map does not draw.
+function posterLegendRows(preferFlat) {
+  const flat = preferFlat ? (flatLegend.items.value || []) : []
+  const src = flat.length ? flat : (legend?.items?.value || [])
+  return src
+    .flatMap((it) => [it, ...(it.children || [])])
+    .map((r) => ({ label: r.label, color: r.color }))
+    .filter((r) => r.label)
+}
+
 const posterBusy = ref(false)
+// The loading screen (MapPrintProgress): the title it names and the renderer's progress while it works.
+const printTitle = ref('')
+const printProgress = ref(null)
 async function openPoster() {
   if (posterBusy.value) return
   posterBusy.value = true
   try {
-    const [{ useMapPoster }, { defaultPosterSpec }, { printImageBlob }] = await Promise.all([
+    const [{ useMapPoster }, { mapPrintSpec, packetScriptureLine }, { printImageBlob }, { loadPacketStrings }] = await Promise.all([
       import('@map/composables/poster/useMapPoster.js'),
-      import('@map/constants/posterDefaults.js'),
+      import('@map/composables/poster/mapPrintTemplate.js'),
       import('@map/composables/printInPlace.js'),
+      import('@map/packet/packetStrings.js'),
     ])
     const exporter = useMapPoster(() => map.value)
-    // ★ THE PAPER FOLLOWS THE MAP, because a map is usually wider than it is tall and a portrait sheet
-    // letterboxes it (Driver, 2026-09-28: the print came out vertical and it should "probably [be] a
-    // horizontal map"). Same 8.5x11 stock either way — only the ORIENTATION turns, so the sheet is
-    // still a standard page and not a custom size no printer has.
-    // Measured from the map's own container rather than from the window: the map may be one pane of a
-    // composite, and it is the MAP's shape being exported, not the browser's.
-    const mapEl = map.value?.getContainer?.() || null
-    const landscape = !!mapEl && mapEl.clientWidth > mapEl.clientHeight
-    const spec = defaultPosterSpec({
-      widthIn:  landscape ? 11 : 8.5,
-      heightIn: landscape ? 8.5 : 11,
-      dpi: 200,
-      orientation: landscape ? 'landscape' : 'portrait',
-    })
-    // The poster is titled by the VIEW on screen ("Prayer", "Religion"…), in the reader's language.
-    // The legend's title bar is the fallback only: on a flat tab it is the generic word "Legend".
-    const title = tabLabel(activeTab.value) || legendTitle.value || 'Doxa Map'
+    // The loading screen follows the renderer's own progress for as long as this print runs.
+    stopPrintWatch = watch(() => exporter.progress.value, (p) => { printProgress.value = p ? { ...p } : null }, { immediate: true, deep: true })
+    // ★ THE SHARED MAP-PRINT TEMPLATE (mapPrintTemplate.js): landscape Letter, a header with the MAP's name and
+    // the view as its subtitle, the legend as a side panel, and a footer line from the prayer packet's final page.
+    // The map's name comes from the host (profile-config mapTitle, e.g. the gallery's tab label); without one the
+    // view on screen ("Prayer", "Religion"…) is the title, as before.
+    const view = tabLabel(activeTab.value) || legendTitle.value || 'Doxa Map'
+    const mapTitle = String(profileConfig?.value?.mapTitle || '').trim()
+    const title = mapTitle || view
+    printTitle.value = title
     // Direction follows the MAP's language, not the host page's: an English map on an Arabic page stays LTR.
-    spec.dir = ['ar', 'fa', 'he', 'ur'].includes(String(uiLocale.value || '').split('-')[0]) ? 'rtl' : 'ltr'
-    spec.slots.title  = { ...spec.slots.title, text: title }
-    // The legend the reader sees: the flat tab's rows (and their sub-rows), else the aggregated ones.
-    const flatRows = (flatLegend.items.value || []).flatMap(it => [it, ...(it.children || [])])
-    const rows = (flatRows.length ? flatRows : (legend?.rows?.value || [])).map(r => ({ label: r.label, color: r.color }))
-    spec.slots.legend = { ...spec.slots.legend, rows, title: legendTitle.value }
-    // No scale bar or north arrow: the headless renderer's are placeholders (a fixed bar reading
-    // "scale"), which on a print would be a false statement — and a globe has no single scale.
-    spec.slots.scaleBar = false
-    spec.slots.north = false
-    // Credit the tiles actually drawn: OpenFreeMap on MapLibre, Mapbox otherwise.
-    // C3: ask the library, not the globals. The explicit === 'maplibre' keeps the original FALSE for
-    // a map that is neither, so the Mapbox attribution stays the fall-through it always was.
+    const lang = String(uiLocale.value || 'en').split('-')[0]
+    const dir = ['ar', 'fa', 'he', 'ur'].includes(lang) ? 'rtl' : 'ltr'
+    // loadPacketStrings never rejects (a copy it cannot use gives the English table), but its fetch has no timeout:
+    // a stalled network must not hold the export, so after 3 s the sheet prints without the prayer line.
+    const strings = await Promise.race([loadPacketStrings(resolveAssetsBase(profileConfig?.value)), new Promise((r) => setTimeout(() => r(null), 3000))])
+    const scripture = packetScriptureLine(strings, lang)
+    // Credit the tiles actually drawn: OpenFreeMap on MapLibre, Mapbox otherwise (C3: ask the library).
     const onMaplibre = providerFor(map.value) === 'maplibre'
-    spec.slots.footer = { ...spec.slots.footer, left: 'pray.doxa.life', right: new Date().toISOString().slice(0, 10),
-      attribution: onMaplibre ? '© OpenFreeMap © OpenMapTiles © OpenStreetMap' : '© Mapbox © OpenStreetMap' }
+    const date = new Date().toISOString().slice(0, 10)
+    const spec = mapPrintSpec({
+      title, subtitle: mapTitle ? view : '', dir,
+      legendRows: posterLegendRows(true), legendTitle: legendTitle.value,
+      footerLeft: scripture || 'pray.doxa.life', footerRight: scripture ? `pray.doxa.life · ${date}` : date,
+      attribution: onMaplibre ? '© OpenFreeMap © OpenMapTiles © OpenStreetMap' : '© Mapbox © OpenStreetMap',
+    })
     const blob = await exporter.render(spec, 'png')
-    // ★ THE DIALOG, NOT A DOWNLOAD (the Driver, 2026-09-28: an export-poster button must open the
+    // ★ THE DIALOG, NOT A DOWNLOAD (ruled 2026-09-28: an export-poster button must open the
     // print dialog with a poster preview, never hand over a file). This used to call _downloadBlob,
     // so the reader got a PNG in their downloads folder with no preview, no paper size and no way to
     // print it without opening it somewhere else first. printImageBlob puts the rendered poster on a
     // sheet of exactly the spec's size and raises the dialog over the map — the preview IS the poster.
-    // The same in-place frame the Driver's earlier ruling settled on: no pop-up, no blocker, and it
+    // The same in-place frame the earlier ruling settled on: no pop-up, no blocker, and it
     // works when an agent triggers it without a user gesture.
     const printed = printImageBlob(blob, {
+      labels: { print: T('wall.hud.printNow', 'Print'), close: T('buttons.close', 'Close') },
       widthIn: spec.widthIn ?? 8.5,
       heightIn: spec.heightIn ?? 11,
       title,
@@ -1475,33 +1474,76 @@ async function openPoster() {
   } catch (err) {
     console.error('[research-map] poster export failed:', err)
   } finally {
+    if (stopPrintWatch) { stopPrintWatch(); stopPrintWatch = null }
+    printProgress.value = null
     posterBusy.value = false
   }
 }
+let stopPrintWatch = null
 // The toolbar's export label, WITH its ellipsis. The ellipsis was stripped while this button handed
 // over a file directly; it now opens the print dialog, which is exactly what an ellipsis promises.
 const exportPosterLabel = computed(() => String(t('controls.export_poster') || 'Export poster…'))
 
 // ─── Export menu router (SemanticTreeLegend @export) ─────────────────────────
 // EXPERIMENTAL — dormant behind the shared kill-switch (SHOW_EXPORT_BUTTON).
-// The legend's Export menu emits 'export' with 'poster' | 'packet'.
+// ★ THE KIND CARRIES A VARIANT: 'poster' | 'packet:full' | 'packet:lightweight'. The legend widened
+// its existing event rather than adding a second one, and this router still tested the whole string
+// for 'packet' — so both submenu items fell through every branch and the Packet export did nothing
+// at all. Split the variant off first, exactly as upg-100-list's onLegendExport does. A bare
+// 'packet' keeps working and still means the full packet, so an older emitter does not break.
 function onExport(kind) {
-  if (kind === 'poster') return openPoster()
-  if (kind === 'packet') return openPacket()
+  const [base, variant] = String(kind).split(':')
+  if (base === 'poster') return openPoster()
+  if (base === 'packet') return openPacket(variant || 'full')
 }
+// ★ THE PHONE HAD NO EXPORT AT ALL, AND THE KILL-SWITCH ONLY COVERED THE DESKTOP.
+// LegendDesktop takes :export-enabled="EXPORT_FEATURE_ENABLED", so turning that flag off hid the
+// desktop menu — but LegendMobile is OPT-IN BY CONSTRUCTION: its exportEnabled is
+// `typeof inject('onLegendExport') === 'function'` (LegendMobile.vue:393), and this profile provided
+// nothing. So a reader on a phone had no way to export a poster or a packet, while the same map on a
+// desktop did. country-posters already carries the guarded line; this is the missing half here.
+// Providing it UNGUARDED would be the other error — the phone would then keep an affordance the
+// desktop deliberately hides whenever the flag is off, which is the bug exp's card names.
+provide('onLegendExport', EXPORT_FEATURE_ENABLED ? onExport : null)
+
+// ★ THE PHONE HAD NO EXPORT AT ALL. The desktop legend gets :export-enabled and @export in the
+// template, but LegendMobile does not read props from here — it reaches for an injected handler, and
+// decides whether to offer the control at all by whether one exists: mobileExportEnabled is
+// `typeof onLegendExport === 'function'` (LegendMobile.vue:412-413). Nothing provided it here, so a
+// reader on a phone saw no poster and no packet, while the same map on a desktop offered both. Not a
+// leak — an absence, which is why it never showed up as a broken control.
+//
+// ⚠ IT MUST CARRY EXPORT_FEATURE_ENABLED, not just the function. The desktop passes that flag, so
+// providing unconditionally would hand the phone an affordance the desktop deliberately hides when
+// the flag is off. Passing null when it is off is what makes the mobile sheet hide the control,
+// because "is there a handler" IS the mobile switch. Same shape as countries-map.vue, which fixed
+// this first (its comment records the same two causes on my-upg-100-list).
+provide('onLegendExport', EXPORT_FEATURE_ENABLED ? onExport : null)
 
 // ─── Packet export (printed, multi-page: map + a card per people group) ──────
 // Lazy-loaded on first use, the same pattern openPoster() uses. Defensive throughout: never throw
 // uncaught into the UI; guard against double-run.
-let _packetBusy = false
+// ★ A REF, NOT A PLAIN LET, AND THAT IS THE WHOLE DEFECT. This guarded re-entrancy correctly and could
+// not tell the reader anything, because a non-reactive binding drives no UI. Its sibling openPoster()
+// has had `posterBusy` as a ref wired to :active/:disabled/:aria-busy since it was written — so the
+// FASTER action showed a busy state and the SLOWER one (dynamic imports, a map render, then a card per
+// people group) showed none. One path was given feedback and its sibling was never looked at; upg100
+// found the identical shape on their own surface the same day.
+// Widened by me today: providing onLegendExport gave the legend's Export menu a mobile entry point,
+// so there is now a second way into this path.
+const packetBusy = ref(false)
+// The legend's Export menu reaches BOTH builds, so it reports either one. Provided rather than passed
+// because the mobile sheet's legend is mounted by LegendMobile, not by this template.
+const exportBusy = computed(() => posterBusy.value || packetBusy.value)
+provide('legendExportBusy', exportBusy)
 // Neither export hands over a file any more: the poster prints through printImageBlob and the packet
 // through the shared usePosterPrints.printPacket, so the download helper that served packet.pdf is gone.
-async function openPacket() {
-  if (_packetBusy) return
-  _packetBusy = true
+async function openPacket(variant = 'full') {
+  if (packetBusy.value) return
+  packetBusy.value = true
   try {
-    // ★ THE PACKET PRINTS, AND IT PRINTS THROUGH THE SHARED RENDERER (Driver-lens audit card 2, and
-    // the Driver's own rule: an export button opens the print dialog, never hands over a file). This
+    // ★ THE PACKET PRINTS, AND IT PRINTS THROUGH THE SHARED RENDERER (audit card 2, and
+    // the standing rule: an export button opens the print dialog, never hands over a file). This
     // built a jsPDF document and downloaded packet.pdf while its poster sibling, two functions up,
     // already printed. The fix is NOT to wrap that PDF in a dialog — a PDF blob cannot go in the
     // <img> the in-place print frame uses, and every workaround (embed, object, the browser's own
@@ -1579,22 +1621,26 @@ async function openPacket() {
     }))
 
     // Page 1 keeps the LIVE map rather than a fetched poster: this half is the one that knows what is
-    // currently on screen. The shared renderer interpolates `mapSvg` as raw markup, so the PNG this map
-    // already knows how to produce rides in as an <img> — a data URL, because the print frame is a
-    // separate document and an object URL created here would be revoked out from under it.
+    // currently on screen. It goes over through the print standard's `mapImage` seam, which PLACES IT
+    // AS THE WHOLE PAGE. It used to be handed across as a bare <img> in `mapSvg`, raw markup the
+    // renderer interpolated — and the page-1 redesign no longer draws that full page, so the live map
+    // arrived shrunk inside a layout built for a sheet. A data URL rather than an object URL, because
+    // the print frame is a separate document and an object URL created here would be revoked out from
+    // under it. The render is skipped for a deck, which has no map page — this map's legend menu only
+    // ever asks for 'full' or 'lightweight', so that arm is a guard against a future caller rather
+    // than a path taken today.
     const spec = defaultPosterSpec({ widthIn: 8.27, heightIn: 11.69, dpi: 150, orientation: 'portrait' })
     spec.slots.title = { ...spec.slots.title, text: legendTitle.value || 'Doxa Map' }
-    spec.slots.legend = { ...spec.slots.legend, rows: legend?.rows?.value || [] }
-    let mapSvg = ''
-    try {
+    spec.slots.legend = { ...spec.slots.legend, rows: posterLegendRows(true), title: legendTitle.value }
+    let mapUrl = ''
+    if (variant !== 'cards') try {
       const mapBlob = await useMapPoster(() => map.value).render(spec, 'png')
-      const dataUrl = await new Promise((resolve, reject) => {
+      mapUrl = await new Promise((resolve, reject) => {
         const r = new FileReader()
         r.onload = () => resolve(String(r.result))
         r.onerror = reject
         r.readAsDataURL(mapBlob)
       })
-      mapSvg = `<img src="${dataUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`
     } catch (e) {
       // A cover without the map beats no packet — the same call the shared composable documents.
       console.warn('[research-map] packet map page skipped:', e?.message || e)
@@ -1609,7 +1655,7 @@ async function openPacket() {
       // professional translation of legend.progress.short renders exactly this relationship as
       // "{covered} / {total}". The word IS available per locale there (ar "من", ru "из", fr "sur"), but that
       // key carries "· {pct}%" with it, so reusing it would mean either a wrong suffix or slicing a
-      // translated string on a separator I cannot guarantee survives translation.
+      // translated string on a separator that may not survive translation.
       // Wrapped in U+2066/U+2069 isolates, the convention the ar catalogue already uses for numeric
       // ranges (five times, e.g. "⁦30–59%⁩"): without them the pair reorders against Arabic text
       // beside it and reads as "214 / 50". NUMERALS ARE HELD, so the digits stay as they are.
@@ -1620,12 +1666,13 @@ async function openPacket() {
       records: () => records,
       lang: () => String(uiLocale.value || 'en').split('-')[0],
       label: () => zone.label,
+      mapImage: () => mapUrl || null,
     })
-    await prints.printPacket(zone, { mapSvg })
+    await prints.printPacket(zone, { variant })
   } catch (err) {
     console.error('[research-map] packet export failed:', err)
   } finally {
-    _packetBusy = false
+    packetBusy.value = false
   }
 }
 
@@ -1655,8 +1702,8 @@ const isDark = computed(() => uiStore.isDarkTheme)
 const isDarkBasemap = computed(() =>
   THEME_TOGGLE ? uiStore.isDarkTheme : FIXED_BASEMAP.lightPreset === 'night')
 
-// Theme-aware data-pin outline (qa: 2026-05-06 user feedback — Joshua Project
-// uses a thin near-black outline that's barely visible; reverse-engineered).
+// Theme-aware data-pin outline. Joshua Project
+// uses a thin near-black outline that's barely visible; reverse-engineered.
 // In dark mode the outline goes white so pins stay visible against dark
 // basemaps. Boot style is light-v11, so the initial circle-stroke-color
 // in addLanguageFamilyLayer is already 'rgba(0,0,0,0.45)' — this watcher
@@ -1707,7 +1754,7 @@ async function ensureRegionsLoaded() {
       if (regionsData && map.value) {
         mapLayers.addRegionsLayer?.(regionsData, 'doxa-regions')
         // ★ PRE-WARM HERE, which is the only moment that helps. These layers are added on first visit
-        // to the Regions tab, and rega measured the first ROW click paying 5.5 s (MapLibre) / 11.1 s
+        // to the Regions tab, and measurement showed the first ROW click paying 5.5 s (MapLibre) / 11.1 s
         // (Mapbox) of shader compile because that click was when their paint first became data-driven.
         // Making the paint data-driven at layer-add moves that compile here, where a 6.4 MB GeoJSON is
         // already loading, instead of into the middle of a gesture.
@@ -1755,8 +1802,8 @@ function switchTab(tabId) {
   // search query doesn't leak across tabs (qa-buildinng-round-1 Bug 11).
   // clearGeocoderProgrammatic uses its internal _geoBeingCleared to skip the legend-
   // deselect side effect — pure text reset. Flip the FEATURES flag to keep
-  // search queries across tabs (the user said "could go either way" — sticking
-  // with clear-on-switch as the default per A4).
+  // search queries across tabs (either behaviour is acceptable; clear-on-switch
+  // stays the default per A4).
   if (!FEATURES.geocoderPersistAcrossTabs) clearGeocoderProgrammatic()
   const tab = tabs.value.find(t => t.id === tabId)
   if (!tab || !map.value) return
@@ -1791,24 +1838,15 @@ function switchTab(tabId) {
       map.value.moveLayer('language-family-pins')
     }
   }
-  // Re-aggregate legend rows for the new lens
-  legend.refresh?.()
+  // Nothing to re-aggregate by hand: useLegendData exposes `items` as a COMPUTED, so the legend
+  // re-derives from the new lens on its own. This used to call legend.refresh?.(), which the
+  // composable has never defined — the optional call made a no-op look like a step.
   // Re-color clusters (cluster paint depends on active strategy)
   clustering.refreshColors?.()
 }
 
 // ─── Legend → fly-to wiring ──────────────────────────────────────────────────
 // LegendRows emits a window event when a row is clicked; we fly the map there.
-function onLegendRowClick(evt) {
-  const detail = evt?.detail
-  if (!detail || detail.mapId !== mapId) return
-  if (detail.center && Array.isArray(detail.center)) {
-    mapFly.flyToCoords?.({ longitude: detail.center[0], latitude: detail.center[1] }, detail.zoom ?? 4)
-  } else if (detail.bounds) {
-    mapFly.fitBounds?.(detail.bounds, 60)
-  }
-}
-
 // LegendFamilyTree emits 'legend:highlight' with { kind, pinIds, coords[], familyKey, languageKey }.
 // Compute bounds from coords[] and fit the map. Fall back to flyTo on the
 // centroid when there's only a handful of points (so a single-pin family
@@ -1864,8 +1902,8 @@ function pinBaseAlpha() {
 }
 // matchExpr: an expression to dim by, null to clear dimming, undefined to re-apply what is current
 // (which is what the slider's watcher needs — it changes the scale, not the selection).
-// ★ THE UNDIMMED VALUE IS DATA-DRIVEN TOO, AND THAT IS THE WHOLE POINT (Driver bug: "the research map
-// isn't connecting with the legend"; rega's CPU profile, 2026-09-28). A legend click on a big affinity
+// ★ THE UNDIMMED VALUE IS DATA-DRIVEN TOO, AND THAT IS THE WHOLE POINT (reported bug: "the research map
+// isn't connecting with the legend"; a CPU profile). A legend click on a big affinity
 // row appeared to do nothing for ~2 s. It was not the echo guard, not the legend's DOM (34 rows before,
 // 34 after) and not expression evaluation (the JS filter scan over 2,106 features against a 700-id list
 // measures 14 ms). It was ONE task of 3.2-3.5 s whose self time was getShaderParameter + getProgram-
@@ -1879,7 +1917,7 @@ function pinBaseAlpha() {
 // and the program compiles during boot alongside every other one. A selection then only re-uploads
 // attribute values, which is the cheap path.
 //
-// The trade, stated: boot compiles one more program (tens of ms on a real GPU; rega measured seconds
+// The trade, stated: boot compiles one more program (tens of ms on a real GPU; measurement showed seconds
 // only because that box rasterises on the CPU via SwiftShader). Paying it at load beats freezing the
 // map mid-gesture, and the variant was going to be compiled on first interaction anyway.
 function applyPinOpacity(m, matchExpr) {
@@ -1889,7 +1927,7 @@ function applyPinOpacity(m, matchExpr) {
   // ['has','uniqueId'] reads a feature property, which is what makes it data-driven; both outcomes are
   // `a`, so a pin without the property renders exactly as before.
   const value = _pinMatchExpr ? ['case', _pinMatchExpr, a, 0] : ['case', ['has', 'uniqueId'], a, a]
-  // ★ ONE WRITE PER DISTINCT VALUE. rega counted circle-opacity rewritten 4-8 times for a single click
+  // ★ ONE WRITE PER DISTINCT VALUE. Measurement counted circle-opacity rewritten 4-8 times for a single click
   // (+1.52, +1.57, +1.94, +5.17 s): the selection handler, the glow sync and the slider watcher all end
   // up here, and each write re-uploads the per-feature attribute. Every writer already routes through
   // this function, so the collapse belongs here and nowhere else. Compared as text because the value is
@@ -2182,7 +2220,7 @@ function routeRegion(evt, { map: m, filterLayerId }) {
   const applyRegionSel = () => {
     // Drop the harsh pin setFilter applied earlier — we want dim, not hide.
     try { m.setFilter(filterLayerId, null) } catch (_) {}
-    const node = _findNodeInTree(regionsTree.value, n =>
+    const node = findNodeInTree(regionsTree.value, n =>
       (n.id.startsWith('region:') || n.id.startsWith('block:')) && _rnorm(_stripTier(n.label)) === wantLabel)
     if (node) {
       onSemanticTreeSelect(node)
@@ -2229,7 +2267,7 @@ function routeCountry(evt) {
   // regionsTree is lazy → ensure loaded and defer to nextTick so it lands after settle.
   if (iso && activeTab.value?.id === 'doxa-regions') {
     const applyCountrySel = () => {
-      const country = _findNodeInTree(regionsTree.value, n =>
+      const country = findNodeInTree(regionsTree.value, n =>
         n.id.startsWith('country:') && (n.isoCodes || []).includes(iso))
       if (country) {
         onSemanticTreeSelect(country)
@@ -2250,7 +2288,7 @@ watch(() => mapStore.filters, () => {
 
 // ─── HOST-DRIVEN FILTERS, AND THE EVENT THAT REPORTS OUR OWN ────────────────
 // A cap-4 composite owns ONE filter state and feeds both halves; this is that map's half of the
-// contract (BUILD-LINKED-FILTERING, Driver 2026-09-25: "interoperability within themselves").
+// contract (BUILD-LINKED-FILTERING, 2026-09-25: "interoperability within themselves").
 // Shape is deliberately the SMALL overlap between what this map filters by and what a people-group
 // grid filters by — region, religion, language, engagement. Anything else a host sends is ignored
 // rather than guessed at.
@@ -2285,8 +2323,8 @@ watch(() => profileConfig?.value?.externalFilters, (raw) => {
   applyingExternal = true
   try {
     // ★ AN EMPTY VALUE THE HOST DID NOT SET MUST NOT CLEAR WHAT THIS PAYLOAD JUST LIT. This is the
-    // Driver's "the research map isn't connecting with the legend" on the WAGF Regions tab, found by
-    // rega's stack trace (l40): the highlight painted at +51 ms and was wiped at +438 ms by
+    // The report "the research map isn't connecting with the legend" on the WAGF Regions tab, found by
+    // a stack trace (l40): the highlight painted at +51 ms and was wiped at +438 ms by
     // clearAllHighlights, reached from applyDimFilter({kind:null}) through the selectedRegion watcher —
     // so selectedRegion had gone FALSY while externalRegion still read "asia".
     //
@@ -2355,7 +2393,7 @@ watch(() => profileConfig?.value?.externalFilters, (raw) => {
     // under the current rule, so it is cited rather than imported, and a move later should delete
     // this block rather than leave a third copy.
     //
-    // ⚠ MOTION SAFETY. The Driver is photosensitive, and a camera that re-animates on every
+    // ⚠ MOTION SAFETY. Readers may be photosensitive, and a camera that re-animates on every
     // keystroke of a search box is exactly the strobe class this repo has already paid for. One
     // move per settled set: an identical slug set never re-flies, and a reduced-motion preference
     // JUMPS (duration 0) rather than easing — same destination, no traversal.
@@ -2383,8 +2421,20 @@ watch(() => profileConfig?.value?.externalFilters, (raw) => {
 // resources-map's window.__grMap. A linked filter is a STATE claim ("the other half adopted it"),
 // and every DOM proxy for it that I tried was either tab-specific or a selector guess: the honest
 // way to check is to read the state itself. Reports the composite-driven facet only.
+//
+// ★ EACH HOOK IS ALSO HELD LOCALLY, so the unmount path can release ONLY WHAT IS STILL OURS.
+// Two of these maps can share a page (research-map-plus-grid composes one beside a grid, and the
+// gallery can show another): B mounts and overwrites A's hooks, then A unmounts. An unconditional
+// delete would strip the hooks belonging to the map still on screen, and it would report a verify
+// hook missing on a map that is perfectly healthy — a false failure costing more to chase than this
+// costs to write. Declared out here rather than inside the block below because a const inside it is
+// invisible to onBeforeUnmount. Same pattern gospel used in d3597f3d1.
+let _hookFilterState = null
+let _hookPinOpacity = null
+let _hookClusterDraw = null
+let _hookVocabulary = null
 if (typeof window !== 'undefined') {
-  window.__researchMapFilterState = () => ({
+  window.__researchMapFilterState = _hookFilterState = () => ({
     selectedRegion: mapStore?.selectedRegion || '',
     externalRegion: profileConfig?.value?.externalFilters?.region || '',
     religionFamily: RELIGION_FAMILIES[uiStore?.religionFilter] || '',
@@ -2408,11 +2458,11 @@ if (typeof window !== 'undefined') {
   // and legend dimming COMPOSE into one paint property, and "the store value changed" is not evidence
   // that they composed. Returns whatever GL is holding — a number when nothing is dimmed, a ['case',…]
   // when something is.
-  window.__researchMapPinOpacity = () => {
+  window.__researchMapPinOpacity = _hookPinOpacity = () => {
     try { return map.value?.getPaintProperty?.('language-family-pins', 'circle-opacity') ?? null } catch (_) { return null }
   }
 
-  window.__researchMapClusterDraw = () => {
+  window.__researchMapClusterDraw = _hookClusterDraw = () => {
     const m = map.value
     const out = {}
     try {
@@ -2426,7 +2476,7 @@ if (typeof window !== 'undefined') {
     return out
   }
 
-  window.__researchMapVocabulary = (field) => {
+  window.__researchMapVocabulary = _hookVocabulary = (field) => {
     const rows = mapData?.normalizedPeopleGroups?.value || []
     const seen = new Set()
     for (const r of rows) {
@@ -2483,7 +2533,7 @@ function emitFilterState() {
   //
   // The NAME still goes out because this map's own legend selects by name; the CODE goes out for
   // anyone matching rows. Both halves get the form they can actually use.
-  // ★ THE LOOKUP HAS TO MATCH THE WAY THE LEGEND BUILT THE LABEL (rega, 2026-09-26, main 49992a5d:
+  // ★ THE LOOKUP HAS TO MATCH THE WAY THE LEGEND BUILT THE LABEL (measured on main 49992a5d:
   // MapLibre, BOTH locales, Languages > Language > "Arabic" -> languageCode:"" -> grid 2,107 -> 0).
   //
   // WHAT I GOT WRONG. This found a row whose language LABEL equals the selected name with `===`.
@@ -2492,7 +2542,7 @@ function emitFilterState() {
   // splitting the API label at the comma. MEASURED against the live source (2,107 rows, all 2,107
   // carrying primary_language as {value,label}): there is NO row whose label is "Arabic". What
   // exists is "Arabic, Sudanese", "Arabic, Levantine", "Arabic, Gulf", ... So the exact match could
-  // never hit, in any locale — which is why rega saw it fail identically in en and ar, and why the
+  // never hit, in any locale — which is why it failed identically in en and ar, and why the
   // locale fix that prompted this code was right about the DISEASE and wrong about this line.
   //
   // This is the derived-value trap, one tier down from where I last wrote it up: a value that
@@ -2535,7 +2585,7 @@ function emitFilterState() {
   const detail = {
     region: mapStore?.selectedRegion || '',
     religion: religionName,
-    // ★ A DIALECT'S NAME COMES FROM ITS LABELS, NOT ITS KEY (rega, row 43 case 3: this reported
+    // ★ A DIALECT'S NAME COMES FROM ITS LABELS, NOT ITS KEY (a measured case: this reported
     // ", Afro-Asiatic__Arabic__Sudanese"). `selectedDialect.key` is the TREE NODE ID —
     // family__baseLang__dialect — and the watcher fifteen lines above says so in as many words;
     // I read that comment and then used the key as a display name anyway. Worse, selectedLanguage
@@ -2554,7 +2604,7 @@ function emitFilterState() {
     languageCodes: langCodes,
   }
   // ★ AN EMPTY REPORT AFTER A NON-EMPTY ONE IS AMBIGUOUS, SO IT IS NOT SENT IMMEDIATELY.
-  // rega, row 43 case 3 at 52eeb0db: coalescing worked — one event per click — and in 3 of 4 runs
+  // measured at 52eeb0db: coalescing worked — one event per click — and in 3 of 4 runs
   // that one event was EMPTY, so the grid stayed at 2,107. The cascade behind a dialect click
   // passes through a fully-cleared state: mapStore.selectLanguage() sets selectedDialect = null
   // BEFORE it sets the language, and the clear was the last write my watcher saw. The settle timer
@@ -2591,7 +2641,7 @@ function emitFilterState() {
   host.dispatchEvent(new CustomEvent('map-filtered', { detail, bubbles: true, composed: true }))
 }
 
-// ★ ONE EVENT PER SETTLED SELECTION (rega, row 43 case 3: a dialect click narrowed the grid in
+// ★ ONE EVENT PER SETTLED SELECTION (a measured case: a dialect click narrowed the grid in
 // only ONE of four runs, with a correct languageCode in all four).
 //
 // THE CAUSE IS A BURST MEETING A GUARD. Clicking a dialect does not change one store value; it
@@ -2614,7 +2664,7 @@ const EMIT_SETTLE_MS = 60
 // of delay on a clear — about a fifth of a second, well under what a reader notices, and far below
 // the composite's own 1.2s push window so it cannot collide with that.
 // ★ A CEILING ON BELIEVING A CLEAR — NOT A GUESS AT HOW LONG THE CASCADE TAKES.
-// rega, row 43 case 3 at 835ec1ac: the retry budget catches the transient on MapLibre and NOT
+// measured at 835ec1ac: the retry budget catches the transient on MapLibre and NOT
 // reliably on Mapbox (and not at all in ar/mapbox), because 3 x 60ms is still a duration I picked
 // without being able to measure the thing it has to outlast. That is the THIRD time I have tuned a
 // number on one machine for this one defect, so the number's JOB changes rather than its value.
@@ -2631,7 +2681,7 @@ let _emptyWaitStartedAt = 0
 let _lastEmitWasFilled = false
 function emitFilterStateSettled() {
   // ★ THE ECHO GUARD MUST BE READ WHEN THE CHANGE HAPPENS, NOT WHEN THE TIMER FIRES.
-  // rega, row 50: a region row click emitted {region:"asia"} and then an EMPTY event, on both
+  // measured: a region row click emitted {region:"asia"} and then an EMPTY event, on both
   // engines. It passed only because the composite's 1.2s push window happened to swallow the
   // second one — a pass that depends on a swallow is not a pass.
   //
@@ -2758,7 +2808,7 @@ function applyFitSlugs(slugs) {
       : null
 
   // ★ REDUCED MOTION DRIVES THE MAP DIRECTLY, and that is not belt-and-braces.
-  // MEASURED by rega with the browser's prefers-reduced-motion: reduce set: the framing move still
+  // MEASURED with the browser's prefers-reduced-motion: reduce set: the framing move still
   // animated for ~5s on MapLibre and ~6.7s on Mapbox — essentially the same as without it, where a
   // jump is ~0ms. So the preference was being honoured in THIS file and thrown away downstream:
   // useMapFly's flyToCoords(coords, zoom) takes NO options argument at all, so the `{ duration: 0 }`
@@ -2789,7 +2839,7 @@ function applyFitSlugs(slugs) {
 //
 // The checkbox force-set 'mst' "regardless of what's in the store", and the picker wrote to a
 // property mapStore never declared — so choosing Native drew nothing, and had it worked, one tick
-// of the checkbox would have snapped it back to MST anyway. MEASURED as inert by exp-shepherd; the
+// of the checkbox would have snapped it back to MST anyway. MEASURED as inert; the
 // second half is what makes fixing only the picker the wrong fix, because the control would have
 // worked until the reader touched the other one.
 //
@@ -2865,7 +2915,7 @@ async function onMapReady(normalizedPeopleGroups) {
     // added with a CONSTANT "circle-opacity": 1 (see addLanguageFamilyLayer), and applyPinOpacity is
     // otherwise first reached from a legend click — so without this line the expression shape below is
     // only ever the CLEARED state and the first selection is still the moment the variant is compiled,
-    // which is the 3.2-3.5s freeze rega profiled. Found by reading the built bundle rather than the
+    // which is the 3.2-3.5s freeze seen in profiling. Found by reading the built bundle rather than the
     // source: the addLayer constant is right there in the shipped JS.
     // matchExpr is left UNDEFINED on purpose — "re-apply what is current" — so a selection already
     // restored from a share-link hash is preserved instead of being cleared at boot.
@@ -2874,8 +2924,9 @@ async function onMapReady(normalizedPeopleGroups) {
     if (activeTab.value?.id === 'prayer') mapLayers.startPrayerGlow()
     // Hand the same dataset to clustering so MST/network can rebuild on toggle
     clustering.setData?.(normalizedPeopleGroups)
-    // Build the initial legend
-    legend.build?.(normalizedPeopleGroups)
+    // No build step: `items` is a computed over the same data, so the legend appears when the data
+    // does. This used to call legend.build?.(normalizedPeopleGroups) against a method that does not
+    // exist; ?.() swallowed it, so a line that read like initialisation did nothing at all.
     // Selected-pin highlight + GO marker — must come after the language-families
     // source exists (added by addLanguageFamilyLayer above).
     selectedPin.initialize()
@@ -2934,8 +2985,8 @@ function applyContainerScale(width) {
     el.style.setProperty('--map-font-md',      '13px')
     el.style.setProperty('--map-font-sm',      '11px')
     // One width for the legend, the pin-detail card and the geocoder pill
-    // (qa: 2026-05-02 — a 400px detail card over a 380px legend read as two
-    // cards). SemanticTreeLegend's .stl-panel follows this variable too.
+    // A 400px detail card over a 380px legend read as two
+    // cards. SemanticTreeLegend's .stl-panel follows this variable too.
     // 400px (was 380) since the desktop type scale widened the numeric
     // columns; keeps "Full Prayer Coverage" on one line (2026-09-16).
     el.style.setProperty('--map-legend-width', '380px')
@@ -2954,6 +3005,38 @@ function applyContainerScale(width) {
   }
 }
 
+// ★ THE ⓘ CONTROL IS COMING, SO SAY SO BEFORE THE GALLERY DRAWS ITS FLOATING ONE. The control column
+// renders only at appReady, after the style AND the people-group data, and a slow phone gets there late.
+// At mount this map tells the gallery's MapInfo that a control is on its way, and the MapInfo waits for
+// the map rather than flashing its floating ⓘ and swapping it out. A failure (mapError) or an unmount
+// withdraws the promise, so the floating ⓘ shows at once and the popup can always be opened. With no
+// MapInfo (a standalone page) nothing answers and nothing changes. This is Prayer Progress's contract.
+function announceInfoPending(pending) {
+  const el = rmRoot.value
+  if (!el) return
+  try { el.dispatchEvent(new CustomEvent('dxmaps:mapinfo-pending', { bubbles: true, composed: true, detail: { pending } })) } catch { /* no CustomEvent */ }
+}
+// A MapInfo that mounted after this map asked into the void; it announces itself, and we answer again.
+const reannounceInfoPending = () => { if (!appReady.value && !mapError.value) announceInfoPending(true) }
+watch(mapError, (e) => { if (e) announceInfoPending(false) })
+// ★ THE PRAYER LINE'S TABLE IS FETCHED AFTER THE MAP MOUNTS, when the browser is idle, not when a print starts: the
+// print waits at most 3 s for it (openPoster), and on a slow phone network a fetch begun at the tap missed that window
+// (the line dropped in 1 of 2 runs). loadPacketStrings caches the promise, so the print reads it at once; it
+// never rejects, and a failed fetch is retried by the print. 48 KB gzipped, once per page.
+onMounted(() => {
+  const prefetch = () => import('@map/packet/packetStrings.js').then(({ loadPacketStrings }) => loadPacketStrings(resolveAssetsBase(profileConfig?.value))).catch(() => {})
+  if (typeof window !== 'undefined' && window.requestIdleCallback) window.requestIdleCallback(prefetch, { timeout: 8000 }); else setTimeout(prefetch, 2000)
+})
+
+onMounted(() => {
+  announceInfoPending(true)
+  window.addEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
+  if (!appReady.value) announceInfoPending(false)
+})
+
 onMounted(async () => {
   // uiStore.init() registers the page-level ResizeObserver that drives
   // updateBreakpoint() — without this, breakpoint stays at default 'desktop'
@@ -2961,7 +3044,7 @@ onMounted(async () => {
   // any code branching on isMobile (LegendDesktop's internal LegendMobile
   // mount, mobile-only feature gates, etc.) runs the desktop path.
   // The CSS @media path on .rm-legend-mobile-slot still works either way,
-  // but isMobile-driven branches don't. (qa: 2026-05-02 mobile audit.)
+  // but isMobile-driven branches don't.
   uiStore.init?.()
   activeTabId.value = tabs.value[0]?.id ?? 'doxa-regions'
   if (uiStore.isMobile) uiStore.collapseLegend?.()
@@ -2987,14 +3070,23 @@ onMounted(async () => {
     console.error('[research-map] data load failed:', err)
     return { normalizedPeopleGroups: [] }
   })
+  // ★ A PANE RELEASED WHILE ITS MAP IS STILL STARTING IS A CANCEL, NOT A FAILURE. When the reader
+  // switches tab, the gallery releases this element. initializeMap then returns SILENTLY (see
+  // useMapInstance's liveness checks) and leaves map.value null. This handler reported that as "Map
+  // failed to initialize — check token and container", so a console ERROR landed in whichever tab was
+  // open by then and blamed the token for a tab switch (measured 2026-09-29, a phone in Arabic,
+  // 2 runs in 3). The pane is gone, so nobody is waiting for a map: return quietly.
+  const released = () => !mapContainer.value || !mapContainer.value.isConnected
   try {
     await initializeMap()
   } catch (err) {
+    if (released()) return
     // `new mapboxgl.Map()` throws outright when the device has no WebGL context.
     console.error('[research-map] Map failed to initialize —', err)
     mapError.value = String(err?.message || err)
     return
   }
+  if (released()) return
   // Keep the Mapbox Map OUT of Vue's reactive Proxy. useMapInstance holds it in a plain
   // ref() (deep-reactive): every internal read/write inside Mapbox then pays the Proxy
   // get/set trap, and a render scheduled through the Proxy (any map.value.* call →
@@ -3013,8 +3105,10 @@ onMounted(async () => {
   if (!map.value) {
     // The code has already concluded the map is dead — say so instead of leaving
     // the loading line up, which is indistinguishable from "still loading".
+    // The console line stays English: it is for whoever is debugging. What the READER sees comes
+    // from the catalogue, and says what to do rather than naming the internals that failed.
     console.error('[research-map] Map failed to initialize — check token and container')
-    mapError.value = 'Map failed to initialize — check token and container'
+    mapError.value = t('dashboard.map_init_failed')
     return
   }
   map.value.once('style.load', async () => {
@@ -3033,29 +3127,62 @@ onMounted(async () => {
     _scrollZoomObserver = new ResizeObserver(_resyncScrollZoom)
     const host = (map.value.getContainer && map.value.getContainer()) || null
     if (host) _scrollZoomObserver.observe(host)
-    const port = host ? _findScrollportAncestor(host) : null
+    const port = host ? findScrollportAncestor(host) : null
     if (port) _scrollZoomObserver.observe(port)
     if (document.body) _scrollZoomObserver.observe(document.body)
   } catch (_) { /* no ResizeObserver: the initial call above still answers for a static page */ }
   window.addEventListener('resize', _resyncScrollZoom)
 })
 
+// ★ THE MAP IS TORN DOWN NO MATTER WHAT ELSE FAILS. heap snapshots (leak-722ac7789) found
+// every unmounted research map still alive, held by window.__doxaLogoOwner -> Map -> div.rm-map-canvas
+// -> ShadowRoot -> app, and that global is released only when the map's 'remove' event fires. So a
+// single throw anywhere in this hook stranded the entire application in memory, one copy per mount.
+// Two of the steps below were unguarded calls into other composables, which is a dependency on other
+// people's code never changing shape — the same assumption that made legend.rows return undefined.
+// Each step is now isolated, and destroy() runs from a finally so it cannot be skipped. The globals
+// this component owns are dropped here too: whoever sets a window key is responsible for unsetting
+// it, and setup is not the place to assume an unmount will be tidy.
 onBeforeUnmount(() => {
-  window.removeEventListener('doxa:legend-row-click', onLegendRowClick)
-  window.removeEventListener('legend:highlight', onLegendHighlight)
-  if (_containerObserver) { _containerObserver.disconnect(); _containerObserver = null }
-  if (_scrollZoomObserver) { _scrollZoomObserver.disconnect(); _scrollZoomObserver = null }
-  if (_resyncScrollZoom) { window.removeEventListener('resize', _resyncScrollZoom); _resyncScrollZoom = null }
-  mapLayers.stopPrayerGlow()
-  clustering.cleanup?.()
-  selectedPin.cleanup?.()
-  mapStore.unregisterMap(mapId)
-  destroy()
+  const step = (fn) => { try { fn() } catch (err) { console.warn('[research-map] teardown step failed', err) } }
+  try {
+    step(() => window.removeEventListener('doxa:legend-row-click', onLegendRowClick))
+    step(() => window.removeEventListener('legend:highlight', onLegendHighlight))
+    step(() => { if (_containerObserver) { _containerObserver.disconnect(); _containerObserver = null } })
+    step(() => { if (_scrollZoomObserver) { _scrollZoomObserver.disconnect(); _scrollZoomObserver = null } })
+    step(() => { if (_resyncScrollZoom) { window.removeEventListener('resize', _resyncScrollZoom); _resyncScrollZoom = null } })
+    step(() => mapLayers.stopPrayerGlow?.())
+    step(() => mapLayers.cleanup?.())
+    step(() => clustering.cleanup?.())
+    step(() => selectedPin.cleanup?.())
+    step(() => mapStore.unregisterMap?.(mapId))
+    // Every verify hook this component plants is an arrow closing over it, so each one left behind
+    // keeps the component, its shadow root and the whole app alive (leak-722ac7789). They are
+    // released as a set: they are installed as a set, and releasing three of four leaks just as much
+    // as releasing none. Each is checked before deleting so a later mount's hook is never removed.
+    // Written out one per line, not looped over an array of names, SO THE CHECK CAN READ IT.
+    // check-window-globals-released matches `delete window.__x`; a computed `delete window[k]` is
+    // invisible to it, and a release a checker cannot see is worth as much as no release at all the
+    // day someone deletes three of the four. Legibility to the tool is the point here, not brevity.
+    // Identity-checked: release only the hooks THIS instance installed, so unmounting one map on a
+    // two-map page cannot strip the hooks of the one still running. Written one key per line, not
+    // looped, so check-window-globals-released can read both the delete and the comparison.
+    step(() => {
+      if (typeof window === 'undefined') return
+      if (window.__researchMapFilterState === _hookFilterState) delete window.__researchMapFilterState
+      if (window.__researchMapPinOpacity === _hookPinOpacity) delete window.__researchMapPinOpacity
+      if (window.__researchMapClusterDraw === _hookClusterDraw) delete window.__researchMapClusterDraw
+      if (window.__researchMapVocabulary === _hookVocabulary) delete window.__researchMapVocabulary
+    })
+  } finally {
+    destroy()
+  }
 })
 </script>
 
 <template>
   <div ref="rmRoot" :class="['rm-root', { 'rm-dark': isDark, 'dsm-dark': isDark }]">
+    <MapPrintProgress :visible="posterBusy" :kind="exportPosterLabel" :title="printTitle" :progress="printProgress" />
     <!-- 10-tab bar -->
     <div v-if="showTabBar" ref="tabBar" class="rm-tab-bar">
       <template v-for="tab in tabs" :key="tab.id">
@@ -3077,7 +3204,7 @@ onBeforeUnmount(() => {
 
       <!-- Engine badge (bottom-left) — shows which GL engine rendered this map. -->
       <!-- Provider badge only when the engine is NOT Mapbox: Mapbox already renders its own
-           wordmark bottom-left, and two badges there read as a bug (Driver, 2026-09-16). -->
+           wordmark bottom-left, and two badges there read as a bug (reported 2026-09-16). -->
       <div v-if="mapProvider !== 'mapbox'" class="rm-provider-badge" :data-provider="mapProvider">{{ mapProviderName }}</div>
 
       <!-- "RESEARCH" corner badge removed per qa.md R5 status flag (2026-04-27).
@@ -3111,6 +3238,10 @@ onBeforeUnmount(() => {
 
       <!-- Map toolbar (right rail) — canonical button set + ordering. -->
       <MapToolbar v-if="appReady && map" :has-geocoder="hasGeocoder">
+        <!-- The TOP control is "What can this map do?". It opens the gallery's MapInfo for this tab, which
+             then hides its own floating button. It renders only where a MapInfo answers it, so a standalone
+             page (DX Life's research page, the leaf) has no dead button. -->
+        <MapInfoButton     :is-dark="isDark" />
         <ZoomInButton      :map="map"          :is-dark="isDark" />
         <ZoomOutButton     :map="map"          :is-dark="isDark" />
         <LocationButton    :map="map"          :is-dark="isDark" />

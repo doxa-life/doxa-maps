@@ -1,11 +1,10 @@
 /**
  * WAGF region color strategy — colors pins by the region they belong to.
  *
- * ★ THE VALUES ARE THE RESEARCH MAP'S, ON THE DRIVER'S INSTRUCTION (2026-09-24). He compared the
- * two surfaces himself: "when i look on teh color ffor th regiosn tab of the simpel research map i
- * don tsee the you using htes colors on the reigosn dashbarod hwen you shoudl". Two surfaces
- * disagreeing about what Africa's colour means is a product defect whichever palette is prettier,
- * and he chose which one wins. Source of truth:
+ * ★ THE VALUES ARE THE RESEARCH MAP'S (2026-09-24). The Simple Research map's Regions tab and the
+ * regions dashboard painted the same regions in different colours. Two surfaces disagreeing about
+ * what Africa's colour means is a product defect whichever palette is prettier, and the research
+ * map's palette was chosen to win. Source of truth:
  * library/colors/doxa-region.js (it lived at plugin-designs/doxa-research-map/src/colors/ until C1a), which the research dashboard and
  * three other consumers already paint from.
  *
@@ -25,10 +24,10 @@
  * seven regions as a TABLE with names and figures. Identity never rests on hue alone on either.
  * The LIGHTNESS FAIL is the part with no relief: three of these read faintly as PINS on a light
  * basemap. Darkening those three by ~10% L would enter the band while keeping the hue
- * recognisable, and that is the Driver's call to make, not mine to make quietly — asked, not done.
+ * recognisable. That is provisional, pending a product decision — asked, not done quietly.
  *
- * WHY THIS EXISTS. The regions element's no-selection state is a CHOOSER: the Driver's brief was
- * "some type of map that would show the regions and countries and let you select one". For the
+ * WHY THIS EXISTS. The regions element's no-selection state is a CHOOSER: a map that shows the
+ * regions and countries and lets you select one. For the
  * seven regions to read AS regions the moment the map loads, the pins have to be colored by
  * region — which is a categorical encoding no existing strategy provides. (`_registry.js` and
  * `religion.js` both mention a `doxa-region.js`; it does not exist in this tree.)
@@ -66,7 +65,7 @@ export const PROPERTY_KEY = 'region'
 // DX-life --color-brand-lighter: an unknown region reads as chrome, not as an eighth region.
 // ★ DELIBERATELY NOT THEIRS. doxa-region.js uses '#0098FF' for null/undefined and keys
 // 'No WAGF Region/Bloc' to '#1a1a2e'. Neither is a REGION colour — they are what an absent value
-// looks like — and the Driver's instruction was about the seven regions. A bright blue for
+// looks like — and the instruction was about the seven regions. A bright blue for
 // "unknown" would also read as a region on a map whose every other pin is a region. Every row in
 // this feed carries a wagf_region, so this value is almost never painted; it is chrome on purpose.
 const DEFAULT_COLOR = '#6d766e'

@@ -19,7 +19,7 @@
  * `tk` to a baked-in child, at production stage. See the comment at the scan below.
  *
  * Source-level and headless BY DESIGN: the behavioural twin (check:composite-embed-knobs) needs a
- * browser and only rega may run one. Exit 0 pass · 1 fail.
+ * browser, and this gate runs without one. Exit 0 pass · 1 fail.
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'

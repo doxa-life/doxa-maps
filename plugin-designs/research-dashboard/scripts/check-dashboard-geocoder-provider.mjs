@@ -25,7 +25,7 @@
  * look identical: the bars appear, suggestions work, nothing errors. Only the request log tells the
  * truth, which is why this counts requests rather than looking at the page.
  *
- * ★ CORRECTED 2026-09-26, after rega reported "0 search bars on both engines" and it was the CHECK
+ * ★ CORRECTED 2026-09-26, after a browser check reported "0 search bars on both engines" and it was the CHECK
  * that was wrong, not the product. Two separate mistakes, both of them mine:
  *
  *   1. UNDER MAPLIBRE, NO SEARCH BAR IS THE CONTRACT — not a hollow pass and not a failure.
@@ -57,14 +57,14 @@
  *      gate unless the runner says so.
  *
  * ★ WHY THE MAP PROBE ASKS THE ENGINE AND NOT THE DOM (2026-09-26, the second correction in a
- * day). This gate reported "NO map constructed" on a leaf where rega then measured 1 Mapbox map, 2
+ * day). This gate reported "NO map constructed" on a leaf where a browser check then measured 1 Mapbox map, 2
  * GL canvases and 3 search inputs, on BOTH token rungs. The product was never at fault; the
  * detection was. A DOM walk for a canvas is a chain of assumptions — every shadow root open, the
  * canvas carrying the class expected, existing by the time it is looked for — and when any link
  * breaks it reports ABSENCE, which is indistinguishable from a broken product. It now hooks the
  * engine's own Map.prototype.setStyle through both globals, which cannot be wrong about the DOM
  * because it never looks at it, and widens the bar selector to what a reader would call a search
- * box. Both borrowed from rega's tokrung.mjs.
+ * box. Both borrowed from the token-rung probe (tokrung.mjs).
  *
  * THE LESSON, recorded because it is the second time in two days that a probe accused a working
  * product: a measurement that yields ZERO when its own assumption is wrong will always blame the
@@ -137,8 +137,8 @@ const fails = []
 const lines = []
 try {
   // ★ THE MAPBOX HALF IS MEASURED ON BOTH TOKEN RUNGS, AND THAT IS A DELIBERATE EXPERIMENT.
-  // rega, gates:post at 1a761741 WITH a token: the mapbox half reported "NO map constructed", 21
-  // requests to api.mapbox.com, 0 bars — while rega's own probe of THIS leaf at
+  // gates:post at 1a761741 WITH a token: the mapbox half reported "NO map constructed", 21
+  // requests to api.mapbox.com, 0 bars — while a separate probe of THIS leaf at
   // ?provider=mapbox&tk=<same token> constructed a Mapbox map. The suggested cause was that the
   // generated leaf overwrites the window.MAP_TOKEN this gate sets in addInitScript.
   //
@@ -172,7 +172,7 @@ try {
     page.on('response', (r) => { if (r.url().includes('api.mapbox.com') && r.status() >= 400) mapboxBad.push(r.status()) })
     if (c.rung === 'global') await page.addInitScript((tk) => { window.MAP_TOKEN = tk }, TOKEN)
     // ★ ASK THE ENGINE, NOT THE DOM, WHETHER A MAP EXISTS. See the header note; borrowed from
-    // rega's tokrung.mjs, which measured this leaf correctly while this gate did not. Both globals
+    // the token-rung probe (tokrung.mjs), which measured this leaf correctly while this gate did not. Both globals
     // are hooked because the leaf loads only the engine its provider asks for.
     await page.addInitScript(() => {
       window.__mapsBuilt = { mapbox: 0, maplibre: 0 }

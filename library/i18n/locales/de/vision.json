@@ -17,5 +17,6 @@
   "ruleAll": "Jede Zeile der IMB-Volksgruppendaten: eine Volksgruppe in einem Land.",
   "ruleUnreached": "IMB-Lostness-Priorität 0 bis 2: weniger als 2 % Evangelikale.",
   "ruleFrontier": "IMB-Lostness-Priorität 0: weniger als 0,1 % Evangelikale. Eine Teilmenge der Unerreichten.",
-  "ruleDoxa": "Jede Gruppe auf der DOXA-Gebetsliste, den IMB-Daten nach Volk und Land zugeordnet. Nicht alle sind Frontier."
+  "ruleDoxa": "Jede Gruppe auf der DOXA-Gebetsliste, den IMB-Daten nach Volk und Land zugeordnet. Nicht alle sind Frontier.",
+  "about": "Über diese Karte"
 }

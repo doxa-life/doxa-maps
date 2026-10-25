@@ -17,7 +17,8 @@
     "failed": "La table des voisins n’a pas pu être chargée, ce graphique n’est donc pas tracé.",
     "reached": "Déjà atteints, donc au centre :",
     "unmatched": "Absents de la table des voisins, donc non tracés :",
-    "unplaced": "Aucune relation trouvée, donc non placés :"
+    "unplaced": "Aucune relation trouvée, donc non placés :",
+    "shown": "Peuples sur les anneaux :"
   },
   "centre": {
     "aria": "Afficher",
@@ -150,7 +151,7 @@
     "messaging": "Messagerie principale (pays)",
     "messagingNote": "La plus téléchargée sur l’App Store d’Apple du pays : iOS seulement, un rang de téléchargements, pas l’usage.",
     "province": "Inde et Chine : État ou province",
-    "provinceNote": "Approximatif : placé d’après l’endroit où vit un peuple, pas une ville.",
+    "provinceNote": "Approximatif : déduit du point du groupe sur la carte, pas d’une ville.",
     "region": "Région",
     "religion": "Religion",
     "wayIn": "Porte d’entrée quand rien n’existe dans leur langue"
@@ -199,11 +200,11 @@
     "aria": "Carte des groupes ethniques, ombrée selon la part de chaque pays qui utilise internet"
   },
   "notice": {
-    "pin": "Le point indique où ce peuple vit en {country}, pas une ville.",
-    "pins": "Un point indique où un peuple vit dans son pays, pas une ville. {n} groupes partagent un point avec un autre groupe.",
+    "pin": "Le point représente ce peuple, pas une ville.",
+    "pins": "Un point représente un peuple, pas une ville. {n} groupes partagent un point avec un autre groupe.",
     "shares": "Il partage son point avec {n} autre(s) groupe(s).",
     "sources": "Sources :",
-    "standing": "Les points sont approximatifs (où un peuple vit dans son pays, pas une ville). Les chiffres d’internet sont ceux du pays ou de l’État indien, jamais du groupe. « Trouvé » signifie trouvé dans les sources consultées."
+    "standing": "Les points sont approximatifs : un point représente un peuple, pas une ville. Les chiffres d’internet sont ceux du pays ou de l’État indien, jamais du groupe. « Trouvé » signifie trouvé dans les sources consultées."
   },
   "panel": {
     "charts": "Graphiques",
@@ -284,7 +285,6 @@
     "posterOmitted": "{n} noms omis là où ils en chevaucheraient un autre ; chaque cercle est dessiné.",
     "posterPrint": "Imprimer",
     "posterSizeAria": "Taille de l’affiche",
-    "posterSvg": "Télécharger le SVG",
     "posterTitle": "L’accès à l’Évangile, famille de langues par famille de langues",
     "sources": "Arbre : Glottolog (CC BY 4.0). Ressources : eBible, Faith Comes By Hearing, Scripture Earth, PNG.Bible, film JÉSUS, Global Recordings et d’autres, par code ISO 639-3.",
     "st": {

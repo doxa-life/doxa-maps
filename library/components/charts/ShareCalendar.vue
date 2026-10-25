@@ -3,7 +3,7 @@
  * ShareCalendar — the same 5,200-cell grid, shaded by a population-weighted share.
  *
  * ★ shareLabel IS REQUIRED AND HAS NO DEFAULT, on purpose. The shipped figure is the EVANGELICAL
- * share (christian-share.json: pctEvangelical 0.6133), and the brief and the Driver both say
+ * share (christian-share.json: pctEvangelical 0.6133), and the brief says
  * "% Christian". IMB publishes no %-Christian column at all, so a true "% Christian" is not
  * computable from repo data (UPG100-RESEARCH-FINDINGS.md §3). This project has already retracted one
  * P0 that was two metrics wearing one name. A default here would let this component be the thing

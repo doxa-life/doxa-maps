@@ -65,7 +65,7 @@ useShadowStyles(`
   .rm-side-backdrop.open { opacity:1;pointer-events:auto; }
   /* box-shadow lives on .open ONLY: when closed the drawer is translateX(100%) off
      the right edge, but a left-pointing shadow (-4px) bled back onto the map's right
-     edge — the mystery "shadow on the right side" (coder staging QA 2026-06-25). */
+     edge — the mystery "shadow on the right side". */
   .rm-side-drawer { position:absolute;top:0;right:0;bottom:0;width:340px;max-width:100vw;background:#171c23;color:#e7ebf0;border-left:1px solid #232a33;z-index:1600;transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column;font:13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
   .rm-side-drawer.open { transform:translateX(0); box-shadow:-4px 0 16px rgba(0,0,0,0.4); }
   .rm-side-header { display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #232a33;flex:0 0 auto; }
@@ -89,6 +89,14 @@ useShadowStyles(`
   .rm-btn:hover { background:#9aa6ff; }
   .rm-btn.ghost { background:transparent;color:#a8b2bd;border:1px solid #2c343f; }
   .rm-btn.ghost:hover { background:#232a33;color:#e7ebf0; }
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .rmsm-root, .rmsm-item { transition: none !important; animation: none !important; }
+}
 `, 'research-map-side-menu')
 </script>
 

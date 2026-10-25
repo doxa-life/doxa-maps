@@ -57,27 +57,36 @@ function shadowCssOf(script, filename) {
   // Fold a `'a' + 'b' + IDENT` expression into its literal parts, noting whether any part was not one.
   function fold(node, acc) {
     if (!node) return
-    if (node.type === 'StringLiteral') { acc.css += node.value; return }
+    // ★ `endsLiteral` TRACKS THE LAST FRAGMENT, not whether any fragment was readable. A sheet that
+    // STARTS with an imported constant (SHADOW_BOX_SIZING_RESET + DXLIFE_TOKENS + '…') is
+    // complete:false for the whole string, yet its TAIL is plain text and perfectly judgeable — and
+    // that is exactly the shape regions-list shipped its dangling selector in. Gating the
+    // dangling-selector arm on `complete` alone suppressed the one bug it was written for, which is
+    // what the poison test caught. A trailing CALL (GoalCard's `'.rd-goal ' + strongMedium()`) is
+    // the case that genuinely cannot be judged, and that is what this flag distinguishes.
+    if (node.type === 'StringLiteral') { acc.css += node.value; acc.endsLiteral = true; return }
     if (node.type === 'TemplateLiteral') {
       if (node.expressions.length) acc.complete = false
       acc.css += node.quasis.map((q) => q.value.cooked ?? '').join('')
+      acc.endsLiteral = node.expressions.length === 0
       return
     }
     if (node.type === 'BinaryExpression' && node.operator === '+') { fold(node.left, acc); fold(node.right, acc); return }
     acc.complete = false   // an identifier, a call, a conditional -- not text we can read here
+    acc.endsLiteral = false
   }
 
   ;(function walk(node) {
     if (!node || typeof node !== 'object') return
     if (Array.isArray(node)) { node.forEach(walk); return }
     if (node.type === 'CallExpression' && node.callee && node.callee.name === 'useShadowStyles') {
-      const acc = { css: '', complete: true }
+      const acc = { css: '', complete: true, endsLiteral: false }
       fold(node.arguments[0], acc)
       // The style ID (second argument). A plain identifier is the only correct shape: a CSS rule moved
       // past the first argument concatenates onto it ('@media(...){...}doxa-gospel-map'), which is valid
-      // JS, keeps the build green and silently loses the rule (gospel-plugin's trap, COMMON.md).
+      // JS, keeps the build green and silently loses the rule (a known trap, COMMON.md).
       const lab = { text: '', literal: true, present: !!node.arguments[1] }
-      if (node.arguments[1]) { const la = { css: '', complete: true }; fold(node.arguments[1], la); lab.text = la.css; lab.literal = la.complete }
+      if (node.arguments[1]) { const la = { css: '', complete: true, endsLiteral: false }; fold(node.arguments[1], la); lab.text = la.css; lab.literal = la.complete }
       acc.label = lab
       found.push(acc)
     }
@@ -124,7 +133,23 @@ function scanCss(cssRaw) {
     if (depth === 0 && ch === ';' && /[A-Za-z-]+\s*:/.test(chunk)) { orphans.push(chunk.trim().slice(0, 90)); chunk = '' }
     i++
   }
-  return { open, close, orphans, emptySelectors }
+  // ★ A SELECTOR THAT NEVER GETS A BLOCK (2026-09-29). Whatever is left in `chunk`
+  // once the scan ends sits at depth 0 after the last '}' — i.e. text that looks like a selector and
+  // has no declarations. That is how regions-list.vue shipped
+  //     [lang="ru"] .rl-title, [lang="ru-RU"] .rl-title,regions-list
+  // for weeks: the author ended the line with a comma instead of a rule, so the concatenation joined
+  // the selector list to useShadowStyles' STYLE-ID argument. The Russian heading font was never
+  // applied AND the sheet lost its id. Braces stayed balanced (12/12), there was no orphaned
+  // declaration and no empty selector, so every existing arm here passed it — this file reported
+  // 80/80 green both before and after the fix.
+  // Only flagged when it actually looks like a selector: a bare trailing comment or whitespace is
+  // normal, and a chunk with no selector-ish character would be noise.
+  const tail = chunk.trim()
+  const dangling = []
+  if (depth === 0 && tail && /[.#\[:a-zA-Z]/.test(tail) && !/^\/\*/.test(tail)) {
+    dangling.push(tail.slice(0, 90))
+  }
+  return { open, close, orphans, emptySelectors, dangling }
 }
 
 // ── SELF-TESTS: the scanner must be shown to FAIL on the damage it is meant to catch ────────────
@@ -141,6 +166,19 @@ r = scanCss('/* padding:4px; a comment that looks like a declaration */ .a{ colo
 ok(!r.orphans.length, 'NEG CONTROL: a CSS comment containing "padding:4px;" is not read as a stranded declaration')
 r = scanCss('.a{ background:url(data:image/svg+xml;base64,AA==); }')
 ok(r.open === 1 && !r.orphans.length, 'a data: URL with a ; inside url() does not read as an orphan')
+
+// ── the dangling-selector arm, with the EXACT bug it was written for ────────────────────────────
+// regions-list.vue shipped `'[lang="ru"] .rl-title, [lang="ru-RU"] .rl-title,' + 'regions-list'`:
+// braces balanced 12/12, no orphan, no empty selector — every other arm here passed it, and the
+// Russian heading font silently never applied while the style-id was consumed as CSS.
+r = scanCss('.a{ color:red; } [lang="ru"] .t, [lang="ru-RU"] .t,regions-list')
+ok(r.dangling.length === 1, `NEG CONTROL: a selector list that never gets a { } block is caught (found ${r.dangling.length}) -- the exact regions-list damage`)
+r = scanCss('.a{ color:red; } [lang="ru"] .t{ font-weight:500; }')
+ok(!r.dangling.length, 'a sheet whose last rule HAS a block is not flagged as dangling')
+r = scanCss('.a{ color:red; } /* a trailing comment is normal */')
+ok(!r.dangling.length, 'NEG CONTROL: a trailing CSS comment is not read as a dangling selector')
+r = scanCss('.a{ color:red; }   ')
+ok(!r.dangling.length, 'trailing whitespace is not a dangling selector')
 
 // the three extractor bugs, as regression tests against the files that exposed them
 {
@@ -160,7 +198,7 @@ ok(r.open === 1 && !r.orphans.length, 'a data: URL with a ; inside url() does no
     'an argument built partly from an imported constant is reported PARTIAL, not scanned as a whole sheet')
 }
 {
-  // gospel-plugin's trap: a rule moved past the CSS argument concatenates onto the style id
+  // The known trap: a rule moved past the CSS argument concatenates onto the style id
   const trap = "useShadowStyles('.a{ color:red; }', '@media (max-width:1px){ .b{ color:red; } }' + 'doxa-gospel-map')"
   const lab = shadowCssOf(trap, 'x.js')[0].label
   ok(lab.literal && !/^[a-z0-9-]+$/.test(lab.text), 'the style-id arm reads a rule concatenated onto the id as NOT a plain identifier')
@@ -186,7 +224,7 @@ for (const f of files) {
   let blocks
   try { blocks = scriptsOf(f, src).flatMap((s) => shadowCssOf(s, f)) }
   catch (e) { console.log(`  FAIL - ${rel(f)}: could not be parsed (${e.message.slice(0, 70)})`); fails++; continue }
-  for (const { css, complete, label } of blocks) {
+  for (const { css, complete, endsLiteral, label } of blocks) {
     // ID arm: a literal style ID must be a plain identifier. A computed one (a variable) is left alone.
     if (label && label.present && label.literal && !/^[a-z0-9-]+$/.test(label.text)) {
       console.log(`  FAIL - ${rel(f)}: useShadowStyles id is not a plain identifier: ${JSON.stringify(label.text.slice(0, 80))}`)
@@ -201,12 +239,19 @@ for (const f of files) {
     // constants are complete rule sets, so the literal remainder must balance on its own; if one ever
     // straddled a rule this would go red and the label below says where to look.
     measured++
-    const { open, close, orphans, emptySelectors } = scanCss(css)
+    const { open, close, orphans, emptySelectors, dangling } = scanCss(css)
     const note = complete ? '' : ' (literal segments only; imported constants scanned in their own module)'
-    if (open !== close || orphans.length || emptySelectors.length) {
+    // ★ ONLY JUDGE A DANGLING SELECTOR WHEN THE WHOLE STRING IS READABLE. When part of the argument
+    // is a call or an identifier (complete:false) the folder cannot see that text, so a trailing
+    // ".rd-goal " is simply the prefix before a helper's output — GoalCard composes
+    // `'.rd-goal ' + strongMedium()` exactly that way, and my first version reported it as a bug.
+    // The brace arms already tolerate incompleteness for the same reason; this one must too.
+    const realDangling = endsLiteral ? dangling : []
+    if (open !== close || orphans.length || emptySelectors.length || realDangling.length) {
       console.log(`  FAIL - ${rel(f)}: ${open} open / ${close} close brace(s)${note}`)
       for (const o of orphans) console.log(`         orphan declaration: ${o}`)
       for (const e of emptySelectors) console.log(`         ${e}`)
+      for (const d of realDangling) console.log(`         SELECTOR WITH NO BLOCK (nothing is applied, and the style-id may have been consumed): ${d}`)
       fails++
     } else {
       console.log(`  ok   - ${rel(f)}: ${open} rule(s), braces balanced, 0 orphans${note}`)

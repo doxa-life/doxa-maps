@@ -59,7 +59,7 @@ const BASE = process.argv.slice(2).find((a) => !a.startsWith('--'))
   || process.env.BASE_URL || 'http://127.0.0.1:4173'
 const HOST_PORT = Number(process.env.RTL_HOST_PORT || 47393)
 // ★ --emit WRITES THE PARTNER PAGE TO DISK INSTEAD OF MEASURING IT.
-// Under the Playwright policy (Driver, 2026-09-25) only rega runs a browser, so this check's
+// Under the Playwright policy (2026-09-25) only the browser seat runs a browser, so this check's
 // result now has to be produced by someone else's eyes. But the partner page only ever existed
 // INSIDE this process — two createServer calls on ephemeral ports — so "open a partner page at a
 // foreign origin" was not a thing anyone could actually do. NEEDS-EYES rows 3, 4 and 6 name a

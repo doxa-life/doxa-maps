@@ -17,8 +17,8 @@
  * component never uses — see golden-path-check/index.js's header for the concrete failure
  * that mistake causes (a thrown setup() removes the whole shadow-DOM subtree silently).
  *
- * ★ CLIENT-SIDE API, NOT A BACKEND. The Driver's brief: "Although this is JAMstack, we're
- * not building any API into it. The only API we can build has to be CLIENT SIDE." The root
+ * ★ CLIENT-SIDE API, NOT A BACKEND. The site is JAMstack with no server API of its own, so the
+ * only API this tool can offer is CLIENT SIDE. The root
  * component defineExpose()s addPolygon/deletePolygon/selectPolygon/print/list methods.
  * Because this bundle mounts the SFC AS the defineCustomElement root (not nested under
  * ProfileLoader), Vue's custom-element bridge surfaces those exposed methods directly on the
@@ -32,7 +32,7 @@ import { createAppI18n } from '@map/i18n/index.js'
 
 // ★ configureApp WITHOUT changing the mounting shape. This bundle deliberately mounts the
 // SFC AS the custom-element root so Vue's bridge surfaces its defineExpose()d client-side
-// API on the DOM element (the Driver's "the only API we can build has to be CLIENT SIDE").
+// API on the DOM element (a JAMstack site: the only API it can offer is client side).
 // That decision and i18n are ORTHOGONAL — the second argument takes configureApp whichever
 // component is the root, so this keeps addPolygon/print/listPolygons on the element.
 //

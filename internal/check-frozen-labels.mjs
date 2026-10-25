@@ -38,7 +38,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TREE_NAME } from './_tree-name.mjs'
-// ★ SHARED WITH check:hardcoded-english (regions-plugin). Two gates must agree about WHICH files are
+// ★ SHARED WITH check:hardcoded-english (the same file list). Two gates must agree about WHICH files are
 // in scope even when they disagree about what they find in them; a second copy would drift on exactly
 // the pair-form / transitive / cycle details below, and the drift would be silent.
 import { effectiveStages, stageReason } from './lib/effective-stage.mjs'
@@ -73,7 +73,7 @@ function findFrozen(ast, aliases) {
       if (name && (TRANSLATORS.has(name) || aliases.has(name))) {
         // tStatic(path, EXPLICIT_LOCALE) — the caller pinned it deliberately.
         const pinned = name === 'tStatic' && node.arguments.length > 1
-        // ★ tStatic IS NEVER LIVE, WHEREVER IT SITS (exp, 2026-09-28). It resolves the locale via
+        // ★ tStatic IS NEVER LIVE, WHEREVER IT SITS (2026-09-28). It resolves the locale via
         // getRuntimeLocale(), which reads a PLAIN window property — not a Vue ref — so a computed()
         // wrapping it has NO reactive dependency and never invalidates. computed(() => tStatic(x))
         // is strictly WORSE than the naked call: it looks like the fix, so nobody looks again.
@@ -124,11 +124,208 @@ function findAliases(code) {
   return set
 }
 
+// ── TWO SHAPES THE SHIELDING RULE ABOVE CANNOT SEE (upg100, both real in their i18n batch) ──────
+//
+// The rule above treats "inside a function body" as safe, because a function RE-RUNS. That is true
+// of the function and false of the label, when nothing calls the function again after the locale
+// changes. Both shapes below are frozen labels that the AST walk reports as fine.
+
+/** Names that read the locale REACTIVELY — a watcher on any of these re-runs on a language change. */
+const REACTIVE_LOCALE = /\blocale\b|\bpacketLang\b|\buiLocale\b|\beffectiveLocale\b|\bactiveLocale\b/
+/** Plain getters: they return today's locale and notify nobody. */
+const DEAD_LOCALE_GETTER = /\b(getRuntimeLocale|detectLocale|localeFromUrl)\s*\(/
+
+/**
+ * SHAPE 1 — a tree or list built ONCE from t() and stored.
+ *
+ *   function opts() { return { title: () => t('poster.zone_deaf') } }
+ *   onMounted(() => { nodes.value = build(opts()) })          // and nothing re-runs it
+ *
+ * The t() sits in a function, so the walk above shields it; the RESULT is assigned to a ref and
+ * never rebuilt. Flagged only when NO call site of that function sits inside a reactive wrapper or a
+ * locale watcher.
+ *
+ * ⚠ THE WATCHER DOES NOT HAVE TO BE `watch(locale, …)`. upg100's own fix is
+ * `watch(() => packetLang(), …)`, where packetLang() reads packetLocale.value — a real reactive
+ * source under a local name. A signal that looked for the literal `locale` would have flagged the
+ * FIX as the defect, which is the worst thing a gate can do to someone who just did the work.
+ */
+/**
+ * Is offset `at` inside the parentheses of a computed()/watch()/watchEffect() that tracks the locale?
+ *
+ * ⚠ BRACE DEPTH, NOT A LOOKBACK WINDOW (GOS-FROZEN-SR). The first version of this asked
+ * whether a wrapper appeared in the preceding 260 characters. gospel hit exactly this in GiDrawer.vue
+ * — the enclosing `computed(` opens at line 35 and the call sites are at 95-100 — and reported SIX
+ * false positives on working code, nearly "fixing" it. Measured on the same shape here: 2,600
+ * characters between the `watch(` and the call, ten times the window. A window cannot answer a
+ * containment question; only matching brackets can.
+ *
+ * Walks backwards counting bracket depth, so it finds the wrapper that actually ENCLOSES this
+ * offset however far above it sits, and cannot be fooled by a closed wrapper that merely precedes it.
+ */
+function enclosingReactiveWrapper(code, at) {
+  let depth = 0
+  for (let i = at; i >= 0; i--) {
+    const c = code[i]
+    if (c === ')' || c === '}' || c === ']') depth++
+    else if (c === '(' || c === '{' || c === '[') {
+      if (depth > 0) { depth--; continue }
+      // an unclosed opener: is it the paren of a reactive wrapper call?
+      if (c === '(') {
+        const head = code.slice(Math.max(0, i - 40), i)
+        const m = /\b(computed|watch|watchEffect)\s*$/.exec(head)
+        if (m) {
+          // watchEffect always tracks what it reads; watch/computed must name a locale source.
+          if (m[1] === 'watchEffect') return true
+          const scope = code.slice(i, Math.min(code.length, at))
+          if (REACTIVE_LOCALE.test(scope)) return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+function findStoredTreeFreeze(code) {
+  const out = []
+  // functions whose body calls a translator
+  const fns = [...code.matchAll(/(?:^|\n)\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g)]
+  for (const m of fns) {
+    const name = m[1]
+    const open = code.indexOf('{', m.index + m[0].length - 1)
+    let d = 0, end = open
+    for (let i = open; i < code.length; i++) {
+      if (code[i] === '{') d++
+      else if (code[i] === '}') { d--; if (d === 0) { end = i; break } }
+    }
+    const body = code.slice(open, end + 1)
+    // ⚠ "THE BODY MENTIONS t()" IS NOT THE SHAPE. Tested against development: that alone flagged
+    // fetchPhotos (an image fetcher), relabelSheet and popupHtml — large functions that call a
+    // translator once for an error string or a caption and return something unrelated. Five
+    // production files, none of them a label tree. The shape upg100 described is narrower: the
+    // function RETURNS A STRUCTURE whose values come from the translator — an options object or a
+    // node list — which a caller then stores. So require the translator call to sit inside a
+    // returned object/array literal, not merely somewhere in the body.
+    // ★ THE MECHANISM IS "BUILT CORRECTLY, THEN PARKED", not "built once at setup" (found on
+    // upg100's legendOpts). That function re-reads t() correctly on EVERY call — its own comment
+    // says the function shape is deliberate — and the freeze is one level out: the RESULT is
+    // assigned into a ref and nothing re-fills it. A rule that only looked for a translator outside
+    // a function would miss it entirely, and it is the shape that will recur, because it looks
+    // correct at the call site.
+    //
+    // So: a translator ANYWHERE in the function, plus a returned structure, plus a stored result.
+    // The returned-structure test stays because it is what separates a label builder from a
+    // fetcher that happens to call t() once for an error string — five production false positives
+    // came from dropping it.
+    const callsTranslator = /\b(?:t|tStatic|tf)\s*\(\s*['"`]/.test(body)
+    const returnsStructure = /return\s*[{[]/.test(body)
+    if (!(callsTranslator && returnsStructure)) continue
+    // ⚠ A GETTER DEFERS THE READ TO WHOEVER TOUCHES THE PROPERTY, so storing the object is safe —
+    // the label resolves on access, not on construction. useDashboardShell builds its segment list
+    // exactly this way and says why in its own comment ("a resolved string would freeze the first
+    // locale seen"), and the looser rule above flagged that CORRECT code. Same escape hatch the
+    // provide() rule uses, for the same reason: what matters is when the read happens.
+    if (/\bget\s+[A-Za-z_$][\w$]*\s*\(\s*\)\s*\{/.test(body)) continue
+    // every call site of this function, outside its own declaration
+    const callRe = new RegExp(`\\b${name}\\s*\\(`, 'g')
+    const sites = [...code.matchAll(callRe)].map((x) => x.index).filter((i) => i < m.index || i > end)
+    if (!sites.length) continue
+    // is ANY call site assigned to a ref/let, and is ANY inside a reactive wrapper or locale watcher?
+    let stored = false, live = false
+    for (const i of sites) {
+      const line = code.slice(code.lastIndexOf('\n', i) + 1, code.indexOf('\n', i))
+      if (/\.value\s*=|^\s*(?:let|const)\s+\w+\s*=/.test(line)) stored = true
+      if (enclosingReactiveWrapper(code, i)) live = true
+    }
+    if (stored && !live) {
+      const line = code.slice(0, m.index).split('\n').length
+      out.push({ line, binding: name, call: 'stored-tree', why: `${name}() builds labels from t() and its result is stored; no call site is inside a locale watcher or reactive wrapper` })
+    }
+  }
+  return out
+}
+
+/**
+ * SHAPE 2 — a computed whose ONLY locale source is a non-reactive getter.
+ *
+ *   computed(() => zones.map(z => title(z, getRuntimeLocale())))
+ *
+ * getRuntimeLocale() reads a plain window property, so the computed has no reactive dependency on
+ * the language and resolves once. This is the `neverLive` rule above generalised past tStatic: the
+ * getter can be reached through any helper, not only through a translator call.
+ */
+function findDeadGetterComputed(code) {
+  const out = []
+  for (const m of code.matchAll(/\b(computed|watchEffect)\s*\(\s*\(\s*\)\s*=>/g)) {
+    const open = code.indexOf('{', m.index)
+    const paren = code.indexOf('(', m.index + m[0].length - 3)
+    // take the arrow body by bracket depth from the wrapper's own opening paren
+    const start = code.indexOf('(', m.index + m[1].length)
+    let d = 0, end = start
+    for (let i = start; i < code.length; i++) {
+      if (code[i] === '(') d++
+      else if (code[i] === ')') { d--; if (d === 0) { end = i; break } }
+    }
+    const body = code.slice(start, end + 1)
+    if (!DEAD_LOCALE_GETTER.test(body)) continue
+    // a reactive read anywhere in the body rescues it: locale.value, t(), or any reactive locale name
+    const rescued = /\.value\b/.test(body) || /\b(?:t|tf)\s*\(\s*['"`]/.test(body) || REACTIVE_LOCALE.test(body)
+    if (rescued) continue
+    out.push({
+      line: code.slice(0, m.index).split('\n').length,
+      binding: '(computed)',
+      call: 'dead-locale-getter',
+      why: `${m[1]}() reads the locale only through a plain getter, so it never re-runs on a language change`,
+    })
+  }
+  return out
+}
+
+/**
+ * SHAPE 3 — labels evaluated inside a provide() literal (GOS-FROZEN-SR; real in GiCombos.vue).
+ *
+ *   provide('dashboardConfig', { facets: { access_level: { label: T('…') } } })
+ *
+ * T() runs once at setup, the object goes to the consumer as a plain value, and a live language
+ * switch leaves every facet name in the boot language. The fix is a computed reached through a
+ * getter, so the consumer re-reads instead of capturing a snapshot.
+ *
+ * ⚠ THIS IS INVISIBLE TO EVERY PER-STRING CHECK, and that is gospel's point: all ten call sites
+ * passed a REAL key and every key resolved in ALL ELEVEN locales. "Is it keyed" and "does the key
+ * exist" both answer yes. What was wrong is WHEN the key was read — a lifetime, not a string.
+ *
+ * A getter (`get facets() { … }`) or a spread of a computed rescues it, because the read is deferred
+ * to the consumer.
+ */
+function findProvideFreeze(code) {
+  const out = []
+  for (const m of code.matchAll(/\bprovide\s*\(/g)) {
+    const start = m.index + m[0].length - 1
+    let d = 0, end = start
+    for (let i = start; i < code.length; i++) {
+      if (code[i] === '(') d++
+      else if (code[i] === ')') { d--; if (d === 0) { end = i; break } }
+    }
+    const body = code.slice(start, end + 1)
+    if (!/\b(?:t|T|tStatic|tf)\s*\(\s*['"`]/.test(body)) continue
+    // deferred reads are fine: a getter, or a .value read the consumer triggers
+    if (/\bget\s+[A-Za-z_$][\w$]*\s*\(\s*\)\s*\{/.test(body)) continue
+    if (/\b(computed|watch|watchEffect)\s*\(/.test(body)) continue
+    out.push({
+      line: code.slice(0, m.index).split('\n').length,
+      binding: '(provide)',
+      call: 'provided-literal',
+      why: 'labels are resolved inside the provide() literal, so the consumer receives a snapshot taken at setup',
+    })
+  }
+  return out
+}
+
 export function scanSource(code) {
   const aliases = findAliases(code)
   let ast
   try { ast = parseScript(code) } catch { return [] }
-  return findFrozen(ast, aliases)
+  return [...findFrozen(ast, aliases), ...findStoredTreeFreeze(code), ...findDeadGetterComputed(code), ...findProvideFreeze(code)]
 }
 
 export function scanVue(src) {
@@ -147,10 +344,51 @@ const CASES = [
   ['BAD  through an ALIAS of t',          () => scanSource("const { t } = useI18n()\nconst t2 = t\nconst x = t2('a.b')").length, 1],
   ['GOOD computed(() => t())',            () => scanSource("const { t } = useI18n()\nconst TABS = computed(() => [{ label: t('a.b') }])").length, 0],
   ['GOOD inside a function body',         () => scanSource("const { t } = useI18n()\nfunction f() { return t('a.b') }").length, 0],
+  // ── upg100's two shapes: a function-shielded freeze, and a computed with no reactive locale ──
+  ['BAD  stored tree, nothing re-runs it',
+    () => scanSource("function opts(){ return { title: t('poster.zone_deaf') } }\nonMounted(() => { nodes.value = build(opts()) })").filter((f) => f.call === 'stored-tree').length, 1],
+  ['GOOD stored tree + watch(locale)',
+    () => scanSource("function opts(){ return { title: t('poster.zone_deaf') } }\nwatch(locale, () => { nodes.value = build(opts()) })").filter((f) => f.call === 'stored-tree').length, 0],
+  // ⚠ upg100's OWN FIX watches a locale getter under a local name, not `locale`. A signal that
+  // looked for the literal would flag the fix as the defect.
+  ['GOOD stored tree + watch(() => packetLang())',
+    () => scanSource("function opts(){ return { title: t('poster.zone_deaf') } }\nwatch(() => packetLang(), () => { nodes.value = build(opts()) })").filter((f) => f.call === 'stored-tree').length, 0],
+  // ⚠ the false-positive case that five PRODUCTION files hit on the first draft: a big function that
+  // calls a translator once for an error string and returns something unrelated.
+  ['GOOD fetcher that merely mentions t()',
+    () => scanSource("function fetchPhotos(g){ const e = t('no_photo'); return new Map() }\nconst p = fetchPhotos(x)").filter((f) => f.call === 'stored-tree').length, 0],
+  // ── gospel (GOS-FROZEN-SR): the wrapper can open FAR above the call site ──────────────────────
+  // Their GiDrawer.vue has computed( at line 35 and the call sites at 95-100. A lookback window
+  // reported SIX false positives on working code; this fixture is ~2,600 chars between the two.
+  ['GOOD watcher opens 40 lines above the call site',
+    () => scanSource("function opts(){ return { title: t('poster.zone_deaf') } }\nwatch(() => packetLang(), () => {\n  // padding 0\n  // padding 1\n  // padding 2\n  // padding 3\n  // padding 4\n  // padding 5\n  // padding 6\n  // padding 7\n  // padding 8\n  // padding 9\n  // padding 10\n  // padding 11\n  // padding 12\n  // padding 13\n  // padding 14\n  // padding 15\n  // padding 16\n  // padding 17\n  // padding 18\n  // padding 19\n  // padding 20\n  // padding 21\n  // padding 22\n  // padding 23\n  // padding 24\n  // padding 25\n  // padding 26\n  // padding 27\n  // padding 28\n  // padding 29\n  // padding 30\n  // padding 31\n  // padding 32\n  // padding 33\n  // padding 34\n  // padding 35\n  // padding 36\n  // padding 37\n  // padding 38\n  // padding 39\n  nodes.value = build(opts())\n})").filter((f) => f.call === 'stored-tree').length, 0],
+  // ⚠ gospel's model.js:46 matched only because a DOC COMMENT quotes a translator call.
+  ['GOOD a doc comment that quotes t()',
+    () => scanSource("// returns { title: t('a.b') } for each zone\nfunction opts(){ return { id: 1 } }\nnodes.value = build(opts())").filter((f) => f.call === 'stored-tree').length, 0],
+  // ── gospel (GOS-VERIFY): the mechanism is "built correctly, then parked", not "built at setup" ──
+  // upg100's legendOpts re-reads t() on every call; the freeze is that its RESULT is assigned to a
+  // ref and nothing re-fills it. A rule looking only for a translator OUTSIDE a function misses it.
+  ['BAD  strings built above the return, result stored',
+    () => scanSource("function opts(){ const s = { a: t('x.y') }; return { title: (z) => s.a } }\nnodes.value = build(opts())").filter((f) => f.call === 'stored-tree').length, 1],
+  // ⚠ a GETTER defers the read to the consumer, so storing the object is safe. useDashboardShell
+  // builds its segment list this way on purpose; the looser rule above flagged that correct code.
+  ['GOOD returned object exposes labels through getters',
+    () => scanSource("function seg(){ return [{ k: 'map', get l() { return tStatic('dashboard.map') } }] }\nconst SEG = seg()").filter((f) => f.call === 'stored-tree').length, 0],
+  // ── gospel's PATTERN 1, real in GiCombos.vue and still live on development ────────────────────
+  // Every call site is keyed and every key resolves in all eleven locales; what is wrong is WHEN
+  // they are read. Their fix defers the read to the consumer through a getter.
+  ['BAD  labels resolved inside a provide() literal',
+    () => scanSource("provide('dashboardConfig', { facets: { access: { label: T('gi.facet.access') } } })").filter((f) => f.call === 'provided-literal').length, 1],
+  ['GOOD provide() hands over a getter',
+    () => scanSource("const facets = computed(() => ({ access: { label: T('gi.facet.access') } }))\nprovide('dashboardConfig', { get facets() { return facets.value } })").filter((f) => f.call === 'provided-literal').length, 0],
+  ['BAD  computed reads only a dead locale getter',
+    () => scanSource("const x = computed(() => zones.map(z => title(z, getRuntimeLocale())))").filter((f) => f.call === 'dead-locale-getter').length, 1],
+  ['GOOD computed reads locale.value first',
+    () => scanSource("const x = computed(() => { const l = locale.value; return zones.map(z => title(z, l || getRuntimeLocale())) })").filter((f) => f.call === 'dead-locale-getter').length, 0],
   ['GOOD inside an arrow',                () => scanSource("const { t } = useI18n()\nconst f = () => t('a.b')").length, 0],
   ['GOOD tStatic with explicit locale',   () => scanSource("const x = tStatic('a.b', 'en')").length, 0],
   ['GOOD watch(() => t())',               () => scanSource("const { t } = useI18n()\nwatch(src, () => t('a.b'))").length, 0],
-  // ★ exp's false negative: a computed cannot make tStatic live.
+  // ★ A known false negative: a computed cannot make tStatic live.
   ['BAD  computed(() => tStatic()) is STILL frozen', () => scanSource("const X = computed(() => tStatic('a.b'))").length, 1],
   // A function BODY re-reads the global on every call (useOptionalT:74 returns such an arrow),
   // so it is NOT frozen. Only a reactive wrapper caches it. I had this case backwards at first.

@@ -26,8 +26,8 @@
 // ── (1) ADM1 territory counts (India states + China provinces) ───────────────
 // Verbatim from data/admin-counts.json (IND 34 + CHN 12 = 46), keyed by the
 // EXACT shapeName the gb-IND-ADM1 / gb-CHN-ADM1 features carry.
-export const ADM1_COUNTS = {
-  // IND (34)
+// India's 34 and China's 12, kept apart so each name's COUNTRY is known too (ADM1_COUNTRY below).
+const ADM1_COUNTS_IND = {
   'Andaman and Nicobar Islands': 9,
   'Andhra Pradesh': 81,
   'Arunāchal Pradesh': 7,
@@ -62,7 +62,8 @@ export const ADM1_COUNTS = {
   'Uttar Pradesh': 23,
   'Uttarākhand': 7,
   'West Bengal': 30,
-  // CHN (12)
+};
+const ADM1_COUNTS_CHN = {
   'Gansu Province': 3,
   'Guangxi Zhuang Autonomous Region': 6,
   'Guizhou Province': 34,
@@ -76,6 +77,11 @@ export const ADM1_COUNTS = {
   'Xinjiang Uyghur Autonomous Region': 7,
   'Yunnan Province': 61,
 };
+export const ADM1_COUNTS = { ...ADM1_COUNTS_IND, ...ADM1_COUNTS_CHN };
+// name → 'IND' | 'CHN': the fallback when a feature does not carry shapeGroup / iso3 (a gate's props-only toggle).
+export const ADM1_COUNTRY = Object.fromEntries([
+  ...Object.keys(ADM1_COUNTS_IND).map((n) => [n, 'IND']), ...Object.keys(ADM1_COUNTS_CHN).map((n) => [n, 'CHN']),
+]);
 
 // ── (2) ADM0 per-country counts (iso3 → # records in admin-membership.json) ──
 // Covers ALL 161 ADM0 countries rendered in world-adm0.geojson; every one has a
@@ -102,53 +108,10 @@ export const COUNTRY_COUNTS = {
   VNM: 16, VUT: 1, WLF: 1, WSM: 1, YEM: 9, ZAF: 2, ZMB: 6, ZWE: 3,
 };
 
-// ── (3) ISO3 → display-name FALLBACK ─────────────────────────────────────────
-// Used only when the profile does NOT pass a live country_code_label for an
-// iso3 (it normally does — see buildCountryNameMap below). Short common names.
-export const ISO3_NAME = {
-  ABW: 'Aruba', IND: 'India', AFG: 'Afghanistan', AGO: 'Angola', ALB: 'Albania',
-  AND: 'Andorra', ARE: 'United Arab Emirates', ARM: 'Armenia',
-  ASM: 'American Samoa', ATG: 'Antigua and Barbuda', AZE: 'Azerbaijan',
-  BEN: 'Benin', BFA: 'Burkina Faso', BGD: 'Bangladesh', BGR: 'Bulgaria',
-  BHR: 'Bahrain', BHS: 'Bahamas', BIH: 'Bosnia and Herzegovina',
-  BLM: 'Saint Barthélemy', BLR: 'Belarus', BMU: 'Bermuda', BOL: 'Bolivia',
-  BRA: 'Brazil', BRB: 'Barbados', BRN: 'Brunei', BTN: 'Bhutan',
-  CAF: 'Central African Republic', CHN: 'China', CIV: "Côte d'Ivoire",
-  CMR: 'Cameroon', COD: 'DR Congo', COG: 'Congo', COK: 'Cook Islands',
-  COL: 'Colombia', COM: 'Comoros', CUB: 'Cuba', CUW: 'Curaçao',
-  CYM: 'Cayman Islands', CYP: 'Cyprus', CZE: 'Czechia', DJI: 'Djibouti',
-  DMA: 'Dominica', DZA: 'Algeria', ECU: 'Ecuador', EGY: 'Egypt',
-  ERI: 'Eritrea', ESP: 'Spain', ETH: 'Ethiopia', FIN: 'Finland', FJI: 'Fiji',
-  FRO: 'Faroe Islands', FSM: 'Micronesia', GAB: 'Gabon', GEO: 'Georgia',
-  GGY: 'Guernsey', GHA: 'Ghana', GIN: 'Guinea', GLP: 'Guadeloupe',
-  GMB: 'Gambia', GNB: 'Guinea-Bissau', GNQ: 'Equatorial Guinea', GRC: 'Greece',
-  GRD: 'Grenada', GUF: 'French Guiana', GUM: 'Guam', GUY: 'Guyana',
-  IDN: 'Indonesia', IRN: 'Iran', IRQ: 'Iraq', ISL: 'Iceland', ISR: 'Israel',
-  JAM: 'Jamaica', JOR: 'Jordan', JPN: 'Japan', KAZ: 'Kazakhstan', KEN: 'Kenya',
-  KGZ: 'Kyrgyzstan', KHM: 'Cambodia', KIR: 'Kiribati', KWT: 'Kuwait',
-  LAO: 'Laos', LBN: 'Lebanon', LBR: 'Liberia', LBY: 'Libya', LCA: 'Saint Lucia',
-  LIE: 'Liechtenstein', LKA: 'Sri Lanka', LUX: 'Luxembourg', MAR: 'Morocco',
-  MDV: 'Maldives', MHL: 'Marshall Islands', MLI: 'Mali', MLT: 'Malta',
-  MMR: 'Myanmar', MNE: 'Montenegro', MNG: 'Mongolia',
-  MNP: 'Northern Mariana Islands', MOZ: 'Mozambique', MRT: 'Mauritania',
-  MSR: 'Montserrat', MUS: 'Mauritius', MWI: 'Malawi', MYS: 'Malaysia',
-  MYT: 'Mayotte', NAM: 'Namibia', NCL: 'New Caledonia', NER: 'Niger',
-  NGA: 'Nigeria', NIU: 'Niue', NPL: 'Nepal', NZL: 'New Zealand', OMN: 'Oman',
-  PAK: 'Pakistan', PAN: 'Panama', PER: 'Peru', PHL: 'Philippines',
-  PLW: 'Palau', PNG: 'Papua New Guinea', PRK: 'North Korea', PRY: 'Paraguay',
-  PSE: 'Palestine', PYF: 'French Polynesia', QAT: 'Qatar', RUS: 'Russia',
-  SAU: 'Saudi Arabia', SDN: 'Sudan', SEN: 'Senegal', SHN: 'Saint Helena',
-  SLB: 'Solomon Islands', SLE: 'Sierra Leone', SMR: 'San Marino',
-  SOM: 'Somalia', SSD: 'South Sudan', STP: 'São Tomé and Príncipe',
-  SUR: 'Suriname', SWE: 'Sweden', SWZ: 'Eswatini', SYR: 'Syria',
-  TCA: 'Turks and Caicos Islands', TCD: 'Chad', TGO: 'Togo', THA: 'Thailand',
-  TJK: 'Tajikistan', TON: 'Tonga', TUN: 'Tunisia', TUR: 'Turkey',
-  TZA: 'Tanzania', UGA: 'Uganda', USA: 'United States', UZB: 'Uzbekistan',
-  VCT: 'Saint Vincent and the Grenadines', VEN: 'Venezuela',
-  VGB: 'British Virgin Islands', VIR: 'U.S. Virgin Islands', VNM: 'Vietnam',
-  VUT: 'Vanuatu', WLF: 'Wallis and Futuna', WSM: 'Samoa', YEM: 'Yemen',
-  ZAF: 'South Africa', ZMB: 'Zambia', ZWE: 'Zimbabwe',
-};
+// ── (3) ISO3 → display-name FALLBACK — now library data (library/data/iso3-name.js), re-exported here
+// so every importer of this file keeps working. Used when the profile has no live country_code_label.
+import { ISO3_NAME } from '../../../library/data/iso3-name.js';
+export { ISO3_NAME };
 
 /**
  * buildCountryNameMap(records) -> { iso3: label }
@@ -171,10 +134,18 @@ export function buildCountryNameMap(records) {
  * resolveTerritory(props, opts) -> { key, name, count, kind } | null
  *
  * Given a clicked tapestry feature's `properties`, return a stable identity for
- * batch-selection. Resolution order mirrors zone-geometry.js stamp():
- *   1. ADM1: props.shapeName present → name = shapeName, count = ADM1_COUNTS.
- *   2. ADM0: props.iso3 present      → name = nameMap[iso3] (live label, else
- *      ISO3_NAME fallback, else the raw iso3), count = COUNTRY_COUNTS[iso3].
+ * batch-selection. The LEVEL comes from where zone-geometry.js drew the feature from:
+ *   1. ADM1: an India state / China province. zone-geometry takes those ONLY from the
+ *      gb-IND/CHN-ADM1 pools, and only when props.listId === the zone's id, so every
+ *      ADM1 feature carries listId → name = shapeName, count = ADM1_COUNTS. (A legacy
+ *      feature with a shapeName and no iso3 is also ADM1.)
+ *   2. ADM0: a country, props.iso3 → name = nameMap[iso3] (live label, else ISO3_NAME
+ *      fallback, else the raw iso3), count = COUNTRY_COUNTS[iso3].
+ * ★ NOT "shapeName present → ADM1". The world ADM0 boundaries now carry a shapeName too
+ * (Sudan: { shapeGroup:'SDN', shapeName:'Sudan', iso3:'SDN' }), so that rule filed EVERY
+ * tapped country as a province: key 'adm1:Sudan', count null, a HUD total of 0 UUPG, and a
+ * Prayer List that refused the country the reader had just selected ("Select your own
+ * territory always finds 0 people groups", reported from a phone, 2026-09-30).
  *
  * `key` is the de-dup / toggle identity ('adm1:<shapeName>' or 'adm0:<iso3>') so
  * a country and a same-named admin never collide, and re-clicking toggles cleanly.
@@ -188,12 +159,13 @@ export function resolveTerritory(props, opts = {}) {
   if (!props || typeof props !== 'object') return null;
   const nameMap = opts.nameMap || ISO3_NAME;
 
-  // (1) ADM1 — India state / China province
-  if (props.shapeName) {
+  // (1) ADM1 — India state / China province (listId marks the ADM1 pools; see above)
+  if (props.shapeName && (props.listId || !props.iso3)) {
     const name = String(props.shapeName);
     const count = Object.prototype.hasOwnProperty.call(ADM1_COUNTS, name)
       ? ADM1_COUNTS[name] : null;
-    return { key: 'adm1:' + name, name, count, kind: 'adm1' };
+    // country: which ADM1 set it belongs to (IND / CHN), because data/apply-grouping.mjs regroups one kind at a time.
+    return { key: 'adm1:' + name, name, count, kind: 'adm1', country: props.shapeGroup || props.iso3 || ADM1_COUNTRY[name] || null };
   }
 
   // (2) ADM0 — country (only iso3 on the feature)

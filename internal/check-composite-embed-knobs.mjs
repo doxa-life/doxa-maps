@@ -111,8 +111,8 @@ if (!targets.length) {
 // The token to hand the partner page is the one the tree already bakes into its own leaves: this
 // gate must not invent a key, and a token that is not this tree's would 401 and look like our bug.
 // The tree bakes no token since the auto engine (the repo ships none), so every tk case SKIPPED and every
-// provider case went UNMEASURED: a hollow PASS (rega, ded4b3c1). A seat that has a real public token passes
-// it as TEST_MAPBOX_TOKEN (as rega's checks do); otherwise a baked one is still used if a tree has it.
+// provider case went UNMEASURED: a hollow PASS (measured at ded4b3c1). A seat that has a real public token passes
+// it as TEST_MAPBOX_TOKEN (as the browser checks do); otherwise a baked one is still used if a tree has it.
 const bakedToken = process.env.TEST_MAPBOX_TOKEN || (() => {
   for (const b of manifest.bundles || []) {
     for (const p of b.profiles || []) {
@@ -134,7 +134,7 @@ const HOST_PORT = await freePort()
 const TREE = `http://127.0.0.1:${TREE_PORT}/${TREE_NAME}`
 
 let pageHtml = '<!doctype html><html><body>nothing yet</body></html>'
-const tree = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(TREE_PORT)], { cwd: ROOT, stdio: 'ignore' })
+const tree = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(TREE_PORT), '--exit-with-parent'], { cwd: ROOT, stdio: 'ignore' })
 const host = createServer((_, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(pageHtml) }).listen(HOST_PORT, 'localhost')
 const cleanup = () => { try { tree.kill() } catch { /* already gone */ } try { host.close() } catch { /* already closed */ } }
 await new Promise((r) => setTimeout(r, 900))
@@ -170,10 +170,10 @@ try {
         lines.push(`  · ${t.element} [${c.knob}] SKIPPED — no baked token in this tree to hand the host`)
         continue
       }
-      // The composite's OWN profile rides with the knob under test (rega, 1a761741: gospel-resources,
+      // The composite's OWN profile rides with the knob under test (measured at 1a761741: gospel-resources,
       // my-upg-100-list, regions-dashboard and two more drew no map under a knob-only config, because a
       // multi-profile element needs to be told which profile is the composite). A knob still wins.
-      // A composite that opens on a non-map view must be told to show its map (exp-shepherd: country-posters-mfe
+      // A composite that opens on a non-map view must be told to show its map (country-posters-mfe
       // reads profile-config `view`), or there is no canvas to measure.
       const VIEW = { 'country-posters-mfe': { view: 'map' } }
       const cfg = JSON.stringify({ profile: t.profile, ...(VIEW[t.element] || {}), ...c.config(bakedToken) }).replace(/'/g, '&#39;')

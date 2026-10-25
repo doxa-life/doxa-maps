@@ -62,7 +62,7 @@ const layout = computed(() => layoutBoundedSet(joined.value, { r: 120, spread: 2
 const tally = computed(() => boundedSetTally(layout.value))
 // formatCount, not toLocaleString(): a bare toLocaleString follows the READER'S BROWSER,
 // so one page could print 2,074 here and 2.074 in the panel beside it. formatCount holds
-// en-US in one place until the Driver rules on numerals.
+// en-US in one place until the numerals question is ruled on.
 // The `|| 0` stays: formatCount FORMATS and deliberately does not decide what empty means —
 // Number(undefined) is NaN, so handing it a missing count would print "NaN" where this has
 // always printed 0. The locale source changes; the empty policy does not.

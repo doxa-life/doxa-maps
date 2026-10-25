@@ -1,11 +1,11 @@
 <!--
   StudioTree.vue — the plugin studio's rail: an EXPLORER TREE, imitating VS Code's Explorer.
 
-  ★ WHY IMITATE, NOT INVENT (Kingdom-agent directive, 2026-09-24): the studio nests every plugin, and
+  ★ WHY IMITATE, NOT INVENT: the studio nests every plugin, and
     composites nest composites — a hierarchy too deep and too repetitive to hand-roll as tabs. The
     leader for exactly this problem is the VS Code Explorer (researched against VS Code's views UX
-    guidelines, its tree settings, Storybook's sidebar and the WAI-ARIA APG Tree View pattern; notes in
-    _qa-cycle/studio-organize/RESEARCH-STUDIO-VERTICAL-TABS-IMITATE-THE-LEADER.md). What is copied:
+    guidelines, its tree settings, Storybook's sidebar and the WAI-ARIA APG Tree View pattern). What is
+    copied:
       - collapsible SECTIONS with sticky uppercase headers (VS Code views)      → CAP 5 … CAP 1
       - twisty on the LEFT, space reserved on leaves so labels line up
       - one-line rows: label + a muted DESCRIPTION                              → the element tag
@@ -16,7 +16,7 @@
       - the ACTIVITY BAR when the rail is slim: one icon per section, click → rail opens at it
       - APG keyboard: ↓/↑ move, → open / first child, ← close / parent, Home/End, Enter activates,
         type a letter to jump
-    Composites start FOLDED (Driver: "too hard to navigate so many nested plugins"); the open/closed
+    Composites start FOLDED (a deep tree of nested plugins is hard to navigate open); the open/closed
     state is remembered per page, as VS Code remembers expansion.
 
   ★ ONE TREE, SECTIONS AS LEVEL-1 NODES. VS Code's section headers are separate pane buttons; here they
@@ -273,7 +273,7 @@ export default defineComponent({
     },
     setRow(id, el) { if (!this._rows) this._rows = {}; if (el) this._rows[id] = el; else delete this._rows[id] },
     // Choosing a plugin opens it in the pane (through the layout's pick, which also closes the mobile
-    // drawer). It does NOT unfold the row: the Driver clicks UPG 100 List to see UPG 100 List, not every
+    // drawer). It does NOT unfold the row: a reader clicks UPG 100 List to see UPG 100 List, not every
     // element inside it. Only the twisty (or → / ←) folds and unfolds. A part with no page of its own
     // opens the composite it lives in.
     activate(item) {

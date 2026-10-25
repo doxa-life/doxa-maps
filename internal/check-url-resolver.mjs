@@ -7,7 +7,7 @@
  *     404 /__plugin-gallery//plugin-designs/big-picture/index.js
  *                          ^^ a base concatenated onto an ALREADY-ROOTED path
  * Every tab read "Could not load <plugin>", which looks like 29 broken plugins rather than one broken
- * string join. The Driver saw it as "none of my plugins are working".
+ * string join. It read as none of the plugins working.
  *
  * ★ WHY NO EXISTING GATE COULD HAVE CAUGHT IT — this is the reason this file exists rather than a test
  * inside the build. The BUILT manifest hands RELATIVE refs ("./big-picture/big-picture.js"), so

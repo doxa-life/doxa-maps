@@ -40,6 +40,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
+import { globalVariant } from '../library/scripts/posters/pin-poster-render.mjs'
 // Bake the composition tier (capability machine-key) INTO the manifest so ANY consumer —
 // the built gallery AND the plugin-studio cap-5 element — can group by capability 5→1
 // without a separate tierMap. Previously the manifest carried no `type`, so a manifest-fed
@@ -76,7 +77,7 @@ function readBuildConfig() {
     // EMBED_BASE_URL overrides the committed embedBaseUrl, the same way DOXA_SYNC_PATHS extends paths:
     // a host that builds its own tree (maps-dev's /cdn build inherits the container env) bakes absolute
     // snippet URLs without a committed config change. It is the base WITHOUT the tree name
-    // (https://maps-dev.nuxtbase.app/cdn -> .../cdn/<name>/...). check-embed-targets-exist reads the same.
+    // (https://<host>/cdn -> .../cdn/<name>/...). check-embed-targets-exist reads the same.
     const embedBaseUrl = ((process.env.EMBED_BASE_URL || '').trim()
       || (typeof cfg.embedBaseUrl === 'string' ? cfg.embedBaseUrl.trim() : '')).replace(/\/+$/, '')
     const tokenUrl = typeof cfg.tokenUrl === 'string' ? cfg.tokenUrl.trim() : ''
@@ -108,10 +109,11 @@ function readBuildConfig() {
     // from previews/, so the tree stays visually complete without them; bundling both pushed the
     // tree to 74 MB and the catalog server refused the pack. Turn on only for a fully offline drop.
     const bundlePosters = cfg.bundlePosters === true
-    // Ship the poster SOURCES (<id>.html, what the browser rasterises) without the
-    // 40.9 MB of rasters. bundlePosters is a single boolean over a directory holding
-    // both, so it could not express this — and "neither" is what left export and print
-    // preview 404ing on a default drop. Implied by bundlePosters:true.
+    // Ship every poster ONCE, in its lightest printable form: its SOURCE (<id>.html, which the
+    // browser rasterises) if it has one, else its raster (<id>.webp). bundlePosters is a single
+    // boolean over a directory holding both, so it could not express this — and "neither" is
+    // what left export and print preview 404ing on a default drop. Implied by bundlePosters:true
+    // (which ships both forms of every poster).
     const posterSources = cfg.posterSources === true || bundlePosters
     return { name, paths, embedBaseUrl, tokenUrl, token, assetsBaseUrl, apiBaseUrl, gatedProfiles, qaWidget, bundlePosters, posterSources }
   } catch {
@@ -146,7 +148,7 @@ function assetsBaseFor(depth) {
   // depth is measured from the WEB-ROOT; the tree root is one level in, hence depth - 1.
   return DEST_CONFIG.assetsBaseUrl || `${'../'.repeat(Math.max(0, depth - 1))}assets`
 }
-// design note 2026-07-11: the staging TOP must not mention deployment orgs (doxa/GO/...). The visible
+// The staging TOP must not mention deployment orgs (doxa/GO/...). The visible
 // title is the PRODUCT title (config displayTitle, default org-free), never the deployment TREE_NAME
 // (TREE_NAME stays in URLs/paths where it is a folder name, not branding).
 const DISPLAY_TITLE = (typeof DEST_CONFIG.displayTitle === 'string' && DEST_CONFIG.displayTitle.trim())
@@ -177,8 +179,22 @@ const SCAFFOLD_BUNDLES = ['template-bundle']
 // so the embed snippet's preload can never point at a different version than the one the bundle
 // requests — a mismatched preload is not used, and the engine would download twice.
 const MAPBOX_GL_JS = CDN.mapboxGlJs.url   // the ONE registry the bundle's loader reads too (library/constants/cdn.js)
+// An engine's script + stylesheet preloads, pinned as useMapInstance.js loads them (a preload is reused only
+// when its URL and request mode match the later request).
+const pinnedPreload = (e, as) => `<link rel="preload" as="${as}" href="${e.url}" integrity="${e.integrity}" crossorigin="anonymous">\n`
+const enginePreload = (engine) => engine === 'mapbox'
+  ? pinnedPreload(CDN.mapboxGlJs, 'script') + pinnedPreload(CDN.mapboxGlCss, 'style')
+  : pinnedPreload(CDN.maplibreGlJs, 'script') + pinnedPreload(CDN.maplibreGlCss, 'style')
 
 const isBundleDir = (name) => !name.startsWith('_') && !name.startsWith('.') && !DEST_CONFIG.gatedProfiles.includes(name) && !SCAFFOLD_BUNDLES.includes(name)
+
+// ★ A GATED bundle's folder never stays in the tree. vite.config.js builds it into .gated/ already; this
+// removes one that arrived anyway (an older build, or a landing that kept the tree's side of a conflict),
+// so the tree this writes is clean whatever came before. check:gated-not-in-tree asserts the result.
+for (const g of DEST_CONFIG.gatedProfiles) {
+  const dir = join(DEFAULT_ROOT, g)
+  if (existsSync(dir)) { rmSync(dir, { recursive: true, force: true }); console.log(`[generate-tree] removed gated bundle folder ${TREE_NAME}/${g}/ from the tree`) }
+}
 
 // ★ CUSTOM-ELEMENT NAME RULE (HTML spec): lowercase, must contain a hyphen, no spaces.
 // @element is NOT a comment — the build copies it VERBATIM into manifest.json and consumers feed
@@ -289,6 +305,53 @@ function ownsAMapDeeply(profileDir) {
  * An explicit boolean `isMap` in <profile>.meta.json wins over the scan.
  */
 const RELATIVE_IMPORT_RE = /(?:import[^'"`;]*?from\s*|import\s*\(\s*|import\s+)['"`](\.{1,2}\/[^'"`]+)['"`]/g
+/**
+ * ★ AND THE @map/ ALIAS TOO (BUG-ALIAS-IMPORT-HIDES-A-MAP, measured 2026-09-29).
+ *
+ * Following only RELATIVE imports is what made the regions-list fix above correct, and it is also
+ * what made a map INVISIBLE once the component holding it moved into library/. MEASURED: the seven
+ * curated production tabs, alias imports resolved and re-tested — exactly ONE is misclassified.
+ * regions-dashboard/regions-mfe renders a real map through
+ * @map/components/maps/RegionCountryMap.vue — that file matches MAP_ENGINE_RE (it imports
+ * useMapInstance and useMapProvider), but region-dashboards.vue holds no engine token of its own,
+ * so the profile resolved isMap=FALSE. The other five map tabs happen to carry an engine token in
+ * their own files as well, which is why only this one shows the symptom.
+ *
+ * THE MEASURED CONSEQUENCE. check-mapbox-drew takes its targets from this flag, so it was silently
+ * measuring 6 of the 7 tabs — omitting the one tab with an open map bug. A gate that cannot see a
+ * page is worse than no gate, because its PASS reads as coverage.
+ *
+ * WHY THIS DOES NOT REOPEN THE regions-list FALSE POSITIVE. That bug came from asking "is there a
+ * map anywhere under this BUNDLE", which let a map-less sibling inherit map-ness. This still walks
+ * the PROFILE'S OWN import graph and only adds one more edge to it: an alias import is a real
+ * import, exactly as a relative one is. regions-list imports no map component and still resolves
+ * false — asserted in the self-test below, because that is the regression worth pinning.
+ *
+ * BOUNDED THE SAME WAY. Only the @map/ prefix (there is one alias and it is fixed, so no bundler
+ * resolution is needed), only into library/, only .vue/.js/.mjs. An @map/ import that escapes
+ * library/ via .. is refused by the same startsWith check the relative arm uses.
+ *
+ * ★ AND A STRICTER TEST ONCE INSIDE library/, BECAUSE MAP_ENGINE_RE IS TOO LOOSE THERE. It matches
+ * the BARE STRING 'maplibre-gl', which in a shared library is mostly prose and CSS: comments, and
+ * selectors like .maplibregl-ctrl-bottom-left. MEASURED while building this: 12+ library files match
+ * it without using an engine at all. The one that bit: wall-of-people-groups (a D3 wall, no map)
+ * imports src/wallD3.js, which imports library/constants/cdn.js — a pinned URL + SRI table that
+ * merely NAMES the engine CDNs. Following that edge with the loose test flipped a map-less leaf to
+ * isMap=true, which is the exact 400 KB regression the per-profile fix above was written to stop.
+ * So inside library/ a file counts only if it really DEPENDS on an engine: it imports the package,
+ * or calls useMapInstance()/useMapProvider, or touches a global map object. Plugin files keep the
+ * original loose test, so no existing in-bundle classification moves.
+ */
+const Q = '[\'"\\x60]'   // a quote: ' " or a backtick, written by code point so this line stays backtick-free
+const LIBRARY_ENGINE_RE = new RegExp(
+  `from\\s*${Q}(?:maplibre-gl|mapbox-gl)${Q}` +           // import … from 'maplibre-gl'
+  `|import\\s*\\(\\s*${Q}(?:maplibre-gl|mapbox-gl)${Q}` + // await import('mapbox-gl')
+  '|useMapInstance\\s*\\(' +                              // the composable, actually called
+  `|from\\s*${Q}[^'"\\x60]*useMapProvider` +              // … from '@map/composables/useMapProvider.js'
+  '|window\\.(?:mapboxgl|maplibregl)' +
+  '|new\\s+(?:mapboxgl|maplibregl)\\.Map')
+const ALIAS_IMPORT_RE = /(?:import[^'"`;]*?from\s*|import\s*\(\s*|import\s+)['"`](@map\/[^'"`]+)['"`]/g
+const ALIAS_ROOT = resolve(__dirname, '..', 'library')   // vite.config.js:180 — '@map' is exactly this
 function profileReachesAMap(dir, file) {
   const seen = new Set()
   const stack = [join(dir, file)]
@@ -298,14 +361,16 @@ function profileReachesAMap(dir, file) {
     seen.add(f)
     let src
     try { src = readFileSync(f, 'utf8') } catch { continue }
-    if (MAP_ENGINE_RE.test(src)) return true
-    for (const m of src.matchAll(RELATIVE_IMPORT_RE)) {
-      const base = resolve(dirname(f), m[1])
-      if (!base.startsWith(dir)) continue                     // stay inside this bundle
+    // A library file has to really depend on an engine; a plugin file keeps the original test.
+    if ((f.startsWith(ALIAS_ROOT) ? LIBRARY_ENGINE_RE : MAP_ENGINE_RE).test(src)) return true
+    const push = (base, root) => {
+      if (!base.startsWith(root)) return                      // stay inside the tree we are allowed to walk
       for (const cand of [base, base + '.vue', base + '.js', base + '.mjs', join(base, 'index.js')]) {
         if (NESTED_SCAN_EXT.test(cand) && existsSync(cand) && statSync(cand).isFile()) { stack.push(cand); break }
       }
     }
+    for (const m of src.matchAll(RELATIVE_IMPORT_RE)) push(resolve(dirname(f), m[1]), dir)
+    for (const m of src.matchAll(ALIAS_IMPORT_RE)) push(resolve(ALIAS_ROOT, m[1].slice('@map/'.length)), ALIAS_ROOT)
   }
   return false
 }
@@ -432,6 +497,18 @@ function readComposes(dir, profileName) {
  * `profile`/`tk`/`assetsBase`/`instanceId` are generator-owned and cannot be overridden.
  */
 const RESERVED_CONFIG_KEYS = new Set(['profile', 'tk', 'assetsBase', 'instanceId', 'dataSource'])
+
+/**
+ * The phone rule for a standalone leaf (SPEC-MOBILE-FLAG): the manifest entry's `mobile` flag, and the
+ * name the desktop-only message gives the map. ProfileLoader reads both; absent for a phone-ready map,
+ * so every other leaf page keeps the bytes it has. The name is the profile's display label without a
+ * trailing "(…)" note, which is written for the Studio rail rather than for a reader.
+ */
+function mobileConfig(profile) {
+  if (!profile.mobile) return {}
+  const name = String(profile.label || '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+  return { mobile: profile.mobile, ...(name ? { mobileLabel: name } : {}) }
+}
 function readProfileConfig(dir, profileName) {
   try {
     const metaPath = join(dir, `${profileName}.meta.json`)
@@ -660,8 +737,8 @@ function rootHtml(bundles, manifest) {
 /**
  * THE WEB-ROOT PAGE — a thin host that mounts <plugin-studio> and nothing else.
  *
- * DRIVER DIRECTION 2026-09-22: "We just need a functional plugin studio with all our plugins
- * working. We do not need these old staging index.html that get in the way of everything."
+ * THE DIRECTION (2026-09-22): a functional Plugin Studio with every plugin working, and none of
+ * the old staging index.html pages that get in the way.
  * The dev server made this move first (internal/plugin-gallery/dev-plugin.mjs); this is the same
  * page for the BUILT tree, so `/` is the studio in BOTH trees and a developer who learns one
  * does not meet a different product in the other.
@@ -700,7 +777,7 @@ function rootHtml(bundles, manifest) {
  *   "the plugin works"; a mounted element with no data is the failure that looks like success.
  */
 function studioRootHtml(bakedToken, integrity = '') {
-  // THE TREE'S FRONT PAGE (<tree>/index.html) — Driver decision, card
+  // THE TREE'S FRONT PAGE (<tree>/index.html) — the decision in card
   // BUILD-PLUGIN-STUDIO-IS-THE-OUTPUT-FRONT-PAGE: the output is ONE folder, and opening it opens the
   // studio. It used to sit one level ABOVE the tree (public/index.html) with the staging-forge chooser
   // at <tree>/index.html; both are replaced by this. Relative paths, so the folder stays
@@ -721,7 +798,12 @@ function studioRootHtml(bakedToken, integrity = '') {
   <link rel="icon" href="data:,">
 ${bakedToken ? `  <script>window.MAP_TOKEN=${JSON.stringify(bakedToken)};</script>\n` : ''}${DEST_CONFIG.apiBaseUrl ? `  <script>window.MAP_APP_API_URL = ${JSON.stringify(DEST_CONFIG.apiBaseUrl)};</script>\n` : ''}  <style>
     html, body { margin: 0; padding: 0; height: 100%; background: #f3f3f1; }
-    plugin-studio { display: block; width: 100%; height: 100vh; }
+    /* 100svh, not 100vh: on a phone 100vh is the LARGE viewport, taller than what shows while the address bar is
+       up, so the page scrolls by the bar's height and the app seems to resize as the bar hides and shows. svh is
+       the viewport with the bar shown and never changes; 100% first is the fallback where svh is unknown. The
+       --profile-min-h:0 opts out of ProfileLoader's 100dvh floor, which would otherwise grow the element when
+       the bar hides. */
+    plugin-studio { display: block; width: 100%; height: 100%; height: 100svh; --profile-min-h: 0; }
   </style>
 </head>
 <body>
@@ -761,13 +843,92 @@ function bundleHtml(b, index, manifest) {
  *   opts.tokenUrlExpr sources.json mapboxTokenUrl value (data-safe URL or global name)
  *   opts.bakedToken opt-in literal token baked from build-config (ladder rung 3)
  */
+// The origins a map leaf touches, from the ONE registry the runtime reads (library/constants/cdn.js)
+// plus useMapInstance's MapLibre style host. Origins only (preconnect wants an origin, not a file).
+const ORIGIN = (u) => { try { return new URL(u).origin } catch { return '' } }
+const ENGINE_ORIGIN = { mapbox: ORIGIN(CDN.mapboxGlJs.url), maplibre: ORIGIN(CDN.maplibreGlJs.url) }
+const MAPLIBRE_STYLE_ORIGIN = 'https://tiles.openfreemap.org'   // useMapInstance.js OPENFREEMAP_STYLE/_DARK
+
+/**
+ * Which engine a map leaf will use, decided at BUILD time from the same inputs the runtime ladder reads
+ * (see mapPageHtml's token block): profile-config.provider, then whether a token is derivable now — a
+ * baked token, or a token endpoint (tokenUrl / window.MAP_TOKEN_URL). 'auto' with no token path is
+ * MapLibre, keyless. The runtime can still be overridden by ?tk=/?provider=/window.MAP_PROVIDER/a stored
+ * token; the hint follows the build default and the report names that miss case (one unused preconnect).
+ */
+function engineFor({ config }) {
+  // CORRECTED 2026-09-29 (the shipping resolver was executed, and a network trace confirmed it on the wire):
+  // a token no longer selects Mapbox. useMapProvider's default is MapLibre unless provider is EXPLICITLY
+  // 'mapbox'. A browser check measured all 8 auto leaves — which DO carry a pray.doxa.life token endpoint — loading
+  // MapLibre from jsdelivr cold. So the hint's engine is Mapbox ONLY when provider:'mapbox' is set; every
+  // other case (auto, or provider:'maplibre') is MapLibre, regardless of any baked token / tokenUrl.
+  return String((config && config.provider) || '').toLowerCase().trim() === 'mapbox' ? 'mapbox' : 'maplibre'
+}
+
+/**
+ * Engine-aware resource hints for a map leaf's <head>. preconnect the token-implied engine origin, the
+ * style host and the data origin; and, ONLY for the 'auto' leaf (which emits no engine <script> today),
+ * preload the engine from cdn.js so it downloads alongside the bundle instead of after it. The 'maplibre'
+ * and 'mapbox' branches already carry a static engine tag (mapPageHtml's peerBlock / the embed snippet),
+ * so a preload there would double-fetch — those get preconnects only. Returns '' for a non-map leaf.
+ */
+function resourceHints({ isMapLibre, config, apiBaseUrl }) {
+  const engine = engineFor({ config })
+  const styleOrigin = engine === 'maplibre' ? MAPLIBRE_STYLE_ORIGIN : ENGINE_ORIGIN.mapbox
+  const dataOrigin = ORIGIN(apiBaseUrl)   // '' when same-origin (no build apiBaseUrl): nothing to preconnect
+  const origins = [...new Set([ENGINE_ORIGIN[engine], styleOrigin, dataOrigin].filter(Boolean))]
+  const lines = origins.map((o) => `  <link rel="preconnect" href="${o}" crossorigin />`)
+  // Preload the engine UNLESS the leaf already emits a static engine <script>. Only a provider:'maplibre'
+  // leaf does (peerBlock); the 'auto' leaf and a provider:'mapbox' leaf emit no static tag (the Mapbox
+  // static tags were removed 2026-09-25), so both benefit from a preload. URL+integrity+crossorigin from
+  // cdn.js so it matches ensureEngineScript's tag exactly (a mismatched preload is not reused).
+  if (!isMapLibre) {
+    const gl = engine === 'maplibre' ? CDN.maplibreGlJs : CDN.mapboxGlJs
+    lines.push(`  <link rel="preload" as="script" href="${gl.url}" integrity="${gl.integrity}" crossorigin="anonymous" />`)
+  }
+  return lines.length ? `  <!-- A9 hints: the map's origins, so DNS/TLS + the engine start with the bundle, not after it (engine = provider or the MapLibre default). -->\n${lines.join('\n')}\n` : ''
+}
+
+// Does this BUILT bundle .js reference a map engine? Read from public/<tree>/<bundle>/<bundle>.js with the
+// same regex the source classifier uses — the directly verifiable A9-leaf-hint signal.
+function oneBundleLoadsEngine(bundleName) {
+  try { return MAP_ENGINE_RE.test(readFileSync(join(DEFAULT_ROOT, bundleName, `${bundleName}.js`), 'utf8')) }
+  catch { return false }
+}
+// Element tag → owning bundle, built once from the scanned bundles so a composes entry that names a
+// child by its ELEMENT tag (stack-demo composes "research-dashboard-map", whose bundle is
+// "research-dashboard") resolves to the right bundle, not a non-existent dir.
+let ELEMENT_TO_BUNDLE = null
+function setElementToBundle(bundles) {
+  ELEMENT_TO_BUNDLE = new Map()
+  for (const b of bundles) for (const e of (b.elements || [])) ELEMENT_TO_BUNDLE.set(e, b.bundle)
+}
+// Does a leaf's PAGE end up loading an engine? True if its own bundle does, OR any bundle it `composes`
+// does — the latter catches a composite whose engine lives in a lazily-fetched child (research-map-plus-grid
+// composes doxa-research-map: its own bundle has 0 engine refs, the child's has 74). A `composes` entry is
+// "<bundle>/<profile>", a bare bundle, or an element TAG — resolved to a bundle via ELEMENT_TO_BUNDLE, then
+// the bundle's first segment. Verifiable from built files, so the gate can mirror it. Excludes a composite
+// that composes only non-maps (big-picture).
+function builtBundleLoadsEngine(bundleName, composes) {
+  if (oneBundleLoadsEngine(bundleName)) return true
+  for (const c of composes || []) {
+    const tag = String(c).split('/').pop()
+    const child = (ELEMENT_TO_BUNDLE && ELEMENT_TO_BUNDLE.get(tag)) || String(c).split('/')[0]
+    if (child && child !== bundleName && oneBundleLoadsEngine(child)) return true
+  }
+  return false
+}
+
 function mapPageHtml(opts) {
-  const { title, tag, config, jsSrc, apiBaseUrl, tokenUrlExpr, bakedToken, integrity, shellTokenFree, isMap, scrollPage, isComposite } = opts
+  const { title, tag, config, jsSrc, apiBaseUrl, tokenUrlExpr, bakedToken, integrity, shellTokenFree, isMap, scrollPage, isComposite, bundleLoadsEngine } = opts
   const apiScript = apiBaseUrl
     ? `\n  <script>window.MAP_APP_API_URL = ${JSON.stringify(apiBaseUrl)};</script>`
     : ''
   // Bake the QA corner widget onto the host platform's embed surface (opt-out via build-config qaWidget:false).
-  const pageConfig = DEST_CONFIG.qaWidget ? { ...config, qa: true } : config
+  // urlOwner 'app' (library/composables/useViewAddress.js): this generated page is OURS, so its shell may write the
+  // view address (?tab=…) for a reload and a sent link. Only the page's own config gets it, never an embed snippet
+  // (embedCfg), so a partner's page is never written to; and a FRAMED page drops it at runtime (below).
+  const pageConfig = { ...(DEST_CONFIG.qaWidget ? { ...config, qa: true } : config), urlOwner: 'app' }
   // PROVIDER-AWARE PAGE (see library/composables/useMapProvider.js): a profile or
   // instance whose config says provider:'maplibre' gets the MapLibre peer (token-
   // free, no Mapbox account) and SKIPS the token ladder entirely — the map mounts
@@ -799,6 +960,26 @@ function mapPageHtml(opts) {
   // EVERY non-map leaf (cap-4 composites + cap-1/2/3 non-map leaves), not just cap-5 shells.
   const shellOnly = !!shellTokenFree || notAMap
   const tokenFree = isMapLibre || shellOnly
+  // A9 leaf hints: give the browser the map's origins BEFORE the bundle
+  // parses. Engine-aware, derived from the SAME inputs the runtime ladder reads (below), never
+  // hardcoded: preconnect the token-implied engine + the style host + the data origin, and — only
+  // where the leaf emits no engine <script> today (the 'auto' leaf) — preload the engine, its URL,
+  // integrity and crossorigin from library/constants/cdn.js so it cannot drift from the runtime tag.
+  // WHO GETS HINTS: any page whose OWN bundle loads a map engine — the directly verifiable signal
+  // (`bundleLoadsEngine`, an engine reference in the built .js), NOT the leaf's `isMap` flag. A network
+  // run found regions-mfe (isMap:false, 56 engine refs in its bundle) AND research-map-plus-grid
+  // (isMap:false, own bundle 0 refs but composes doxa-research-map, 74 refs) opening cdn.jsdelivr.net +
+  // tiles.openfreemap.org from the top page and getting no hints — my first cut keyed on isMap and missed
+  // both, the same trap check:leaf-engine-per-provider's isMap gate fell into. bundleLoadsEngine is true
+  // when the leaf's own bundle OR any bundle it composes loads an engine, so both composites are covered;
+  // a composite that composes only non-maps (big-picture) stays out. A cap-5 nested-mfe-spa shell
+  // (shellTokenFree) is excluded even if it references an engine: its maps render in their OWN iframe
+  // leaves, which carry hints. A plain non-map leaf (a list/card) can SHARE a bundle with a map leaf
+  // (connectivity-list rides the cities-internet bundle) — so the `isComposite &&` guard keeps the bundle
+  // signal from over-hinting it: the engine only mounts in-page for a real map leaf (drawsMap) or a cap-4
+  // composite (isComposite) that stacks a map child; a non-map, non-composite leaf never opens it.
+  const drawsMapInPage = (drawsMap || (isComposite && bundleLoadsEngine)) && !shellTokenFree
+  const hintBlock = drawsMapInPage ? resourceHints({ isMapLibre, config, apiBaseUrl }) : ''
   const peerBlock = shellOnly
     ? `<!-- NON-MAP leaf (app-shell / composite / grid / card / chart-table): NO map peer.
        This element draws no map tiles, so it needs no Mapbox/MapLibre engine and MUST NOT
@@ -831,7 +1012,7 @@ function mapPageHtml(opts) {
   <script>window.MAP_OWNS_PAGE = true;</script>
   <title>${esc(title)}</title>
   <link rel="icon" href="data:,">
-  ${peerBlock}
+${hintBlock}  ${peerBlock}
   <style>
     ${scrollPage
     ? `/* SCROLL-PAGE leaf (cap-4 nested-elements-mfe composite: a StackLayout scroll-stack). The DOCUMENT
@@ -846,17 +1027,24 @@ function mapPageHtml(opts) {
        min-height:100% here resolved against BODY's computed height, which is auto (body only has
        min-height:100%, never a definite height) — and a percentage of auto collapses to 0. Any
        element whose own chrome is position:absolute / height:100% (upg-100-mfe -> .pane-col -> .pane)
-       then measured 0 and the leaf looked empty. 100dvh depends on NO ancestor, keeps the page
-       growable (it is a MIN), and is correct on mobile with dynamic toolbars. */
-    #slot, ${esc(tag)} { position: static; inset: auto; width: 100%; min-height: 100dvh; display: block; }
+       then measured 0 and the leaf looked empty. A viewport unit depends on NO ancestor and keeps the page
+       growable (it is a MIN). svh, not dvh: dvh follows the mobile URL bar, so the slot (and its map)
+       resized while the reader scrolled; svh never moves. 100vh first for a browser without svh. */
+    #slot, ${esc(tag)} { position: static; inset: auto; width: 100%; min-height: 100vh; min-height: 100svh; display: block; }
     #status { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
       padding: 24px; text-align: center; color: #9aa7b8;
       font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
     #status.err { color: #f87171; }`
     : `/* BARE full-page map — no chrome. The custom element IS the page, so the
-       browser URL shares the map itself. */
+       browser URL shares the map itself.
+       HEIGHT IN svh, NOT inset:0. A fixed box with inset:0 follows the phone's DYNAMIC viewport, so the map
+       (and a legend sheet sized from it) changes height every time the address bar hides or shows. 100svh is
+       the viewport WITH the bar shown and never changes; when the bar hides, the page background shows below
+       instead of the map resizing. On a desktop svh = the viewport, so nothing moves there. The 100% before it
+       is the fallback for a browser without svh, which would otherwise size the box to its content.
+       --profile-min-h:0 opts out of ProfileLoader's 100dvh floor, which would grow the element again. */
     html, body { height: 100%; margin: 0; background: #0a0e15; }
-    #slot, ${esc(tag)} { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #slot, ${esc(tag)} { position: fixed; inset: 0 auto auto 0; width: 100%; height: 100%; height: 100svh; --profile-min-h: 0; display: block; }
     #status { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
       padding: 24px; text-align: center; color: #9aa7b8;
       font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -877,7 +1065,7 @@ function mapPageHtml(opts) {
     @media print {
       html, body { height: auto; background: #fff; }
       #status:not(.err) { display: none; }
-      /* ★ RELEASE THE FIXED HOST, MEASURED (rega, RQ-RGPRINT on a035408e2). The leaf pins both the
+      /* ★ RELEASE THE FIXED HOST, MEASURED (a print check on a035408e2). The leaf pins both the
          slot and the element with position:fixed; inset:0. A fixed element is painted once, on the
          first page, so the printed document was exactly ONE viewport: 900px tall, while the content
          continued to y=1753. Every plugin whose leaf is taller than a screen has been printing its
@@ -914,6 +1102,9 @@ ${apiScript}
       var slot = document.getElementById('slot');
       var status = document.getElementById('status');
       var BASE_CONFIG = ${JSON.stringify(pageConfig)};
+      // Framed (the iframe embed on a partner's page): READ the address, never write it. A push inside a frame adds
+      // entries to the partner page's own Back button (the joint session history).
+      try { if (window.self !== window.top) delete BASE_CONFIG.urlOwner } catch (e) { delete BASE_CONFIG.urlOwner }
       // MapLibre map pages AND shell pages (app-shell / nested-mfe-spa) need NO token:
       // the ladder below is skipped entirely and the element mounts immediately.
       // (A leaf whose engine is MapLibre at RUNTIME joins them — see PROVIDER below.)
@@ -998,10 +1189,11 @@ ${apiScript}
       if (urlTk) { try { localStorage.setItem('MAPS_STAGING_TK', urlTk); } catch (e) {} }
       var directToken = (BASE_CONFIG && BASE_CONFIG.tk) || urlTk || stored || HOST_TOKEN || BAKED_TOKEN;
       // PROVIDER — the same ladder as resolveMapProvider (library/composables/useMapProvider.js):
-      // profile-config.provider → ?provider= → window.MAP_PROVIDER → 'auto'. An explicit engine wins.
-      // 'auto' = Mapbox when a token is available (a rung above, a host-set window.MAP_TOKEN, or a token
-      // endpoint to ask), otherwise MapLibre, keyless: no token prompt, no request to Mapbox. The
-      // element decides the same way from the token this page hands it, so the two cannot disagree.
+      // profile-config.provider → ?provider= → window.MAP_PROVIDER → 'auto'. An explicit engine wins,
+      // and 'auto' draws with MapLibre whether or not a token is available (the element decides that).
+      // This page only decides whether to FIND a token first: when one is on offer (a rung above, a
+      // host-set window.MAP_TOKEN, or a token endpoint) it resolves it, since place search uses it on
+      // either engine; with none, it mounts at once, keyless: no token prompt, no request to Mapbox.
       var ASKED = String((BASE_CONFIG && BASE_CONFIG.provider) || qp('provider') || window.MAP_PROVIDER || '').toLowerCase().trim();
       var EXPLICIT = (ASKED === 'mapbox' || ASKED === 'maplibre') ? ASKED : '';
       var HAS_TOKEN = !!(directToken || (typeof window.MAP_TOKEN === 'string' && window.MAP_TOKEN));
@@ -1092,7 +1284,7 @@ function profileHtml(b, profile, tokenUrlExpr, bakedToken) {
     // Profile-declared keys first, so the generator-owned ones always win (they are
     // also filtered as reserved at read time — belt and braces, since a leaf whose
     // `profile` or `assetsBase` got overwritten would silently render the wrong thing).
-    config: { ...(profile.extraConfig || {}), profile: profile.profile, dataSource: 'pray-tools', instanceId: `${b.bundle}-${profile.profile}`, assetsBase: assetsBaseFor(3) },
+    config: { ...(profile.extraConfig || {}), ...mobileConfig(profile), profile: profile.profile, dataSource: 'pray-tools', instanceId: `${b.bundle}-${profile.profile}`, assetsBase: assetsBaseFor(3) },
     jsSrc: `../${b.bundle}.js`,
     apiBaseUrl: DEST_CONFIG.apiBaseUrl,
     tokenUrlExpr,
@@ -1104,6 +1296,8 @@ function profileHtml(b, profile, tokenUrlExpr, bakedToken) {
     // Whether this leaf actually draws map tiles (computed in scanBundles → isMapLeaf). A
     // non-map leaf renders token-free with no map peer; only a real map runs the token ladder.
     isMap: profile.isMap,
+    // Whether this bundle's OWN built .js loads a map engine — the A9-leaf-hint signal (mapPageHtml).
+    bundleLoadsEngine: builtBundleLoadsEngine(b.bundle, b.composes),
     // A cap-4 composite (nested-elements-mfe) is a StackLayout SCROLL-STACK: its leaf must let the
     // DOCUMENT own the scroll (height:auto, no position:fixed) so the page grows and a reader scrolls
     // PAST one section to the next. A fixed-viewport leaf traps a 100vh dashboard and nothing scrolls
@@ -1123,10 +1317,10 @@ function instanceHtml(b, profile, inst, tokenUrlExpr, bakedToken) {
   return mapPageHtml({
     title: `${inst.title} · ${b.bundle}`,
     tag,
-    // MERGE, never replace (go-int: a preset lost its profile's pinHint:false): the profile's
+    // MERGE, never replace (a preset once lost its profile's pinHint:false): the profile's
     // <profile>.meta.json `config` first, then the instance's props over it. The rule is stated in
     // documentation/PRESET-PLUGIN-STANDARD.md and asserted by check:preset-config-merge.
-    config: { assetsBase: assetsBaseFor(4), ...(profile.extraConfig || {}), ...inst.props },
+    config: { assetsBase: assetsBaseFor(4), ...(profile.extraConfig || {}), ...mobileConfig(profile), ...inst.props },
     jsSrc: `../../${b.bundle}.js`,
     apiBaseUrl: inst.apiBaseUrl || DEST_CONFIG.apiBaseUrl,
     tokenUrlExpr,
@@ -1138,6 +1332,8 @@ function instanceHtml(b, profile, inst, tokenUrlExpr, bakedToken) {
     // Instance pages inherit the profile's map-ness: a preset of a non-map leaf is still a
     // non-map (token-free, no peer); a preset of a real map still runs the token ladder.
     isMap: profile.isMap,
+    // Same bundle as the profile page, so the same engine signal (A9-leaf-hint, mapPageHtml).
+    bundleLoadsEngine: builtBundleLoadsEngine(b.bundle, b.composes),
     // A preset of a cap-4 composite scroll-stack is still a scroll page (see profileHtml).
     scrollPage: profile.type === 'nested-elements-mfe',
   })
@@ -1281,11 +1477,16 @@ function scanBundles() {
         assetsBase: DEST_CONFIG.assetsBaseUrl || 'YOUR_TREE_URL/assets',
       }
       const apiBase = DEST_CONFIG.apiBaseUrl || 'YOUR_API_BASE_URL'
-      const scriptEmbed =
+      const scriptEmbedFor = (cfg, note) =>
         `<script>window.MAP_APP_API_URL=${JSON.stringify(apiBase)};<\/script>\n` +
         `<script src="${scriptUrl}"${integrity ? ` integrity="${integrity}" crossorigin="anonymous"` : ''}><\/script>\n` +
-        `<!-- provider: "maplibre" is the default; change it to "mapbox" and fill tk to use Mapbox. -->\n` +
-        `<${tag} profile-config='${JSON.stringify(embedCfg)}'></${tag}>`
+        `<!-- ${note} -->\n` +
+        `<${tag} profile-config='${JSON.stringify(cfg)}'></${tag}>`
+      // The notes depend on isMap, which is decided further down, so the snippets are built where the
+      // embed object is (below). The Mapbox variant is the same element with "provider":"mapbox".
+      const MAP_NOTE = 'MapLibre draws this map and needs no token. For Mapbox, paste this map\'s embed.scriptMapbox from manifest.json instead: it sets "provider":"mapbox" and preloads the Mapbox engine; fill "tk" with your token.'
+      const PLAIN_NOTE = 'provider: "maplibre" is the default; change it to "mapbox" and fill tk to use Mapbox.'
+      const MAPBOX_NOTE = 'Mapbox draws this map: fill "tk" with your Mapbox token.'
 
       // Preconfigured instances: ONE parameterized profile → N preset render
       // targets, declared in <something>.instances.json next to the .vue. Each
@@ -1365,9 +1566,16 @@ function scanBundles() {
         // The default engine is 'auto' (Mapbox only with a token), so a partner with no token drops it too.
         embed: {
           iframe: iframeEmbed,
-          script: isMap && MAPBOX_GL_JS
-            ? `<!-- Mapbox engine, fetched early. Keep it only with a real Mapbox token in "tk": without one (or with "provider":"maplibre") the map draws with MapLibre and this line must go -->\n<link rel="preload" as="script" href="${MAPBOX_GL_JS}" integrity="${CDN.mapboxGlJs.integrity}" crossorigin="anonymous">\n` + scriptEmbed
-            : scriptEmbed,
+          // ★ THE DEFAULT SNIPPET PRELOADS THE DEFAULT ENGINE. It used to preload Mapbox, while its own
+          // profile-config said provider "maplibre", and since 2026-09-28 only an explicit
+          // provider:"mapbox" selects Mapbox. So an unedited paste downloaded the Mapbox engine on every
+          // view, never used it, and made a Mapbox request from a keyless page. The default now preloads
+          // MapLibre (script + stylesheet, pinned exactly as useMapInstance loads them, so the preloads
+          // are reused), and Mapbox is its own snippet, scriptMapbox, chosen by provider. check:snippet-engine.
+          script: isMap
+            ? `<!-- MapLibre engine (the default), fetched early -->\n${enginePreload('maplibre')}` + scriptEmbedFor(embedCfg, MAP_NOTE)
+            : scriptEmbedFor(embedCfg, PLAIN_NOTE),
+          ...(isMap ? { scriptMapbox: `<!-- Mapbox engine, fetched early -->\n${enginePreload('mapbox')}` + scriptEmbedFor({ ...embedCfg, provider: 'mapbox' }, MAPBOX_NOTE) } : {}),
         },
         ...(instances.length ? { instances } : {}),
         // Extra profile-config keys from <profile>.meta.json `config` (e.g. pinHint:false).
@@ -1379,6 +1587,9 @@ function scanBundles() {
         // consumers but useless for deriving a tier — a bundle's composite and its plain leaves would
         // all inherit the same edges. The tier is a property of the profile that declares them.
         composesOwn: readComposes(dir, profileName),
+        // Generator-internal, stripped with the two above: what the snippets are built from, so the
+        // composite pass below can rebuild them once every profile's isMap is known.
+        _snippet: { cfg: embedCfg, build: scriptEmbedFor, mapNote: MAP_NOTE, mapboxNote: MAPBOX_NOTE },
         ...rest,
       }
     })
@@ -1438,6 +1649,7 @@ function readDestinations() {
 }
 
 function writeManifestAndHtml(root, bundles, tokenUrlExpr, bakedToken) {
+  setElementToBundle(bundles)   // for builtBundleLoadsEngine's tag→bundle resolution (A9 leaf hints)
   // ── DERIVE THE COMPOSITION TIER FROM THE EDGES, BEFORE ANYTHING READS THE MANIFEST ──────────
   // Every consumer downstream — the gallery's capFor, the studio rail, check:composite-embed-knobs —
   // trusts profile.type. Deriving here means a composite can no longer ship understated because its
@@ -1460,6 +1672,24 @@ function writeManifestAndHtml(root, bundles, tokenUrlExpr, bakedToken) {
       console.error('        Fix the meta.json or the composes list; the generator will not choose between them.')
       process.exit(1)
     }
+  }
+
+  // ★ A COMPOSITE THAT DRAWS ITS MAP THROUGH A CHILD GETS THE MAP SNIPPETS TOO. isMap is false on
+  // research-map-plus-grid and regions-mfe, because their map is a child element, so they published no
+  // engine preload and no Mapbox variant, though both draw a map and pass provider to it (pasted with
+  // provider "mapbox" and a token, both draw on Mapbox: measured). Decided here, once every profile's
+  // isMap exists, and from each profile's OWN composes, never the bundle's hoisted list: a bundle's
+  // plain leaves (charts, data-tables, a poster wall) share that list and must stay plain. The gallery
+  // shell (nested-mfe-spa) is left out until its passing of provider to its tabs is measured.
+  // check:snippet-engine asserts the same rule on the written manifest.
+  const isMapById = new Map()
+  for (const b of bundles) for (const p of b.profiles) isMapById.set(`${b.bundle}/${p.profile}`, !!p.isMap)
+  const reachesMap = (ref) => isMapById.get(ref) || [...isMapById].some(([k, v]) => v && k.startsWith(`${ref}/`))
+  for (const b of bundles) for (const p of b.profiles) {
+    if (p.isMap || p.type !== 'nested-elements-mfe' || !(p.composesOwn || []).some((r) => reachesMap(String(r)))) continue
+    const s = p._snippet
+    p.embed.script = `<!-- MapLibre engine (the default), fetched early -->\n${enginePreload('maplibre')}` + s.build(s.cfg, s.mapNote)
+    p.embed.scriptMapbox = `<!-- Mapbox engine, fetched early -->\n${enginePreload('mapbox')}` + s.build({ ...s.cfg, provider: 'mapbox' }, s.mapboxNote)
   }
 
   const manifest = {
@@ -1486,7 +1716,7 @@ function writeManifestAndHtml(root, bundles, tokenUrlExpr, bakedToken) {
     // Consumers read the manifest as a contract; a new key would be a silent schema change.
     bundles: bundles.map((b) => ({
       ...b,
-      profiles: b.profiles.map(({ extraConfig, composesOwn, ...p }) => p),
+      profiles: b.profiles.map(({ extraConfig, composesOwn, _snippet, ...p }) => p),
     })),
   }
   mkdirSync(root, { recursive: true })
@@ -1501,7 +1731,7 @@ function writeManifestAndHtml(root, bundles, tokenUrlExpr, bakedToken) {
   // THE FRONT PAGE IS THE STUDIO (see studioRootHtml). The staging-forge chooser that used to be
   // written here (rootHtml) is retired with it; nothing is written above the tree any more.
   // …with the studio bundle's integrity, written HERE: it used to be added only by fix:sri, so running
-  // `bun run tree` after fix:sri stripped it again (rega, 2026-09-25).
+  // `bun run tree` after fix:sri stripped it again (found 2026-09-25).
   writeFileSync(join(root, 'index.html'), studioRootHtml(bakedToken, (bundles.find((b) => b.bundle === 'plugin-studio') || {}).integrity || ''))
 
 
@@ -1516,8 +1746,8 @@ function writeManifestAndHtml(root, bundles, tokenUrlExpr, bakedToken) {
     // their URL, mounted NO element, and returned a confident HTTP 200.
     //
     // ★ WHY THAT 200 WAS EXPENSIVE, not merely useless: probing a chooser is INDISTINGUISHABLE
-    // from probing a broken feature. It cost the Driver a session ("none of the elements are
-    // working" — they were; the page was a chooser presenting itself as the product) and cost an
+    // from probing a broken feature. It cost a whole session (none of the elements seemed to
+    // work — they did; the page was a chooser presenting itself as the product) and cost an
     // agent a false "the grid is completely inert" diagnosis. A page that answers 200 with no
     // element is a lying instrument, and deleting it removes a whole class of wrong answer.
     //
@@ -1580,7 +1810,7 @@ function main() {
   // They must be COPIED here or a clean build drops them and the wall falls back
   // to text placeholders while the map fails to resolve its boundaries.
   {
-    // STAGED IN A TEMP DIRECTORY, NOT public/assets (Driver decision, card BUILD-OUTPUT-IS-ONE-FOLDER:
+    // STAGED IN A TEMP DIRECTORY, NOT public/assets (decision, card BUILD-OUTPUT-IS-ONE-FOLDER:
     // public/ holds only the output folder + README.md). This step still gathers the sources
     // (data/, plugin previews, the upg-100 boundaries) into one pool and copies the fetched
     // allowlist into <tree>/assets below; the pool itself is a build intermediate. The web-root
@@ -1632,8 +1862,29 @@ function main() {
       [join(dataDir, 'adm0', 'world-adm0-web.geojson'), 'world-adm0-web.geojson'],
       [join(dataDir, 'gb-IND-ADM1-web.geojson'), 'gb-IND-ADM1-web.geojson'],
       [resolve(__dirname, '..', 'data', 'boundaries', 'gb-IND-ADM1-full-web.geojson'), 'gb-IND-ADM1-full-web.geojson'],
+      // The capitals and cities a generated map sheet draws (Natural Earth 1:10m, public domain — no credit
+      // to carry). Served here and fetched at PRINT time by library/packet/posterSheets.js, so the 170 KB is
+      // paid by a reader who prints, not bundled into every page that can. The Node generator reads the
+      // same file from its source.
+      [resolve(__dirname, '..', 'library', 'scripts', 'posters', 'data', 'ne-places.json'), 'ne-places.json'],
     ]) if (existsSync(from)) cpSync(from, join(bDir, to))
     console.log('[generate-tree] gathered boundary geojson')
+    // ★ THE MAP-SHEET GENERATOR, SERVED — not bundled. library/packet/poster-render.js is a pure module with
+    // no imports; every bundle that can print a sheet imported it, and single-file builds inline an
+    // import, so each carried ~65 KB for a print few readers make (country-posters crossed the 1.5 MB
+    // ceiling on it). Served here verbatim, posterSheets imports it BY URL at the first print, once, cached
+    // across maps. check:poster-browser-equiv asserts this copy is byte-identical to the source.
+    const libDir = join(pubAssets, 'lib')
+    mkdirSync(libDir, { recursive: true })
+    cpSync(resolve(__dirname, '..', 'library', 'packet', 'poster-render.js'), join(libDir, 'poster-render.js'))
+    // …and its CLASSIC-SCRIPT copy, for pages whose policy forbids blob: scripts (loaded with
+    // <script integrity>), written by the same transform the pin is computed from.
+    writeFileSync(join(libDir, 'poster-render.global.js'),
+      globalVariant(readFileSync(resolve(__dirname, '..', 'library', 'packet', 'poster-render.js'), 'utf8')))
+    // …and the packet/list/card TEXT in all 11 languages (~115 KB), for the same reason: every bundle that can
+    // print inlined the whole table. library/packet/packetStrings.js fetches this copy at print time, checks
+    // it against PACKET_STRINGS_SHA384, and falls back to the bundled English block if it cannot.
+    cpSync(resolve(__dirname, '..', 'library', 'scripts', 'posters', 'packet-strings.json'), join(libDir, 'packet-strings.json'))
 
     // DATA LIVES IN data/, THE WEB-ROOT IS GENERATED (the D1 reorganization):
     // source-of-truth folders that used to sit ONLY inside public/ now live in
@@ -1700,9 +1951,20 @@ function main() {
       'boundaries/world-adm0-web.geojson',           // the web copies the interactive maps fetch
       'boundaries/gb-IND-ADM1-web.geojson',
       'boundaries/gb-IND-ADM1-full-web.geojson',
+      // The map-sheet generator's two print-time fetches (library/packet/posterSheets.js): the capitals and
+      // cities it draws, and the generator itself (sha384-pinned in poster-render.integrity.js). Both were
+      // gathered into the pool above but, missing here, never reached the tree: a print would 404.
+      'boundaries/ne-places.json',
+      'lib/poster-render.js',
+      'lib/poster-render.global.js',   // the classic-script copy, same generator (see the pool stage)
+      'lib/packet-strings.json',       // the packet/list/card text, fetched at print time (packetStrings.js)
       // people-groups — all-people-groups.vue (the slim JSON only; NOT the 16 MB CSV,
       // which no element fetches and which dropin.exclude already withholds).
       'people-groups/people-groups-slim.json',
+      // …and India's states and union territories with their people groups (data/people-groups/india-states.json),
+      // fetched by library/data/indiaStates.js only when a state is needed (UPG-100's batch selection, Country
+      // Posters' India section). sha384-pinned in library/data/indiaStates.integrity.js.
+      'people-groups/india-states.json',
       // …and its compact cut (build-points.mjs): what all-people-groups actually fetches, 0.74 MB.
       'people-groups/people-groups-points.json',
       // pplr-data-maps — fetched through dataUrl() (src/utils/pplrData.js). pg-names.json loads
@@ -1764,7 +2026,7 @@ function main() {
     }
     // people-groups/lists/*.json — the ?list= / profile-config `list` prop fetches the chosen list by name
     // (frontier-500k, frontier, unreached, unengaged), so the whole folder ships. Missing, every non-default
-    // list 404'd on the built tree and drew 0 pins (go-int / rega at a71007f1).
+    // list 404'd on the built tree and drew 0 pins (measured at a71007f1).
     const listsSrc = join(pubAssets, 'people-groups', 'lists')
     if (existsSync(listsSrc)) {
       const listsDest = join(treeAssets, 'people-groups', 'lists')
@@ -1818,15 +2080,23 @@ function main() {
     //   <id>.webp  378 files, 40.9 MB — the print-resolution rasters. This is the weight
     //              that pushed the tree to 80MB and got the push rejected.
     //   <id>.html   28 files, the poster SOURCE the browser rasterises when no .webp is
-    //              present (library/packet/poster-raster.js). ~0.3 MB each.
+    //              present (library/packet/poster-raster.js). 27 MB raw, 7 MB gzipped.
     // "Neither" is what a default drop got, and it is why BOTH full-size paths 404'd:
     // export fell back to fetching <id>.html and that was not shipped either, so the
     // fallback had nothing to fetch. posterSources ships the sources WITHOUT the rasters,
     // which is the only combination the old boolean could not express.
-    // Default stays FALSE — 28 sources are ~27.9 MB raw, real weight that needs a
-    // deployment decision, not a silent default. This makes the choice available.
+    // The code default stays FALSE (real weight is a per-deployment decision); the dx-maps config
+    // turns it ON, because the prayer packet's map page fetches these and printed blank without them.
+    // ★ SOURCES ALONE LEFT 350 OF 378 POSTERS UNPRINTABLE (2026-09-29). Only the 28 zone posters
+    // have a source; the 176 city-* need OSM street tiles to regenerate (not reproducible offline,
+    // see library/scripts/posters/publish-html.mjs) and the 174 country-* have none, so their
+    // export said "poster not found (404)". So posterSources ships each poster ONCE: the source
+    // where one exists (28, ~28 MB), the raster for the rest (350, ~37 MB). HTML is the heavy form
+    // (~1 MB per source vs ~0.1 MB per raster), so generating sources for the 350 would have
+    // multiplied the weight; and the rasters are the tracked data/posters/*.webp, byte-identical,
+    // so git stores each once and the published tree adds ~0 new pack bytes.
     const posterExts = DEST_CONFIG.bundlePosters ? null                 // everything
-      : (DEST_CONFIG.posterSources ? ['.html'] : [])                    // sources only / nothing
+      : (DEST_CONFIG.posterSources ? ['.html', '.webp'] : [])           // lightest form each / nothing
     const assetDirs = (posterExts === null || posterExts.length)
       ? ['previews', 'posters', 'fonts', 'images']
       : ['previews', 'fonts', 'images']
@@ -1837,8 +2107,12 @@ function main() {
         // Selective copy: only the extensions this deployment asked for.
         mkdirSync(join(treeAssets, dirName), { recursive: true })
         let n = 0
-        for (const f of readdirSync(src)) {
+        const files = readdirSync(src)
+        // A poster with a source never also ships its raster (lightest printable form).
+        const hasSource = new Set(files.filter((f) => f.endsWith('.html')).map((f) => f.slice(0, -'.html'.length)))
+        for (const f of files) {
           if (!posterExts.some((e) => f.endsWith(e))) continue
+          if (f.endsWith('.webp') && hasSource.has(f.slice(0, -'.webp'.length))) continue
           cpSync(join(src, f), join(treeAssets, dirName, f))
           n += 1
         }
@@ -1851,7 +2125,7 @@ function main() {
     if (DEST_CONFIG.bundlePosters) {
       console.log('[generate-tree] posters/ bundled in full (bundlePosters:true) — rasters + sources')
     } else if (DEST_CONFIG.posterSources) {
-      console.log('[generate-tree] posters/*.html bundled (posterSources:true) — no rasters; export and print RASTERISE in the browser')
+      console.log('[generate-tree] posters/ bundled once each (posterSources:true) — the .html source where one exists (rasterised in the browser), else the .webp')
     } else {
       console.log('[generate-tree] posters/ NOT bundled — the wall renders from previews; export and print need posterSources:true, bundlePosters:true, or an absolute assetsBaseUrl')
     }

@@ -1,9 +1,9 @@
 // check-share-policy — one written rule for WHICH MAPS CARRY A SHARE BUTTON.
 //
-// Driver: "Some maps need a map-level share button and some do not. The Prayer
+// THE RULE: some maps need a map-level share button and some do not. The Prayer
 // Progress map is the one intended for embedding on other people's websites, so it
 // MUST have a share button. UPG-100 must not (the header already provides it).
-// Decide + record the per-map rule, then apply it."
+// The per-map rule is decided and recorded here, then applied.
 //
 // The BEHAVIOUR already existed on both of those. What did not exist was the RULE,
 // so nothing stopped the next agent adding a share button to a map that should not
@@ -68,6 +68,7 @@ const POLICY = {
   'key-cities': 'none',                   // not published
   'template-bundle': 'none',              // the STARTER, not published: a copy adds ShareButton when it becomes a real map
   'all-people-groups': 'own-button',      // was debt-no-share; ShareButton added 2026-09-24
+  'regions-dashboard': 'own-button',        // a map since its phone popup rules (2026-09-30); its one ShareButton
   // ⚠ prayer-walk-planner took a SECOND LOOK before this flipped, and the reason is worth
   // keeping: it builds a PERSONAL WALKING ROUTE from polygons the reader draws, so a share
   // link that silently drops them arrives as an empty planner — a button that reliably
@@ -173,7 +174,7 @@ if (debt.length) {
       // Links that already exist must keep opening.
       eq('a legacy JSON hash still restores', parseView('#f=' + encodeURIComponent(JSON.stringify({ affinity_bloc: 'A008' }))).filters, { affinity_bloc: 'A008' })
       eq('an old link with no q restores no search', parseView('#f=religion_family:Hinduism').search, '')
-      // QUERY MODE, requested by go-int: its board already shares as ?access=…&band=…, restored before
+      // QUERY MODE, requested by the gospel-internet board: it already shares as ?access=…&band=…, restored before
       // first render, and writes only on its own leaves so a partner's address bar is never touched. A
       // hash-only composable would have given that board TWO URL states instead of replacing its glue.
       // The host-param case is the one that matters: writing must not eat a query the page already owns.
@@ -183,7 +184,7 @@ if (debt.length) {
       eq('query round-trips filters and search', parseQuery(serializeQuery({ access: 'low', band: ['2g', '3g'] }, 'bhutan'), ['access', 'band']), { filters: { access: 'low', band: ['2g', '3g'] }, search: 'bhutan' })
       eq('query reads only declared facet keys', parseQuery('?access=low&panel=map', ['access']).filters, { access: 'low' })
       eq('query keeps a comma inside a value', parseQuery(serializeQuery({ language: ['Arabic, Sudanese'] }, ''), ['language']).filters, { language: 'Arabic, Sudanese' })
-      // ★ AN ALIAS MAP, because a param name already published cannot be renamed. go-int has shared
+      // ★ AN ALIAS MAP, because a param name already published cannot be renamed. gospel-internet has shared
       // ?access= against a bus key of access_level; insisting the two match would have renamed every
       // param on adoption and broken every link already sitting on a partner page — the exact harm this
       // card exists to prevent, delivered by the thing meant to prevent it. Driven with its real names.
@@ -192,7 +193,7 @@ if (debt.length) {
       eq('alias reads an already-shared link', parseQuery('?access=low&app=sms', ALIAS), { filters: { access_level: 'low', messaging: 'sms' }, search: '' })
       eq('an undeclared bus key keeps its own name', serializeQuery({ country: 'BT' }, '', '', { facetKeys: ALIAS }), '?country=BT')
       eq('a host param survives under an alias map', serializeQuery({ access_level: 'low' }, '', '?utm=x', { facetKeys: ALIAS }), '?utm=x&access=low')
-      // ★ BOTH SEPARATORS ON READ, ONE ON WRITE. go-int's board has always written band=yes|partial and
+      // ★ BOTH SEPARATORS ON READ, ONE ON WRITE. The gospel-internet board has always written band=yes|partial and
       // those links are on partner pages; splitting only on ',' read that back as the single value
       // "yes|partial" and matched no row, so adopting this composable would have broken every multi-value
       // link they had already shared. Reserving `|` on write is what makes accepting it on read free.

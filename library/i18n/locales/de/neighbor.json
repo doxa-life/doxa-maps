@@ -8,7 +8,7 @@
     "langCluster": "Sprachcluster",
     "flowers": "Blüten",
     "mobilize": "Mobilisieren",
-    "campaigns": "Kampagnen"
+    "campaigns": "Bewegungen"
   },
   "hints": {
     "cockpit": "Crossfilter-Zentrale",
@@ -180,6 +180,8 @@
     "title": "Nahe Nachbarn mobilisieren",
     "close": "Schließen",
     "why": "Die Gläubigen, die ein unerreichtes Volk am besten erreichen können, stehen ihm meist in Sprache und Kultur am nächsten. Dieses Werkzeug findet sie für jede unerreichte Volksgruppe mit Ralph D. Winters E-Skala und P-Skala, damit Sie planen können, wen Sie mobilisieren, in welcher Sprache und wo.",
+    "greenTitle": "Für Gemeinden: bei einem grünen Punkt beginnen",
+    "green": "Wählen Sie eine erreichte (grüne) Gruppe, in der Liste Erreichte Gruppen oder über einen grünen Punkt, um die unerreichten Völker zu sehen, die ihre Gläubigen am besten erreichen können, eine E-Stufe nach der anderen, die nächsten zuerst. Exportieren Sie dann die Liste (CSV), schreiben Sie ihren Gläubigen einen Brief oder drucken Sie ein Gebetspaket, für diese Gemeinde oder ihre Missionspartner.",
     "eTitle": "E-Skala: die Distanz, die ein Zeuge überwinden muss",
     "pTitle": "P-Skala: die Distanz zwischen einem Volk und einer Gemeinde",
     "dataTitle": "Daten und Grenzen",
@@ -193,7 +195,7 @@
     "title1": "E-1 · Sie sprechen dieselbe Sprache",
     "title2": "E-2 · Eine nahe Kultur",
     "title3": "E-3 · In der Nähe, eine andere Kultur",
-    "long1": "Gläubige, die die Sprache dieser Gruppe sprechen. Sie können das Evangelium ohne Sprachbarriere weitergeben, und eine Kampagne in dieser Sprache kann sie mobilisieren.",
+    "long1": "Gläubige, die die Sprache dieser Gruppe sprechen. Sie können das Evangelium ohne Sprachbarriere weitergeben, und eine Bewegung in dieser Sprache kann sie mobilisieren.",
     "long2": "Gläubige aus einem verwandten Volk: gleiches Völkercluster oder gleiche Sprachfamilie im selben Affinitätsblock. Ein kürzerer kultureller Schritt als ein Neuanfang.",
     "long3": "Gläubige in der Nähe (im Umkreis von 600 km oder im selben Land) mit anderer Kultur. Sie teilen die Region, nicht die Sprache.",
     "rlong1": "Unerreichte Gruppen, die die Sprache dieser Gruppe sprechen. Ihre Gläubigen können sie ohne Sprachbarriere erreichen.",
@@ -220,6 +222,11 @@
     "legend": "Kartenlegende",
     "legendUnreached": "Unerreichte Gruppe",
     "searchPlaceholder": "Unerreichte Gruppe, Land oder Sprache suchen",
+    "kind": "Welche Gruppen anzeigen",
+    "listUnreached": "Unerreichte Gruppen",
+    "listReached": "Erreichte Gruppen",
+    "searchReached": "Erreichte Gruppe, Land oder Sprache suchen",
+    "introReached": "Wählen Sie eine erreichte Gruppe (die mit den meisten Gläubigen zuerst) oder klicken Sie auf einen grünen Punkt der Karte, um die unerreichten Gruppen zu sehen, denen ihre Gläubigen am nächsten sind.",
     "pFilter": "Nach P-Stufe filtern",
     "pAll": "Alle",
     "loading": "Volksgruppen werden geladen…",
@@ -230,7 +237,7 @@
     "believersNear": "Etwa {n} Gläubige unter den Nachbarn unten.",
     "resources": "Ressourcen in seiner Sprache",
     "export": "Zielgruppensegmente exportieren (CSV)",
-    "openBridge": "Kampagne auf {lang} planen",
+    "openBridge": "Bewegung auf {lang} planen",
     "samePeople": "gleiches Volk",
     "cardStats": "~{b} Gläubige · {km} km entfernt",
     "noNeighbors": "Keine erreichten Nachbarn in diesen Daten.",
@@ -245,10 +252,12 @@
     "showNeighbors": "Ihre Nachbarn zeigen",
     "noUnreachedNeighbors": "Keine unerreichte Gruppe zählt diese Gruppe zu ihren nächsten erreichten Nachbarn.",
     "showAll": "Alle {n} zeigen",
-    "eFilter": "Nachbarn nach E-Stufe zeigen"
+    "eFilter": "Nachbarn nach E-Stufe zeigen",
+    "sheetHide": "Liste ausblenden",
+    "sheetShow": "Liste einblenden"
   },
   "camp": {
-    "intro": "Brückensprachen: Sprachen, die sowohl Gläubige als auch unerreichte Völker sprechen. Eine Kampagne in dieser Sprache, dort ausgespielt, wo die Gläubigen leben, kann sie mobilisieren, die Unerreichten in ihrer eigenen Sprache zu erreichen.",
+    "intro": "Brückensprachen: Sprachen, die sowohl Gläubige als auch unerreichte Völker sprechen. Eine Bewegung in dieser Sprache, dort angestoßen, wo die Gläubigen leben, kann sie mobilisieren, die Unerreichten in ihrer eigenen Sprache zu erreichen.",
     "searchPlaceholder": "Sprache oder Land suchen",
     "minBelievers": "Mindestens",
     "exportAll": "Liste exportieren (CSV)",
@@ -258,9 +267,27 @@
     "back": "Alle Sprachen",
     "bigBelievers": "Gläubige zum Mobilisieren ({g} Gruppen, {c} Länder)",
     "bigUnreached": "Unerreichte zum Erreichen ({g} Gruppen, {c} Länder)",
-    "export": "Diese Kampagne exportieren (CSV)",
+    "export": "Diese Bewegung exportieren (CSV)",
     "whereToRun": "Wo sie laufen soll: Gläubige nach Land",
     "believersInGroups": "~{n} in {g} Gruppen",
     "whoTheyReach": "Wen sie erreichen können"
+  },
+  "letter": {
+    "button": "Einen Brief schreiben",
+    "title": "Ein Brief an die Gläubigen der {group}",
+    "greeting": "Liebe Freunde unter den Gläubigen der {group} ({country}),",
+    "intro": "Diese {n} unerreichten Völker zählen euch zu ihren nächsten Gläubigen ({level}). Unter ihnen leben bisher nur wenige Gläubige.",
+    "item": "{name}, {country}: {pop} Menschen, Sprache {language}, {km} km entfernt.",
+    "pray": "Betet für sie: {url}",
+    "more": "…und {n} weitere. Die vollständige Liste steht im CSV-Export.",
+    "close": "Werdet ihr für sie beten und Gott fragen, wie eure Gemeinde sie segnen kann? Jedes dieser Völker ist von Gott geliebt.",
+    "sign": "In Jesu Namen,",
+    "copy": "Brief kopieren",
+    "download": "Herunterladen (.txt)"
+  },
+  "packet": {
+    "button": "Gebetspaket",
+    "label": "{group}: ihre unerreichten Nachbarn ({level})",
+    "labelCapped": "{group}: die {n} nächsten ihrer {total} unerreichten Nachbarn ({level})"
   }
 }

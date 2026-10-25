@@ -100,6 +100,9 @@ const groups = src.map((r, i) => {
     // what already exists in this group's language: the content a campaign could point to
     bible: avail(r.BibleAvailability), film: avail(r.JesusFilmAvailability), audio: avail(r.AudioResourceAvailability),
     radio: avail(r.RadioProgramAvailability),
+    // IMB's GSEC (0-6), the one reachedness NUMBER: the prayer packet's description prints its level
+    // sentence from it (library/packets/describeGroup, desc_gsec_<n>, 11 locales). Named as it reads it.
+    imb_gsec: /^[0-6]$/.test(String(r.GSEC).trim()) ? Number(r.GSEC) : null,
   }
 })
 
@@ -206,7 +209,7 @@ const COLS = ['pgid', 'name', 'iso3', 'country', 'lat', 'lng', 'pop', 'reached',
   'family', 'ethne', 'cluster', 'clusterName', 'bloc', 'blocName', 'religion', 'engaged', 'bible', 'film', 'audio', 'radio',
   // rop3 + iso3 is the join key other plugins hold (DX groups: rop3 + country). ring = centered-set ring 1-10
   // (0 = REACHED, the centre; -1 = unreached with no relation, unplaced: never drawn as a ring); ringNb = the shipped row of the reached group that sets it (-1 = none).
-  'rop3', 'ring', 'ringNb', 'slug']
+  'rop3', 'ring', 'ringNb', 'slug', 'imb_gsec']
 // Repeated strings are dictionary-encoded (the value in the row is an index into dict[col]); this
 // halves the file. A reader decodes with dict[col][row[j]].
 const DICT_COLS = ['iso3', 'country', 'lang', 'langName', 'family', 'cluster', 'clusterName', 'bloc', 'blocName', 'religion']

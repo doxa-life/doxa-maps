@@ -12,7 +12,7 @@
   row, its full composition tree is drawn indented, so a defect can be pinned on the exact nested
   element responsible. This is the DX viewing surface:
   the spot to SEE every plugin element work, in one place, ordered by capability, with the embed
-  snippet for each — so a developer (or the Driver) can review each element and give feedback.
+  snippet for each — so a developer (or a reviewer) can review each element and give feedback.
 
   ★ WHY AN ELEMENT, NOT A PAGE. Every plugin in this system is a compiled Vue custom element, so
     it supports all five deployment methods (iframe · script-tag/custom-element · direct-JS
@@ -76,6 +76,12 @@
           <path d="M12 16v5" />
         </svg>
       </span>
+      <!-- ON A PHONE the layout hides the header's #meta slot (its 56px bar has no room for it), and the
+           "Hide header" button in #meta went with it, so a phone could not collapse the header at all. This
+           copy shows only at phone width, pinned to the header's end corner; the one in #meta serves wider
+           screens. The floating "Show header" button below brings the header back, as on a desktop. -->
+      <button type="button" class="ps-hide-header-phone" :title="tr('hideHeader')" :aria-label="tr('hideHeader')"
+        @click="setHeaderHidden(true)"><span aria-hidden="true">⌃</span></button>
     </template>
 
     <!-- #meta: the bundle/element count + an i18n locale toggle. The studio previews LOCALISED
@@ -100,7 +106,7 @@
           </li>
         </ul>
       </span>
-      <!-- THE HEADER SETS THE PROPS EVERY PLUGIN GETS (Driver, 2026-09-25): language (above), the map
+      <!-- THE HEADER SETS THE PROPS EVERY PLUGIN GETS (2026-09-25): language (above), the map
            ENGINE, and — under Settings — the Mapbox token or the URL it comes from. Each is kept in THIS
            browser (localStorage), handed to every pane as its profile-config prop, and published on the
            window for maps nested inside composites; changing one re-mounts the maps. -->
@@ -129,7 +135,7 @@
         <form v-if="settingsOpen" class="ps-token-panel" @submit.prevent="applyToken">
           <p class="ps-token-head">{{ tr('mapToken') }}</p>
           <label class="ps-token-label">{{ tr('tokenPaste') }}
-            <input class="ps-token-input" v-model.trim="tokenDraft" placeholder="pk.eyJ…" autocomplete="off" spellcheck="false" />
+            <input class="ps-token-input" v-model.trim="tokenDraft" placeholder="MAPBOX_PUBLIC_TOKEN…" autocomplete="off" spellcheck="false" />
           </label>
           <label class="ps-token-label">{{ tr('tokenUrlLabel') }}
             <input class="ps-token-input" v-model.trim="urlDraft" type="url" placeholder="https://doxa.life/api/maps/token" autocomplete="off" spellcheck="false" />
@@ -154,7 +160,7 @@
 
     <!-- Toolbar strip: the active element's identity and copy-embed. Kept to ONE line on purpose —
          the plugin is what the studio is for, so it gets the rest of the main area. (A "Composed of"
-         panel used to sit here; the Driver removed it 2026-09-24 because it took the plugin's space.
+         panel used to sit here; it was removed 2026-09-24 because it took the plugin's space.
          Composition lives in the rail, indented under each composite.) -->
     <template #toolbar>
       <div class="ps-toolbar" v-if="active">
@@ -219,6 +225,7 @@ import StudioTree from './src/StudioTree.vue'
 import { LANGUAGES, loadLocale, saveLocale, getLanguage, normaliseLocale } from '@map/layouts/app-wrapper-material/languages.js'
 import { publishMapToken, clearMapToken } from '@map/composables/useSharedMapToken.js'
 import { loadScriptOnce, whenTagDefined } from '@map/utils/embedScript.js'
+import { readViewKeys, writeViewKeys, onAddressChange, urlOwnerOf, commitUrl, ownAddress } from '@map/composables/useViewAddress.js'
 
 // The reader's own map token / token-service URL. localStorage only: never written into the build,
 // never sent anywhere but Mapbox (the token) or the URL the reader typed (the service).
@@ -238,8 +245,8 @@ const PS_SHADOW_CSS = `
 .ps-logo { display:inline-flex; align-items:center; }
 .ps-logo svg { display:block; }
 .ps-count { color:#6d766e; }
-/* THE HEADER'S MENUS SIT ABOVE EVERY PLUGIN (Driver, 2026-09-25: "the Mapbox token menu is not on top …
-   it is underlapping the plugins"). The header row and the pane area are siblings with no stacking context
+/* THE HEADER'S MENUS SIT ABOVE EVERY PLUGIN (2026-09-25: the Mapbox token menu was not on top;
+   it slid under the plugins). The header row and the pane area are siblings with no stacking context
    of their own, so a menu at z-index 30 competed with each plugin's own chrome (a filter bar at 55, a drawer
    at 1000) and lost. The header now stacks above the content, and the pane area is ISOLATED: whatever
    z-index a plugin uses stays inside its pane. */
@@ -248,6 +255,8 @@ const PS_SHADOW_CSS = `
 .ps-token { position:relative; display:inline-flex; }
 .ps-show-header { position:fixed; top:8px; inset-inline-end:8px; z-index:2147483000; display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid #d1d4cd; border-radius:999px; background:rgba(255,255,255,.94); color:#3b463d; font:600 12px system-ui, sans-serif; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.18); }
 .ps-show-header:hover, .ps-show-header:focus-visible { background:#ffffff; outline:2px solid #92b195; }
+.ps-hide-header-phone { display:none; }
+@media (max-width:760px) { .ps-hide-header-phone { display:inline-flex; position:fixed; top:6px; inset-inline-end:8px; z-index:4; align-items:center; justify-content:center; width:44px; height:44px; padding:0; border:1px solid #d1d4cd; border-radius:var(--vtl-radius,8px); background:#d1d4cd; color:#3b463d; font:18px/1 system-ui, sans-serif; cursor:pointer; } }
 .ps-token-dot { width:8px; height:8px; border-radius:50%; background:#b8bdb4; }
 .ps-token-dot.is-yours, .ps-token-dot.is-url { background:#92b195; }
 .ps-token-dot.is-built { background:#c9b36a; }
@@ -388,16 +397,15 @@ const HEAVY_ELEMENTS = new Set([
   // composites that NEST a map, so they own a context too (measured, see above)
   'dashboard-plus-grid', 'research-dashboard-map', 'demo-map', 'all-people-groups',
   'country-posters-map', 'key-cities-map', 'research-map-plus-grid',
-  // gospel-internet-board owns up to TWO contexts (its map and the language-tree whiteboard; go-int).
+  // gospel-internet-board owns up to TWO contexts (its map and the language-tree whiteboard).
   // A profile can also declare "heavy": true in its .meta.json, which the manifest carries (below).
   'gospel-internet-board'
 ])
 
 // SUPERSEDED BUNDLES — built, still embeddable, but NOT shown in the studio. big-picture is a dark
 // header of search + four filters over the people-groups grid with the grid's own (identical)
-// controls switched off: to a developer it is the grid a second time under a misleading name. The
-// Driver, 2026-09-24: "there should not be people groups grid twice … this is just a clone of people
-// groups grid". The real Big Picture is dashboard-plus-grid (the app shell's first tab), and
+// controls switched off: to a developer it is the grid a second time under a misleading name
+// (2026-09-24: the people-groups grid must not appear twice as a clone of itself). The real Big Picture is dashboard-plus-grid (the app shell's first tab), and
 // doxa-maps-spa's NOT_EXPERIMENTAL already hides big-picture for the same reason.
 const STUDIO_HIDDEN = new Set(['big-picture'])
 
@@ -413,8 +421,8 @@ for (const [path, mod] of Object.entries(import.meta.glob('../../library/i18n/lo
 }
 
 // DISPLAY NAMES — what a row is CALLED. Display only: the row key, the URL hash, the stored last-tab and
-// the <tag> under the name are unchanged, so links and memory keep working. AUTO-DETECTED (the Driver:
-// never hardcode): the plugin's own <profile>.meta.json label, carried by the manifest; failing that, a
+// the <tag> under the name are unchanged, so links and memory keep working. AUTO-DETECTED (never
+// hardcoded): the plugin's own <profile>.meta.json label, carried by the manifest; failing that, a
 // readable name made from its ids ("Gospel Internet · Board"), never a bare profile id (a row once read
 // just "board"). DISPLAY_NAME is an OVERRIDE only, and empty unless a label must differ from the meta.
 const DISPLAY_NAME = {}
@@ -443,16 +451,14 @@ const WIDGET_CSS = `
 [data-studio-widgets^="top"] [data-widget]{flex-direction:column-reverse}
 [data-widget-panel]{display:none;position:relative;width:360px;max-width:calc(100vw - 32px);height:min(480px,calc(100vh - 110px));height:min(480px,calc(100dvh - 110px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));border-radius:16px;overflow:hidden;background:#0b0f14;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 [data-widget-panel][data-open]{display:block}
-[data-widget-bubble]{position:relative;display:inline-flex;align-items:center;gap:8px;height:48px;max-width:min(360px,calc(100vw - 32px));padding:0 18px 0 14px;border:1px solid #334155;border-radius:999px;background:#0f172a;color:#e5e7eb;font:600 14px/1 system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+[data-widget-bubble]{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid #334155;border-radius:999px;background:#0f172a;color:#e5e7eb;font:600 14px/1 system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 [data-widget-bubble]:focus-visible{outline:3px solid #7dd3fc;outline-offset:3px}
 [data-wb-icon]{display:grid;place-items:center;flex:none;color:#38bdf8}
 [data-wb-icon] svg,[data-wb-chev] svg{width:20px;height:20px;display:block}
-[data-wb-text]{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-[data-widget-bubble][data-listening="true"]{width:min(300px,calc(100vw - 32px))}
-[data-widget-bubble][data-listening="true"] [data-wb-text]{flex:1 1 auto}
 [data-wb-dot],[data-wb-chev]{display:none;flex:none}
-[data-wb-dot]{width:10px;height:10px;border-radius:50%;background:#ef4444}
+[data-wb-dot]{position:absolute;top:1px;right:1px;width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px #0f172a}
 [data-widget-bubble][aria-expanded="true"] [data-wb-chev]{display:block}
+[data-widget-bubble][aria-expanded="true"] [data-wb-icon]{display:none}
 [data-widget-bubble][data-listening="true"]{border-color:#ef4444;background:#1f0f12;animation:studio-widget-pulse 1.4s ease-out infinite}
 [data-widget-bubble][data-listening="true"] [data-wb-dot]{display:block}
 [data-widget-bubble][data-listening="true"] [data-wb-icon]{color:#6b7280}
@@ -465,12 +471,12 @@ const WIDGET_CSS = `
   [data-studio-widgets$="right"]{right:max(8px,env(safe-area-inset-right))}
   [data-studio-widgets$="left"]{left:max(8px,env(safe-area-inset-left))}
   [data-widget-panel]{width:calc(100vw - 16px);max-width:none;height:60vh;height:60dvh}
-  [data-widget-bubble]{max-width:calc(100vw - 16px)}
 }`
 const WIDGET_ICON_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 18v4"/></svg>'
 const WIDGET_ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
-// The pill: [recording dot] [mic] [label, or the last words while recording] [chevron when open]
-const WIDGET_PILL = '<span data-wb-dot aria-hidden="true"></span><span data-wb-icon>' + WIDGET_ICON_OPEN + '</span><span data-wb-text></span><span data-wb-chev>' + WIDGET_ICON_CLOSE + '</span>'
+// The bubble: a mic in a small circle (a chevron while its panel is open), a red dot while it records. It shows
+// no text: its name is its accessible label and tooltip, so it takes the corner and nothing more.
+const WIDGET_PILL = '<span data-wb-dot aria-hidden="true"></span><span data-wb-icon>' + WIDGET_ICON_OPEN + '</span><span data-wb-chev>' + WIDGET_ICON_CLOSE + '</span>'
 
 export default defineComponent({
   name: 'PluginStudio',
@@ -569,9 +575,9 @@ export default defineComponent({
         .map(c => ({ cap: c, label: CAP_LABEL[c] || ('capability ' + c), rows: byCap[c] }))
     },
     // The RAIL MODEL the Explorer tree (src/StudioTree.vue) paints: ONE list, highest capability to
-    // lowest (Driver, 2026-09-24: "everything in studio organized by highest capability to lowest",
-    // "the composability in the capability sidebar … to understand the interoperability and the
-    // various elements that go into each plugin", "it needs to be collapsible").
+    // lowest (2026-09-24: everything in the studio ordered from highest capability to lowest, the
+    // composition shown in the capability sidebar so the interoperability and the elements that go
+    // into each plugin can be understood, and all of it collapsible).
     //
     //   CAP 5 → CAP 1 sections. Every plugin has exactly ONE canonical node (depth 0) in its own tier,
     //   and a composite's parts hang under it (depth 1+), ordered by capability at each level, folded
@@ -583,15 +589,15 @@ export default defineComponent({
     //   plugin left no single name to report it by; a node that only TARGETS the canonical row has no
     //   identity of its own, so nesting and the one-name rule coexist.
     treeSections() {
-      // ★ LAID OUT LIKE plugin-designs/ (Driver, 2026-09-26): one FOLDER per BUNDLE, its ELEMENTS inside,
+      // ★ LAID OUT LIKE plugin-designs/ (2026-09-26): one FOLDER per BUNDLE, its ELEMENTS inside,
       // bundles grouped by their HIGHEST capability (5 → 1) and sorted by name within a group. A bundle
       // with one element is shown as that element (a folder of one is noise). A composite's parts still
       // hang under its element, folded, each TARGETING its canonical row (one identity per plugin).
       const treeOf = new Map(this.compositionTrees.map(t => [t.nodes[0].selects, t]))
       const byBundle = new Map()
       for (const r of this.rows) { if (!byBundle.has(r.bundle)) byBundle.set(r.bundle, []); byBundle.get(r.bundle).push(r) }
-      // ★ EVERY PLUGIN IS CAPABILITY 1-5 (the Driver, 2026-09-27, replacing the Experimental section he
-      // asked for earlier the same day): each bundle sits in the section of its highest capability. A bundle
+      // ★ EVERY PLUGIN IS CAPABILITY 1-5 (2026-09-27, replacing the Experimental section added
+      // earlier the same day): each bundle sits in the section of its highest capability. A bundle
       // whose .meta.json "stage" is not production says so on its own rows instead; the gallery reads the
       // same field.
       const bundles = [...byBundle.entries()].map(([bundle, rows]) => ({ bundle, rows, cap: Math.max(...rows.map(r => r.cap)) }))
@@ -636,7 +642,7 @@ export default defineComponent({
     // ★ ONE TREE PER COMPOSITE, built ENTIRELY from the manifest's `composes` edges — no bundle names
     // or child lists live in this file, so a new composite appears here with zero edits.
     //
-    // Depth is FULL. The Driver's acceptance test is
+    // Depth is FULL. The acceptance test is
     // "can I point at a defect and NAME the single element responsible" — and a defect in the grid
     // inside big-picture inside this studio is two levels down, so a depth-1 list could not name it.
     // A child is expanded only when it is itself a composite (CAP 4+) whose bundle declares edges; a
@@ -644,9 +650,9 @@ export default defineComponent({
     // cycle, so a manifest that ever declares A→B→A costs one row, not a hung rail.
     //
     // A ref that resolves to no published plugin (big-picture's bp-research-header) is KEPT as a
-    // `part` row pointing at its parent. The Driver's worked example is exactly this split: Big
-    // Picture = research header on top + people-groups grid below, and he must be able to say which
-    // half is broken. Dropping the part would hide half of that answer; it cannot be a link to its
+    // `part` row pointing at its parent. The worked example is exactly this split: Big
+    // Picture = research header on top + people-groups grid below, and a reviewer must be able to say
+    // which half is broken. Dropping the part would hide half of that answer; it cannot be a link to its
     // own page because it has none, so it opens the composite it lives in.
     compositionTrees() {
       const out = []
@@ -739,7 +745,7 @@ export default defineComponent({
     },
     activeLang() { return getLanguage(this.locale) || { code: this.locale, flag: '🌐', nativeName: this.locale } },
     // Right-to-left for a right-to-left language (languages.js marks Arabic dir:'rtl'), which is what
-    // switches on VerticalTabsLayout's :dir(rtl) mirror — rega's 5e7f73d0, which doxa-maps-spa turns on
+    // switches on VerticalTabsLayout's :dir(rtl) mirror (5e7f73d0), which doxa-maps-spa turns on
     // the same way. Without this the mirror compiled into the studio but never applied.
     uiDir() { return (this.activeLang && this.activeLang.dir) === 'rtl' ? 'rtl' : 'ltr' }
   },
@@ -757,6 +763,28 @@ export default defineComponent({
         .catch(() => {})
     }
     this.loadManifest()
+    // Back / Forward re-open the tab the address names; they never write (useViewAddress.js says why).
+    this._offAddress = onAddressChange(({ tab }) => {
+      const key = this.keyOfTab(tab)
+      if (key) this.select(key, { fromHistory: true })
+      else if (this.rows.length) this.select(this.rows[0].key, { fromHistory: true })
+    })
+    // A nested composite's own choice (its open pane, its place) is announced up to here and written beside ?tab=,
+    // while this page owns its address. Only pane and place: the tab is Studio's own.
+    this._offOwn = ownAddress(this.$el, () => urlOwnerOf(this.cfg))
+  },
+  // The corner-widget hosts live on window.__doxaStudioWidgets so a HOT UPDATE remounts Studio onto
+  // the same hosts and a live widget (Rudder) keeps its state. A real unmount must release them, or
+  // the hosts and every widget element in them stay pinned on the page after Studio is gone.
+  beforeUnmount() {
+    // FIRST, before the hot-update return below: a remounted Studio adds its own listener, and a kept one would
+    // re-apply every Back twice.
+    if (this._offAddress) { this._offAddress(); this._offAddress = null }
+    if (this._offOwn) { this._offOwn(); this._offOwn = null }
+    if (import.meta.hot) return
+    const W = window.__doxaStudioWidgets
+    if (W && W.hosts) for (const h of Object.values(W.hosts)) { try { h.remove() } catch (_) {} }
+    delete window.__doxaStudioWidgets
   },
   methods: {
     // ── MAP TOKEN ────────────────────────────────────────────────────────────────────────────────
@@ -970,7 +998,7 @@ export default defineComponent({
             cap,
             icon: CAP_ICON[cap] || 'embed',
             description: p.description || '',
-            // CORNER WIDGET (the Driver, BUILD-CORNER-WIDGET-CLASS): a profile whose .meta.json declares
+            // CORNER WIDGET (BUILD-CORNER-WIDGET-CLASS): a profile whose .meta.json declares
             // "widget": { "corner": ... } is mounted once in a fixed corner of the Studio, not in a pane.
             widget: (p.widget && ['bottom-right', 'bottom-left', 'top-right', 'top-left'].includes(p.widget.corner)) ? p.widget.corner : '',
             heavy,
@@ -985,25 +1013,49 @@ export default defineComponent({
       out.sort((a, b) => b.cap - a.cap || a.bundle.localeCompare(b.bundle) || a.label.localeCompare(b.label))
       return out
     },
-    // ★ WHICH TAB OPENS, in priority order. Driver: "when the plugin studio opens, it doesn't by
-    // default select the first tab. It tells you to select an element from the list. It just needs
-    // to auto select the 1st tab and remember using local storage what tab I was on. If I reload
-    // the screen so it will go back to the previously selected tab."
+    // ★ WHICH TAB OPENS, in priority order. The studio used to open on "select an element from the
+    // list" instead of a tab. It opens the first tab, remembers in localStorage the tab you were on,
+    // and a reload goes back to that tab.
     //
-    //   1. the URL hash   — an explicit, shareable request always wins over a remembered one
-    //   2. localStorage   — what you were last looking at, so a reload is not a fresh start
-    //   3. the first row  — never leave the pane empty
+    //   1. ?tab=          — the view address (useViewAddress.js): a reload and a SENT link open it
+    //   2. the URL hash   — the old shareable form (#bundle/profile); rewritten to ?tab= on first paint
+    //   3. localStorage   — what you were last looking at, so a reload is not a fresh start
+    //   4. the first row  — never leave the pane empty
+    //
+    // The first select() is a REPLACE (first paint); a reader's click is a PUSH (one Back step), written only
+    // where this page owns its address (urlOwner 'app', baked into our own leaf page; a partner's page and a
+    // framed leaf only read).
     //
     // Called once after the manifest lands, so `rows` is populated and every candidate can be
     // checked against it. A remembered key whose bundle was renamed or removed simply fails that
     // check and falls through to the first row — a stale key must never render an empty pane, which
     // is the very state this replaces.
     route() {
+      const first = { firstPaint: true }
+      const asked = this.keyOfTab(readViewKeys(typeof location !== 'undefined' ? location.search : '').tab)
+      if (asked) { this.select(asked, first); return }
       const h = (typeof location !== 'undefined' && location.hash || '').replace(/^#\/?/, '')
-      if (h && this.rows.some(r => r.key === h)) { this.select(h); return }
+      if (h && this.rows.some(r => r.key === h)) {
+        this.select(h, first)
+        // The old #bundle/profile link now reads as ?tab=; its hash goes, so the address has ONE form.
+        if (urlOwnerOf(this.cfg) === 'app') commitUrl({ hash: '' })
+        return
+      }
       const remembered = this.readLastTab()
-      if (remembered && this.rows.some(r => r.key === remembered)) { this.select(remembered); return }
-      if (this.rows.length) this.select(this.rows[0].key)
+      if (remembered && this.rows.some(r => r.key === remembered)) { this.select(remembered, first); return }
+      if (this.rows.length) this.select(this.rows[0].key, first)
+    },
+    // ★ A ROW'S TAB ID. A row key is "<bundle>/<profile>", and the address takes plain ids only (no "/"), so the tab
+    // WRITTEN is "<bundle>__<profile>": stable, since a profile name another bundle adopts later cannot make a sent
+    // link mean a different row. READ: that form, or a bare profile name while it names exactly one row (a typed
+    // ?tab=poster-styles), else '' (the default tab opens).
+    tabIdOf(key) { return String(key || '').replace('/', '__') },
+    keyOfTab(id) {
+      if (!id) return ''
+      const full = id.includes('__') ? id.replace('__', '/') : ''
+      if (full && this.rows.some(r => r.key === full)) return full
+      const byProfile = this.rows.filter(r => r.key.split('/')[1] === id)
+      return byProfile.length === 1 ? byProfile[0].key : ''
     },
     // Storage is keyed per HOST (pathname), because two cap-5 shells served from one origin would
     // otherwise fight over a single key and each reload would yank the other's tab.
@@ -1021,7 +1073,7 @@ export default defineComponent({
     writeLastTab(key) {
       try { window.localStorage.setItem(this.storageKey(), key) } catch (_) { /* storage unavailable */ }
     },
-    select(key) {
+    select(key, { fromHistory = false, firstPaint = false } = {}) {
       // ★ BAIL BEFORE TOUCHING STATE if `key` names no real row. A composition-folder's TOP row can be
       // a SYNTHETIC head (see compositionTrees) for a composite that cannot list itself as one of its own
       // tabs (plugin-studio nesting <plugin-studio> would be infinite regress — same reasoning
@@ -1049,6 +1101,8 @@ export default defineComponent({
       // Remember it AFTER confirming the row exists, so a bad key is never written back — otherwise
       // one stray select() would poison the next reload with a key that fails route()'s check.
       this.writeLastTab(key)
+      // The view address: a reader's choice is a push, the first paint a replace, Back/Forward never writes.
+      if (!fromHistory) writeViewKeys({ tab: this.tabIdOf(key) }, { owner: urlOwnerOf(this.cfg), push: !firstPaint, el: this.$el })
       // A heavy row's slot only exists after the v-if subtree renders, so wait a tick before
       // mounting into it — on the first activation the ref is null at this point.
       if (!row.mounted) this.$nextTick(() => { if (this.activeKey === row.key) this.mountElement(row) })
@@ -1103,7 +1157,7 @@ export default defineComponent({
           const btn = document.createElement('button')
           btn.type = 'button'
           btn.setAttribute('data-widget-bubble', '')
-          // A catalogue label per widget ("widget:<row key>"), not the row key (rega / repo: the button read
+          // A catalogue label per widget ("widget:<row key>"), not the row key (a review found the button read
           // the raw "rudder-voice"). Falls back to the row label for a widget with no key yet. The bubble is
           // an icon, so the label is its accessible name and tooltip.
           const wk = 'widget:' + row.key
@@ -1112,7 +1166,6 @@ export default defineComponent({
           btn.title = btn.getAttribute('aria-label')
           btn.setAttribute('aria-expanded', 'false')
           btn.innerHTML = WIDGET_PILL
-          btn.querySelector('[data-wb-text]').textContent = btn.getAttribute('aria-label')
           btn.addEventListener('click', () => this.openWidget(row, !panel.hasAttribute('data-open')))
           box.appendChild(panel); box.appendChild(btn); host.appendChild(box)
         }
@@ -1145,24 +1198,18 @@ export default defineComponent({
         el.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;overflow-y:auto;overscroll-behavior:contain;'
         // LIVE MIC, VISIBLE WHEN COLLAPSED: a widget that emits `recording` (Rudder does) turns its bubble
         // red, pulsing, with a dot while it listens, so closing the panel never hides that the mic is on.
-        // While recording the pill drops its label for the last words heard, and its mic lights only while
-        // speech is detected (`activity`), so a collapsed Rudder still shows it is hearing the reader.
+        // Its mic lights only while speech is detected (`activity`), so a collapsed Rudder still shows it is
+        // hearing the reader; the words themselves show in the panel.
         const pill = box.querySelector('[data-widget-bubble]')
-        const text = pill.querySelector('[data-wb-text]')
         el.addEventListener('recording', (e) => {
           const on = !!(Array.isArray(e.detail) ? e.detail[0] : e.detail)
           pill.setAttribute('data-listening', on ? 'true' : 'false')
-          if (!on) { pill.setAttribute('data-speaking', 'false'); text.textContent = pill.getAttribute('aria-label') }
-          else text.textContent = ''
+          if (!on) pill.setAttribute('data-speaking', 'false')
         })
         el.addEventListener('activity', (e) => {
           const a = (Array.isArray(e.detail) ? e.detail[0] : e.detail) || {}
           if (pill.getAttribute('data-listening') !== 'true') return
           pill.setAttribute('data-speaking', a.speaking ? 'true' : 'false')
-          // A FIXED-width pill while recording (the Driver: it resized with every word): show the newest
-          // words, cut from the front, never let the pill grow.
-          const w = a.words || ''
-          text.textContent = w.length > 34 ? '…' + w.slice(-33) : w
         })
         W.els[row.key] = el
         panel.appendChild(el)
@@ -1254,8 +1301,8 @@ export default defineComponent({
 .ps-logo { display: inline-flex; align-items: center; }
 .ps-logo svg { display: block; }
 .ps-count { color: #6d766e; }
-/* THE HEADER'S MENUS SIT ABOVE EVERY PLUGIN (Driver, 2026-09-25: "the Mapbox token menu is not on top …
-   it is underlapping the plugins"). The header row and the pane area are siblings with no stacking context
+/* THE HEADER'S MENUS SIT ABOVE EVERY PLUGIN (2026-09-25: the Mapbox token menu was not on top;
+   it slid under the plugins). The header row and the pane area are siblings with no stacking context
    of their own, so a menu at z-index 30 competed with each plugin's own chrome (a filter bar at 55, a drawer
    at 1000) and lost. The header now stacks above the content, and the pane area is ISOLATED: whatever
    z-index a plugin uses stays inside its pane. */
@@ -1264,6 +1311,8 @@ export default defineComponent({
 .ps-token { position:relative; display:inline-flex; }
 .ps-show-header { position:fixed; top:8px; inset-inline-end:8px; z-index:2147483000; display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid #d1d4cd; border-radius:999px; background:rgba(255,255,255,.94); color:#3b463d; font:600 12px system-ui, sans-serif; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.18); }
 .ps-show-header:hover, .ps-show-header:focus-visible { background:#ffffff; outline:2px solid #92b195; }
+.ps-hide-header-phone { display:none; }
+@media (max-width:760px) { .ps-hide-header-phone { display:inline-flex; position:fixed; top:6px; inset-inline-end:8px; z-index:4; align-items:center; justify-content:center; width:44px; height:44px; padding:0; border:1px solid #d1d4cd; border-radius:var(--vtl-radius,8px); background:#d1d4cd; color:#3b463d; font:18px/1 system-ui, sans-serif; cursor:pointer; } }
 .ps-token-dot { width:8px; height:8px; border-radius:50%; background:#b8bdb4; }
 .ps-token-dot.is-yours, .ps-token-dot.is-url { background:#92b195; }
 .ps-token-dot.is-built { background:#c9b36a; }

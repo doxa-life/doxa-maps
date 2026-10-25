@@ -2,7 +2,7 @@
 /**
  * check-i18n-stopped-scope.mjs — createAppI18n() must succeed while a STOPPED effect scope is current.
  *
- * WHY (P0, the Driver's console, 2026-09-27): in Plugin Studio's gallery every tab after the first threw
+ * WHY (P0, seen in a live console, 2026-09-27): in Plugin Studio's gallery every tab after the first threw
  * "SyntaxError: Unexpected error" from createI18n inside createAppI18n. vue-i18n's createGlobal() runs in
  * scope.run() and throws UNEXPECTED_ERROR when that returns undefined; Vue 3.5 creates a new EffectScope
  * INACTIVE when the currently active one is stopped; and a custom element's connectedCallback ->

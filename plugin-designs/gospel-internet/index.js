@@ -1,3 +1,4 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * plugin-designs/gospel-internet/index.js — bundle entry for the GOSPEL x INTERNET BOARD.
  *
@@ -13,7 +14,6 @@
  * The RTL text plugin is installed by the map panel itself (installRtlTextPlugin before `new Map`), on
  * whichever engine resolveMapProvider picked.
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 const profileModules = import.meta.glob('./*.vue')
 

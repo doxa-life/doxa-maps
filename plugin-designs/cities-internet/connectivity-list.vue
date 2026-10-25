@@ -19,7 +19,7 @@
  *   resolution: "city"     an actual city measurement (none yet)
  *
  * and rows with no data say `unknown` rather than defaulting to a plausible number.
- * MEASURED 2026-08-01: 129 of 175 countries resolved, 46 unknown. Showing the 46 as
+ * MEASURED: 129 of 175 countries resolved, 46 unknown. Showing the 46 as
  * "unknown" is the point of the app, not a gap in it — an unknown is a research
  * target, and a fabricated figure is a lie a reader cannot detect.
  *
@@ -35,6 +35,7 @@ import { computed, inject, ref } from 'vue'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import data from './data/connectivity.json'
 import { useOptionalT } from '@map/composables/useOptionalT.js'
+import { tStatic } from '@map/i18n/index.js'
 
 const profileConfig = inject('profileConfig', ref(null))
 
@@ -42,14 +43,14 @@ const profileConfig = inject('profileConfig', ref(null))
 // i18n is OPTIONAL: useI18n() throws on a host that never installed it, so English from the
 // shipped catalog is the fallback, never a blank or a key. Region and country names are data.
 // C4 wave 3b: the guard is library/composables/useOptionalT.js now, and the fallback resolves through
-// tStatic — the RUNTIME LOCALE first, English as the last resort. exp-shepherd's call as this
-// plugin's owner (2026-09-26), on the same reasoning gospel-plugin gave: the bundle already carries
+// tStatic — the RUNTIME LOCALE first, English as the last resort. This plugin owns that
+// choice, on the same reasoning the other map plugins use: the bundle already carries
 // all 11 catalogues, so a partner embedding without vue-i18n being served English is a bug, not a
 // decision. The old enLookup was English-only, which is exactly what that served.
 // The local fill() is gone with the guard: fillParams applies the same interpolation, except it leaves
 // a placeholder for a NULL value where this fill() rendered the string "null".
 const t = useOptionalT('connectivity')
-// NUMERALS ARE HELD for the Driver (dx-shepherd, 2026-09-26): a locale-following format would switch
+// NUMERALS ARE HELD by design: a locale-following format would switch
 // 'ar' to Arabic-Indic digits. Until that is decided, numbers keep the browser-default format they
 // had before this pass; only the TEXT is translated.
 const num = (n) => (Number(n) || 0).toLocaleString()
@@ -62,6 +63,15 @@ const countries = computed(() => data.countries || [])
 const sections = computed(() => {
   const by = new Map()
   for (const c of countries.value) {
+    // ★ THE RAW DATA VALUE IS THE KEY, ALWAYS. It groups the rows here AND keys the collapse state
+    // (toggle/isShut below), so a translated key would reset every open section on a locale switch and
+    // filter on a value no row carries — the value/label trap library/composables/useFacetAggregation.js
+    // documents at OTHER_KEY. The label is projected at render instead; see regionLabel().
+    // The `|| 'Other'` this used to carry was DEAD as a fix for the heading — of 175 rows in
+    // connectivity.json none has a falsy region, and the one "Other" section is a row whose region IS
+    // the string "Other" (United States). It stays as a data guard, not as a label: a future row with
+    // no region must not key this Map on undefined. 'Other' is the sentinel that dashboard.other
+    // projects, so the guard and the label agree.
     const r = c.region || 'Other'
     if (!by.has(r)) by.set(r, [])
     by.get(r).push(c)
@@ -76,6 +86,51 @@ const sections = computed(() => {
     }))
     .sort((a, b) => b.groups - a.groups)
 })
+
+/**
+ * A region heading, translated. The catalogue's own English values ARE the data's region strings, so
+ * the map is exact-match rather than a derived slug — `latin_america_&_caribbean` and
+ * `north_america_&_non-spanish_caribbean` are not what any reasonable slug function produces, and
+ * guessing them would fail silently in ten locales at once.
+ *
+ * ★ THE KEYS ARE WRITTEN OUT IN FULL ON PURPOSE. internal/i18n-areas.mjs bundles an area only when its
+ * name appears in a reached file as a literal prefix, so the build narrows each bundle's catalogue to
+ * the areas it can see. Before this, cities-internet shipped 14 areas and NOT dashboard or wall;
+ * assembling these keys at runtime would have left every one of them unresolved in the shipped bundle
+ * while resolving perfectly in the dev tree. Measured both ways: written out, the bundle takes 16.
+ *
+ * Unknown values fall through to the raw string — a region the catalogue has never heard of is data,
+ * and showing it beats showing a key or a blank.
+ */
+const REGION_KEYS = [
+  'dashboard.wagfRegion.asia',
+  'dashboard.wagfRegion.middle_east',
+  'dashboard.wagfRegion.latin_america_&_caribbean',
+  'dashboard.wagfRegion.africa',
+  'dashboard.wagfRegion.europe',
+  'dashboard.wagfRegion.north_america_&_non-spanish_caribbean',
+  'dashboard.wagfRegion.oceania',
+  'dashboard.other',
+  'wall.na',
+]
+/**
+ * name -> key, built by asking the ENGLISH catalogue what each key says. The data's region strings are
+ * the catalogue's own English values, so English is the join and it never has to be written here — which
+ * also keeps this out of check:hardcoded-english, where an English phrase as an object key reads as a
+ * user-visible string and is really a lookup key.
+ */
+// tStatic(path, 'en') — the EXPLICIT locale argument, not t(). t()'s signature is (key, params,
+// plural), so t(k, 'en') would pass 'en' as params and return the RUNTIME locale's value, making the
+// join key locale-dependent: the map would be built from Arabic values and match no region at all.
+const REGION_KEY = Object.fromEntries(
+  REGION_KEYS.map((k) => [tStatic(k, 'en'), k]).filter(([en]) => en),
+)
+const regionLabel = (name) => {
+  const key = REGION_KEY[name]
+  if (!key) return name
+  const v = t(key)
+  return v && v !== key ? v : name
+}
 
 const collapsed = ref({})
 const isShut = (n) => !!collapsed.value[n]
@@ -95,6 +150,17 @@ const band = (a) => a === 'yes' ? 'ok' : a === 'partial' ? 'mid' : a === 'no' ? 
 const bandLabel = (a) => t('connectivity.list.band.' + (['yes', 'partial', 'no'].includes(a) ? a : 'unknown'))
 
 useShadowStyles(
+  // ★ THE LIST MUST STAY INSIDE ITS HOST BOX. This element had NO :host rule, so a custom element
+  // falls back to display:inline with no height of its own, and .ci below — position:absolute;inset:0
+  // — resolved against whatever the PARTNER page happened to have positioned. The result was measured
+  // on a partner page: content painting to y=16,799, which is 16,355px BELOW a 420px host box.
+  // display:block gives it a box; position:relative makes that box the containing block .ci resolves
+  // against; height:100% lets a definite-height slot decide; min-height is the floor for an AUTO-height
+  // host, which grows to fit instead of collapsing to nothing. .ci already carries overflow-y:auto, so
+  // once it is contained the list SCROLLS inside the box rather than overflowing it — no new scroll
+  // container is needed, only a host for the one that is already there.
+  // Pattern: regions-list.vue:408, plus the position:relative that connectivity-map needed (60cb4ff18).
+  ':host{display:block;position:relative;width:100%;height:100%;min-height:320px}' +
   '.ci{position:absolute;inset:0;overflow-y:auto;padding:20px 18px 44px;background:#f6f7f9;color:#0f1419;' +
   "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}" +
   '.ci.is-dark{background:#0a1410;color:#e5e7eb}' +
@@ -151,7 +217,9 @@ useShadowStyles(
     <section v-for="sec in sections" :key="sec.name" class="sec">
       <button type="button" class="sec-head" @click="toggle(sec.name)">
         <span class="sec-caret" :class="{ open: !isShut(sec.name) }">▶</span>
-        <h3 class="sec-name">{{ sec.name }}</h3>
+        <!-- The LABEL is translated; :key, toggle() and isShut() above and below keep the raw
+             sec.name, so collapse state survives a locale switch. -->
+        <h3 class="sec-name">{{ regionLabel(sec.name) }}</h3>
         <span class="sec-meta">
           {{ t('connectivity.list.sectionMeta', { countries: num(sec.items.length), groups: num(sec.groups) }) }}
           <template v-if="sec.unknown"> · {{ t('connectivity.list.unmeasured', { n: num(sec.unknown) }) }}</template>

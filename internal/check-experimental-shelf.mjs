@@ -105,7 +105,7 @@ const SEED = {
 
 // ── our own server, on a port nobody else can be holding ──────────────────────
 const port = await new Promise(ok => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)) }) })
-const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', 'public'], { cwd: ROOT, stdio: 'ignore' })
+const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', 'public', '--exit-with-parent'], { cwd: ROOT, stdio: 'ignore' })
 const reap = () => { try { srv.kill() } catch (_) {} }
 process.on('exit', reap); for (const s of ['SIGINT', 'SIGTERM']) process.on(s, () => { reap(); process.exit(130) })
 const BASE = `http://127.0.0.1:${port}/${TREE_NAME}`

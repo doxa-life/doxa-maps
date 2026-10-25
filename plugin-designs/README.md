@@ -56,8 +56,8 @@ plugin-designs/<your-map>/     ← one FOLDER = one BUNDLE, named after the fold
 
 ```html
 <script src="/dx-maps/<your-map>/<your-map>.js"></script>
-<your-map profile-config='{"profile":"overview","tk":"pk.eyJ..."}'></your-map>
-<your-map profile-config='{"profile":"detail","tk":"pk.eyJ..."}'></your-map>
+<your-map profile-config='{"profile":"overview","tk":"MAPBOX_PUBLIC_TOKEN"}'></your-map>
+<your-map profile-config='{"profile":"detail","tk":"MAPBOX_PUBLIC_TOKEN"}'></your-map>
 ```
 
 ## Add a map — three steps

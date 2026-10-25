@@ -3,7 +3,7 @@
   "pinHint": {
     "tapDot": "Tap a coloured dot — someone still needs prayer"
   },
-  "upg100WallHeading": "My UPG 100 List — Prayer Lists & Posters",
+  "upg100WallHeading": "My UPG100 List — Prayer Lists & Posters",
   "upg100WallTag": "Prayer Mobilization",
   "upg100WallIntroA": "How would you feed a crowd of five thousand? Jesus sat them down in groups of fifty and a hundred, and the impossible became shareable (Luke 9:14). We did the same with the 2,106 unreached people groups: 27 lists of about fifty to a hundred. Each list prints as a prayer packet and a poster, so 27 disciples, churches or local leaders can each carry one — praying for them ",
   "upg100WallIntroEmph": "by their people group name",
@@ -31,5 +31,15 @@
   "territoriesSelected": "Territories: {count}",
   "bandInRange": "✓ 50–100 band",
   "bandOutOfRange": "band 50–100",
-  "mapContextLost": "This map was unloaded to free graphics memory."
+  "mapContextLost": "This map was unloaded to free graphics memory.",
+  "nOfTotal": "{n} of {total}",
+  "mapInitFailed": "Map failed to initialize — check token and container",
+  "countryWallIntroA": "One poster per country, ready to pray, print, and put on a wall — praying for them ",
+  "countryWallIntroB": ". Regions and countries are ordered by how many unengaged people groups they hold, so the greatest need leads.",
+  "countryWallSoon": "Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it.",
+  "countryWallHeading": "Country Posters — Prayer Lists & Posters",
+  "largerScreenNotice": "This experimental map is built for larger screens. It opens here, but parts of it may not fit or work well on a phone.",
+  "desktopOnlyNotice": "{label} only supports desktop — open this page on a desktop to use it.",
+  "noticeDismiss": "Dismiss",
+  "countryPosterTooMany": "Too many people groups to fit on one poster legibly — a solution is in progress."
 }

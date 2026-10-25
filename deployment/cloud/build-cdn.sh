@@ -1,7 +1,7 @@
 #!/bin/bash
 # build-cdn.sh — one public build of the PRODUCTION branch into /data/cdn, one at a time.
-#   main is the shared sandbox the dev server follows; the public build comes only from
-#   PRODUCTION_BRANCH (default production), which moves when someone promotes main to it.
+#   The dev server follows BRANCH (the team's shared table, e.g. development); the public build comes only
+#   from PRODUCTION_BRANCH (default main), which moves only on a publish.
 #   fetch that branch into its own ref -> snapshot it -> apply ITS public exclusions ->
 #   the build steps WITHOUT the gates (memory-capped) -> check the output -> the exclusion check again
 #   (refuses the swap) -> atomic swap of /data/cdn/current.
@@ -14,7 +14,7 @@ exec 9>/tmp/build-cdn.lock
 flock -n 9 || { echo "another build is running"; exit 75; }
 echo $$ > /tmp/build-cdn.pid
 cd /app/repo
-PB="${PRODUCTION_BRANCH:-production}"
+PB="${PRODUCTION_BRANCH:-main}"
 # Its own ref, and no FETCH_HEAD: the dev server's pull loop uses FETCH_HEAD for main at the same time.
 git fetch -q --no-write-fetch-head --depth 1 origin "+refs/heads/$PB:refs/cdn/$PB" \
   || { echo "cannot fetch branch '$PB' (create it with: git push origin main:$PB)"; exit 1; }
@@ -48,6 +48,12 @@ rm -rf "$NEW"; mkdir -p /data/cdn; mv "$SNAP/public" "$NEW"
 bash "$EXDIR/apply-exclusions.sh" --check "$NEW" || { echo "REFUSED: excluded content in the build; not published"; rm -rf "$NEW" "$SNAP" "$EXDIR"; exit 1; }
 ln -sfn "$NEW" /data/cdn/current.tmp && mv -T /data/cdn/current.tmp /data/cdn/current
 echo "$SHA" > /data/cdn/COMMIT
+# The production PocketBase follows the SAME snapshot: its migrations, then a restart of pb-prod only (exit 0 = the
+# migrations changed). A failure keeps pb-prod on its last good schema; the publish itself stands.
+bash /app/repo/deployment/cloud/pb-prod-migrations.sh from "$SNAP/backend/pocketbase/pb_migrations" "$SHA"
+if [ $? -eq 0 ] && [ -f /tmp/pb-prod.pid ]; then
+  kill "$(cat /tmp/pb-prod.pid)" 2>/dev/null && echo "$(date -u +%FT%TZ) pb-prod restarting on schema $SHA"
+fi
 find /data/cdn -maxdepth 1 -name 'build-*' ! -path "$NEW" -exec rm -rf {} +
 rm -rf "$SNAP" "$EXDIR"
 echo "$(date -u +%FT%TZ) published $SHA ($PB) at /cdn/dx-maps/"

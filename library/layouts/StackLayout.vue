@@ -20,7 +20,7 @@
     everything, every section's element mounts on FIRST RENDER (not on activation). If you only want the
     visible ones to load, that's the tabs layout's job; a scroll-stack shows all.
 
-  ★ THE LAYOUT OWNS THE SCROLL — the elements do NOT. This is the Driver's scroll-page contract: a
+  ★ THE LAYOUT OWNS THE SCROLL — the elements do NOT. This is the scroll-page contract: a
     plugin dropped in a section only needs ROOM to display at full height; it never needs its own
     scrollbar. The root is `display:flow-root` with NO fixed height and NO `position:absolute; inset:0`
     — so it takes its content's natural height and the PARENT PAGE scrolls through everything. Each
@@ -80,10 +80,10 @@
 import { defineComponent } from 'vue'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { bundleTreeRoot } from '@map/utils/embedBase.js'
-import { loadScriptOnce } from '@map/utils/embedScript.js'
+import { loadScriptOnce, claimTag } from '@map/utils/embedScript.js'
 
 // ★ ANCHOR A SIBLING-BUNDLE src TO THE TREE ROOT, NOT TO A GUESSED DEPTH.
-// THE BUG (Driver-reported 2026-09-23, verbatim console text):
+// THE BUG (reported, the console text verbatim):
 //     Could not load <doxa-research-map> from ../../doxa-research-map/doxa-research-map.js
 // A composite declares its children as `src: '../../<bundle>/<bundle>.js'`. That literal is correct
 // from a ONE-deep leaf and wrong from a TWO-deep one, and the generator emits both:
@@ -110,7 +110,7 @@ function resolveBundleSrc(url) {
   const m = new RegExp('^(.*/' + TREE_SEGMENT + '/)').exec(window.location.pathname)
   if (m) return m[1] + bare
   // (2) THE DOCUMENT IS NOT INSIDE THE TREE AT ALL, so there is no segment to anchor on.
-  // Driver-reported 2026-09-23: <plugin-studio> mounts at the SERVER ROOT (/index.html) in both
+  // Reported: <plugin-studio> mounts at the SERVER ROOT (/index.html) in both
   // trees, and from there this function's only anchor was missing, so it returned the literal
   // '../../doxa-research-map/doxa-research-map.js' unchanged. The browser resolved that against
   // '/' — where '../' cannot climb — and requested /doxa-research-map/doxa-research-map.js:
@@ -243,6 +243,9 @@ export default defineComponent({
       injectScriptOnce(sec.src)
         .then(() => waitForDefine(sec.element))
         .then(() => {
+          // Name the bundle this tag actually came from, so a page carrying two bundles that both
+          // ship <sec.element> says so once instead of silently running whichever executed first.
+          claimTag(sec.element, resolveBundleSrc(sec.src))
           if (!customElements.get(sec.element)) return
           const el = document.createElement(sec.element)
           const attrs = sec.attrs || {}
@@ -255,7 +258,7 @@ export default defineComponent({
           host.innerHTML = ''
           host.appendChild(el)
         })
-        // ★ A FAILED SECTION MUST SAY SO (BUG-SIMPLE-RESEARCH-GREY-PANE, Driver reported 4x).
+        // ★ A FAILED SECTION MUST SAY SO (BUG-SIMPLE-RESEARCH-GREY-PANE, reported four times).
         // The rest of the stack still renders — that part was always right, and is why this catch
         // is per-section rather than around the whole loop. What was wrong is that it left the host
         // EMPTY and silent, so a composite whose children all failed rendered as a blank rectangle

@@ -13,7 +13,6 @@ data via an env var once silently rendered stale posters (Nepal, Bangladesh, Bhu
 - A template change is not visible in the app until previews are regenerated **and** the app rebuilt.
 - Exported PNGs go to a sibling folder (`../../../upg-100-posters/`), never `public/` — Capacitor
   packages `public/` wholesale.
-- `snapshots/` holds frozen template versions (v5 is the approved current); each has its own README.
 
 **Full reference — files, env vars, gotchas, measurement discipline:**
 **[../../../documentation/architecture/poster-generation.md](../../../documentation/architecture/poster-generation.md)**.

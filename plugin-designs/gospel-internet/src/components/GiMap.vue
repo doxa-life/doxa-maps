@@ -24,7 +24,7 @@ function setGlobal(name, value) {
  *   hoverKey     POINTS — an outline on the hovered pin, from the grid or the map. It never flies,
  *                never selects, never filters.
  *
- * HONESTY: a pin marks where a people is found within a country, not a town (the legend says so, and
+ * HONESTY: a pin marks a people group, not a town, and its position is approximate (the legend says so, and
  * how many share a point); the band is the COUNTRY's figure; a state's NFHS-5 figure is the state's.
  */
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, markRaw, inject } from 'vue'
@@ -34,9 +34,10 @@ import MapToolbar from '@map/components/map-controls/MapToolbar.vue'
 import ZoomInButton from '@map/components/map-controls/ZoomInButton.vue'
 import ZoomOutButton from '@map/components/map-controls/ZoomOutButton.vue'
 import ShareButton from '@map/components/map-controls/ShareButton.vue'
+import HelpButton from '@map/components/map-controls/HelpButton.vue'
 import { useBoardState, EMBED_PATH } from '../useBoard.js'
 import { useGiT } from '../useGiT.js'
-import { createBoardMap, reducedMotion } from '../boardEngine.js'
+import { createWhiteboardMap, reducedMotion } from '@map/maps/whiteboard-map.js'
 import { ACCESS_DETAILS, BANDS, DETAIL_FILL, DETAIL_RIM, BAND_COLOR, label } from '../model.js'
 
 const T = useGiT()
@@ -51,7 +52,7 @@ const ready = ref(false)
 // Province shading: 'zero' = groups with nothing found in their own language (from the rows in scope),
 // 'women' / 'men' = NFHS-5 ever used the internet (India only; China has no verified provincial source).
 const provinceMode = ref('zero')
-// the Driver: legends start collapsed, one tap on "Legend" opens them; the embed knob legend:"open" opens them
+// Legends start collapsed, one tap on "Legend" opens them; the embed knob legend:"open" opens them
 const legendOpen = ref(board.profileConfig.value?.legend === 'open')
 let unmounted = false
 let adm1Table = null     // { [shapeName]: { women, men } } India, NFHS-5
@@ -284,7 +285,16 @@ onMounted(async () => {
   }).catch(() => { adm1Table = null })
   try {
     if (!mapEl.value) return
-    const made = await createBoardMap(mapEl.value, board.profileConfig.value, { token: injectedToken?.value || '' })
+    // ★ THE FOUR OPTIONS ARE STATED, NEVER DEFAULTED. This is the ONE geographic caller — the three
+    // whiteboard callers all pass whiteboard:true — and the library's defaults are the inverse of what
+    // a real map needs (whiteboard:true, boundaries:false, centre [0,0], zoom 1), because it was
+    // extracted for the whiteboard case. Leaning on defaults here meant a blank basemap and no
+    // boundary attribution the moment the import moved. Stating them makes this call read the same
+    // against either module.
+    const made = await createWhiteboardMap(mapEl.value, board.profileConfig.value, {
+      whiteboard: false, boundaries: true, center: [60, 20], zoom: 1.4,
+      token: injectedToken?.value || '',
+    })
     if (made.error) { err.value = T('messages.engineMissing', `The ${made.error} map engine did not load.`, { engine: made.error }); return }
     const map = made.map
     if (unmounted) { try { map.remove() } catch (_) {} return }
@@ -353,7 +363,7 @@ useShadowStyles(
   'background:rgba(255,255,255,.96);color:#3b463d;border:1px solid #d1d4cd;border-radius:10px;padding:8px 10px;' +
   'font:12px/1.4 Roboto,-apple-system,"Segoe UI",sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.10)}' +
   '.gim-lh{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12px;margin-bottom:4px}' +
-  // a real 28px tap target (WCAG 2.5.8 wants 24): the glyph alone measured 16px (rega r75)
+  // a real 28px tap target (WCAG 2.5.8 wants 24): the glyph alone measured 16px
   '.gim-lh button{margin-inline-start:auto;border:0;background:none;color:#6d766e;cursor:pointer;font:inherit;display:inline-grid;place-items:center;width:28px;height:28px;padding:0;flex:none}' +
   '.gim-keys{display:flex;flex-wrap:wrap;gap:3px 10px;margin-bottom:6px}' +
   '.gim-key{display:inline-flex;align-items:center;gap:5px;font-size:11px}' +
@@ -378,6 +388,7 @@ useShadowStyles(
       <ZoomInButton :map="mapRef" />
       <ZoomOutButton :map="mapRef" />
       <ShareButton :embed-path="EMBED_PATH" />
+      <HelpButton hosted />
     </MapToolbar>
 
     <div v-if="legendOpen" class="gim-legend">
@@ -401,7 +412,7 @@ useShadowStyles(
         <button type="button" :aria-pressed="provinceMode === 'men'" @click="setProvinceMode('men')">{{ T('gospelInternet.legend.modeMen', 'Internet: men') }}</button>
       </div>
       <div v-if="provinceMode !== 'zero'" class="gim-note">{{ T('gospelInternet.legend.nfhs', 'India only: share of women or men aged 15-49 who have ever used the internet, by state. NFHS-5, 2019-21. China has no verified provincial source.') }} {{ nfhsAttribution }}</div>
-      <div class="gim-note">{{ T('gospelInternet.notice.pins', 'A dot marks where a people is found in its country, not a town. {n} groups share a point with another group.', { n: approxCount.toLocaleString() }) }}</div>
+      <div class="gim-note">{{ T('gospelInternet.notice.pins', 'A dot marks a people group, not a town. {n} groups share a point with another group.', { n: approxCount.toLocaleString() }) }}</div>
     </div>
     <button v-else type="button" class="gim-legend-min" @click="legendOpen = true">{{ T('gospelInternet.legend.show', 'Legend') }}</button>
   </div>

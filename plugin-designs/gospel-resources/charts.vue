@@ -46,6 +46,8 @@
  * inlining it into the IIFE would block first paint for every profile in the bundle).
  */
 import { useOptionalT } from '@map/composables/useOptionalT.js'
+import { sentenceParts, strong, ltr, keep } from '@map/composables/useSentence.js'
+import { h } from 'vue'
 import { computed, inject, ref, watch } from 'vue'
 import BarChart from '@map/components/charts/BarChart.vue'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
@@ -61,11 +63,27 @@ import { useShadowStyles } from '@map/composables/useShadowStyles.js'
    English sentence the fallback exists to protect. */
 // C4: the guard is library/composables/useOptionalT.js now. enLookup STAYS as the fallback, passed
 // in, so a bare host renders the same ENGLISH it always did -- routing this to the catalogue default
-// would make a bare host honour ?lang=ar, which is gospel-plugin's call and not this migration's.
-// C4 wave 3a, gospel-plugin's call (2026-09-26): take the LOCALE-HONOURING fallback rather than
+// would make a bare host honour ?lang=ar, which is the plugin owner's call and not this migration's.
+// C4 wave 3a, the plugin owner's call (2026-09-26): take the LOCALE-HONOURING fallback rather than
 // enLookup's English. A partner host that never installed vue-i18n now gets the reader's language,
 // with English as the last resort. tStatic resolves 'gospel.<key>' against the same catalogue.
 const tr = useOptionalT('gospel')
+
+// ★ THE HERO SENTENCE, ONE KEY. Each COUNT arrives already formatted and already pluralised from its
+// own key: vue-i18n resolves one plural form per key, so a sentence carrying three counts cannot
+// pluralise them from its own message. keep() hands the placeholders back to t() intact — without it
+// the lookup BLANKS them and the sentence renders with no values at all, in every locale at once.
+const heroSentence = computed(() => {
+  const msg = tr('gospel.charts.noneHero', keep('nNone', 'nLang', 'noScripture', 'popNone'))
+  return h('span', sentenceParts(msg, {
+    nNone: strong(fmt(nNone.value)),
+    nLang: fmt(nLang.value),
+    // The phrase is quoted from English sources and must not reverse inside an Arabic sentence, so it
+    // keeps its own dir. Passed in as a VALUE: a translator never has to reproduce the markup.
+    noScripture: ltr(tr('gospel.charts.noneHeroFound', 'no scripture and no film found in the pools checked'), true),
+    popNone: strong(fmt(popNone.value)),
+  }))
+})
 
 
 const profileConfig = inject('profileConfig', ref(null))
@@ -406,7 +424,7 @@ const active = ref('coverage')
 const picked = ref(null)
 const onPick = (row) => { picked.value = row?.meta ? row : null }
 
-/* ═══ NUMBER FORMAT IS HELD FOR THE DRIVER ════════════════════════════════════════════════
+/* ═══ NUMBER FORMAT IS HELD FLEET-WIDE ════════════════════════════════════════════════
  * This briefly formatted with the locale i18n resolved, which is almost certainly the right
  * answer — but it decides number format for THIS map alone, and the decision belongs to every
  * map at once or none. Reverted on that ground, not because the finding was wrong.
@@ -465,9 +483,13 @@ useShadowStyles(
       group that speaks it — so the language is the unit of the gap.
     </p>
 
-    <div v-if="nLang" class="gc-hero">
-      <b>{{ fmt(nNone) }}</b> of {{ fmt(nLang) }} languages have <b><bdi dir="ltr">no scripture and no film
-      found in the pools checked</bdi></b> — the languages of <b>{{ fmt(popNone) }}</b> people.
+      <!-- ONE KEY, NAMED SLOTS. This was six fragments concatenated around three counts and a bdi
+           island ("of", "languages have", "the languages of", "people."). Arabic does not put those
+           clauses in that order, so translating the fragments gives Arabic words in English order:
+           grammatically broken, and worse than leaving it English because it looks translated. The
+           sentence is now ONE message whose named placeholders a translator can reorder freely, with
+           the bold counts and the ltr island passed in as values rather than written into the catalogue. -->
+      <div v-if="nLang" class="gc-hero"><component :is="heroSentence" />
       <template v-if="noCodeGroups">
         <br><small><bdi dir="ltr">Counted BY LANGUAGE, so {{ fmt(noCodeGroups) }} people group{{ noCodeGroups === 1 ? '' : 's' }}
         with no ISO 639-3 code in the source — {{ fmt(noCodePeople) }} people — cannot appear here.

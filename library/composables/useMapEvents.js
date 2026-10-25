@@ -365,9 +365,21 @@ export function useMapEvents(options = {}) {
      * Attach all event handlers for language family layer
      */
     function attachLanguageFamilyEvents() {
-        attachPinClickHandler();
-        attachCursorHandlers('language-family-pins');
+        // ★ CLICKS BIND TO THE HITBOX ONLY, AND THAT IS DELIBERATE. addLanguageFamilyLayer creates
+        // the hitbox together with the pins, from the same source, with a larger radius and its
+        // filter mirrored — so it already covers every click the visible layer would catch. A pins
+        // layer added WITHOUT a hitbox would get no clicks at all.
+        //
+        // ⚠ BINDING BOTH IS NOT HARMLESS, IT DOUBLES EVERY CLICK. A layer-scoped click fires once
+        // per registered layer that has a feature under the point, and every visible pin has a
+        // hitbox twin at its own point — so registering this handler on both layers called it
+        // TWICE per click, 3ms apart (measured on the leaf at 1440, two different pins, both
+        // reporting both layers at the click point). That shipped as a visible bug: the second
+        // call overwrote the legend state the first had saved, so closing a detail reopened a
+        // legend the reader had collapsed. Anything that counts, toggles or reports from a pin
+        // click was also wrong by a factor of two.
         attachPinClickHandler('language-family-pins-hitbox');
+        attachCursorHandlers('language-family-pins');
         attachCursorHandlers('language-family-pins-hitbox');
         attachClusterClickHandler();
         attachCursorHandlers('clusters');
@@ -401,9 +413,16 @@ export function useMapEvents(options = {}) {
             attachRegionEvents();
         }
 
-        // People groups pins (alternate layer name)
+        // People groups pins (alternate layer name).
+        //
+        // ⚠ NOTHING CREATES THIS LAYER TODAY, so this branch never runs — the id appears only in
+        // this file. It is left in place for a map that adds it later, with the argument it was
+        // missing: the call below used to omit the layer id, which made it fall back to
+        // 'language-family-pins' (see attachPinClickHandler) and bind the wrong layer. Whoever
+        // first adds a people-groups-pins layer would have got either a duplicate binding on the
+        // language-family pins or, with no such layer present, no click handler at all.
         if (map.getLayer('people-groups-pins')) {
-            attachPinClickHandler(); // Reuse same popup logic
+            attachPinClickHandler('people-groups-pins');
             attachCursorHandlers('people-groups-pins');
         }
 

@@ -21,24 +21,50 @@
 //
 // ⚠ PRINTS IN PLACE, never window.open(). A popup is blockable and drops the reader
 // out of the map; the shared openPrintFrame mounts a hidden same-page iframe. This
-// is the mechanism the Driver asked for by name: "not supposed to open up a new
-// browser, but should open up the print dialog directly in the browser".
+// is the mechanism asked for by name: no new browser window, the print dialog
+// opening directly in the page.
 
+import { retryFetch } from './retryFetch.js'
 import { ref } from 'vue';
-import { openPrintFrame } from './printInPlace.js';
+import { printDocument } from './printInPlace.js';
+import { fetchPosterRaster, fetchPosterSource } from '../packet/poster-fetch.js';
+import { keyedError, errorText } from '../i18n/keyedError.js';
+// The packet/card text, fetched from the served tree at print time (English bundled as the fallback).
+import { loadPacketStrings } from '../packet/packetStrings.js';
 
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /**
+ * THE PRINT STANDARD — one call gives any map the poster, the card deck, the prayer list and the
+ * prayer packet (full or lightweight) for ANY item: a zone, a country, or a custom list of people.
+ * An item is `{ id, label }`; everything specific to the host arrives through the options below,
+ * and every one except `records` is optional (an absent option drops only what depends on it).
+ *
  * @param {object} opts
- *   records   async (item) => rows[]   — REQUIRED for the list and deck prints.
- *   strings   () => Promise<object>    — the packet/card i18n catalog.
- *   lang      () => string             — the app locale; the deck and packet follow it.
- *   stock     () => string             — card stock id (see card-render.js STOCK).
- *   posterUrl (item) => string|null    — the pre-rendered image, when one exists.
- *   label     (item) => string
+ *   records    async (item) => rows[]   — REQUIRED for the list, deck and packet. A row is one people
+ *                                         group: { name, slug, population, religion, country_code (ISO3),
+ *                                         image_url }. `slug` is the people-groups slug the evangelical
+ *                                         and near-neighbour tables join on.
+ *   lang       () => string             — the app locale; every print follows it.
+ *   label      (item) => string
+ *   stock      () => string             — card stock id (see card-render.js STOCK).
+ *   state      ref                      — the host's HUD state ref, when it renders its own HUD.
+ *   strings    () => Promise<object>    — the packet/card catalog; defaults to the served, pinned
+ *                                         packet-strings.json (packet/packetStrings.js, English fallback).
+ *   sheet      async (item, format) => html — a map SHEET the host generates now (posterSheets.js
+ *                                         generateSheet): 'letter' for the poster print (a vector page),
+ *                                         'packet' for the packet's page 1. Tried FIRST by both.
+ *   PAGE 1'S MAP, first that yields wins (after `sheet`):
+ *   mapImage   async (item) => url      — a map the host GENERATES (a live map's raster / data: URL).
+ *   assetsBase () => string             — where a STORED sheet lives (posters/<id>.html), lifted.
+ *   iso3Names  () => {ISO3: name}       — the table a stored sheet was labelled from, so its country
+ *                                         names print in the packet's language.
+ *   DATA PAGES, each omitted when its source is absent:
+ *   christian  () => {pctEvangelical…}  — overrides the per-list evangelical share computed from rows.
+ *   sets       () => near-neighbour table — the bounded/centered sets page (full packet only).
+ *   posterUrl  (item) => string|null    — a pre-rendered poster image, when one exists.
  */
 export function usePosterPrints(opts = {}) {
   // ⚠ ACCEPT the caller's state ref when it has one. A wall that renders its OWN
@@ -51,25 +77,59 @@ export function usePosterPrints(opts = {}) {
   const label = opts.label || ((item) => item?.label || item?.id || '');
   const lang = opts.lang || (() => 'en');
   const stock = opts.stock || (() => 'poker');
+  // ★ THE HUD SPEAKS THE READER'S LANGUAGE. Every kind and progress message this composable sets is shown
+  // in the host's HUD (a dialog a screen reader announces) and was English in every locale. A host that
+  // passes `t` (key, params, count) — PosterWall passes its plural-aware translator — gets them
+  // localized at the source; without one they stay English, exactly as before. Counts pass their number
+  // so each locale picks its own plural form.
+  const tr = (key, en, params = null, n = undefined) => {
+    const fillEn = () => String(en).replace(/\{(\w+)\}/g, (m, k) => (params && params[k] != null ? String(params[k]) : m));
+    if (typeof opts.t !== 'function') return fillEn();
+    const v = opts.t(key, params || {}, n);
+    return v && v !== key ? v : fillEn();
+  };
 
   const set = (item, kind, phase, message, pct) => {
     exportState.value = { label: label(item), kind, phase, message, pct };
   };
   const done = (item, kind) => {
-    set(item, kind, 'done', 'print dialog opened', 100);
+    set(item, kind, 'done', tr('wall.hud.printOpened', 'print dialog opened'), 100);
     setTimeout(() => { exportState.value = null; }, 900);
   };
   const fail = (item, kind, e) => {
-    set(item, kind, 'error', String(e?.message || e).slice(0, 140), 0);
+    // a keyed error (keyedError.js) in the reader's language; anything else as its own message
+    set(item, kind, 'error', errorText(e, (k, p) => tr(k, k, p)).slice(0, 140), 0);
   };
-  function dismiss() { exportState.value = null; }
+  function dismiss() {
+    const s = exportState.value;
+    exportState.value = null;
+    try { if (s && typeof s.cancel === 'function') s.cancel(); } catch (_) { /* already gone */ }
+  }
+
+  // ★ EVERY DOCUMENT THIS COMPOSABLE PRINTS LEAVES THROUGH HERE (poster, list, card deck, packet). printDocument
+  // opens the in-place frame exactly as before, except on a phone, where it prints the PAGE (printInPlace.js says
+  // why). A phone whose tap has expired by the time the document is ready gets phase 'ready' with an `action` for a
+  // Print button, when the host renders one (opts.tapToPrint); `cancel` removes the document if the reader leaves.
+  async function deliver(html, item, kind) {
+    const how = await printDocument(html, {
+      onNeedsTap: opts.tapToPrint ? (printNow, cancel) => {
+        exportState.value = {
+          label: label(item), kind, phase: 'ready', message: tr('wall.hud.readyToPrint', 'ready to print'), pct: 100,
+          action: () => { exportState.value = null; printNow(); }, cancel,
+        };
+      } : null,
+      // the shared Print bar (a host without tapToPrint) speaks the reader's language too
+      labels: { print: tr('wall.hud.printNow', 'Print'), close: tr('buttons.close', 'Close') },
+    });
+    if (how !== 'needs-tap') done(item, kind);
+  }
 
   async function rows(item) {
     if (typeof opts.records !== 'function') {
       throw new Error('this wall supplies no records provider');
     }
     const r = await opts.records(item);
-    if (!r || !r.length) throw new Error('that list resolved to no records');
+    if (!r || !r.length) throw keyedError('wall.hud.noRecords', 'that list has no people groups to print');
     return r;
   }
 
@@ -80,8 +140,8 @@ export function usePosterPrints(opts = {}) {
   // PosterWall.vue, which meant the MAP LEGEND's own "print this list's poster" had no way to
   // reach it — and the legend had grown a fourth implementation instead: a hand-rolled
   // `<a download>` of the .webp. That was wrong twice over. It silently downloads a file,
-  // which the Driver ruled out explicitly (2026-09-23: "no silent file download as the default
-  // action"), and it has NO fallback, so on the 27 lists whose .webp does not ship it simply
+  // which is ruled out explicitly (no silent file download as the default action), and it has
+  // NO fallback, so on the 27 lists whose .webp does not ship it simply
   // saved a 404.
   //
   // Two guards below were each learned the hard way and MUST survive any future move:
@@ -96,27 +156,40 @@ export function usePosterPrints(opts = {}) {
   // stays ignorant of where a bundle serves its posters from.
   async function printPoster(item) {
     if (busy()) return;
-    const kind = 'Poster';
+    const kind = tr('wall.hud.kindPoster', 'Poster');
     const base = opts.assetsBase ? opts.assetsBase() : null;
     const id = item?.id ?? item;
-    set(item, kind, 'fetch', 'fetching the poster', 25);
+    set(item, kind, 'fetch', tr('wall.hud.fetchingPoster', 'fetching the poster'), 25);
     try {
+      // ★ GENERATED FIRST (the print standard: generate at the click, store only previews). A host
+      // that can draw the sheet now (opts.sheet -> packet/posterSheets.js) prints it as a VECTOR page on
+      // letter paper — no stored file involved. The stored image and HTML remain the fallback for a host
+      // that cannot generate, and a generation that fails falls through to them rather than to nothing.
+      if (opts.sheet) {
+        set(item, kind, 'render', tr('wall.hud.generatingPoster', 'generating the poster'), 35);
+        const html = await Promise.resolve().then(() => opts.sheet(item, 'letter')).catch(() => '');
+        if (html) {
+          set(item, kind, 'save', tr('wall.hud.openingPrint', 'opening the print dialog'), 80);
+          await deliver(html, item, kind);
+          return;
+        }
+      }
       // An explicit posterUrl still wins — it is how a caller points at a poster that is not
       // <base>/posters/<id>.webp at all.
       const direct = opts.posterUrl ? opts.posterUrl(item) : null;
-      let res = null;
       const webp = direct || (base ? `${base}/posters/${id}.webp` : null);
-      if (webp) { try { res = await fetch(webp); } catch { /* a miss, see guard 1 */ } }
-      if (res && res.ok) { await deliverPoster(await res.blob(), item, kind); return; }
-      if (!base) throw new Error('no poster available for this item');
+      // Only a real image counts: a host's 200 fallback page is a miss (poster-fetch.js).
+      const raster = webp ? await fetchPosterRaster(webp) : null;
+      if (raster) { await deliverPoster(raster, item, kind); return; }
+      if (!base) throw keyedError('wall.hud.noPoster', 'no poster is available for this list');
       // NO PRE-RENDERED IMAGE? GENERATE IT. The .webp posters are ~41MB across a tree and are
       // not shipped by default; the HTML is the SOURCE and is smaller than the image it makes.
-      set(item, kind, 'render', 'generating the poster', 45);
-      const htmlRes = await fetch(`${base}/posters/${id}.html`);
-      if (!htmlRes.ok) throw new Error(`poster not found (${htmlRes.status})`);
+      set(item, kind, 'render', tr('wall.hud.generatingPoster', 'generating the poster'), 45);
+      const source = await fetchPosterSource(`${base}/posters/${id}.html`);
+      if (!source.html) throw keyedError('wall.hud.posterNotFound', 'poster not found ({status})', { status: source.status });
       const { rasterPoster, looksRendered } = await import('@map/packet/poster-raster.js');
-      const blob = await rasterPoster(await htmlRes.text(), { scale: 2 });
-      if (!(await looksRendered(blob))) throw new Error('the generated poster rendered blank');
+      const blob = await rasterPoster(source.html, { scale: 2 });
+      if (!(await looksRendered(blob))) throw keyedError('wall.hud.posterBlank', 'the generated poster came out blank');
       await deliverPoster(blob, item, kind);
     } catch (e) { fail(item, kind, e); }
   }
@@ -126,11 +199,11 @@ export function usePosterPrints(opts = {}) {
   // Constrain both axes and let object-fit letterbox it.
   const posterObjectUrls = [];
   async function deliverPoster(blob, item, kind) {
-    set(item, kind, 'save', 'opening the print dialog', 80);
+    set(item, kind, 'save', tr('wall.hud.openingPrint', 'opening the print dialog'), 80);
     const url = URL.createObjectURL(blob);
     posterObjectUrls.push(url);
     const title = `${opts.downloadPrefix || 'doxa'} — ${label(item)}`;
-    openPrintFrame(
+    await deliver(
       '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>'
       + '<style>@page{size:letter portrait;margin:12mm}'
       + 'html,body{margin:0;height:100%;background:#fff}'
@@ -139,18 +212,17 @@ export function usePosterPrints(opts = {}) {
       + '@media print{body{height:auto}'
       + 'img{width:auto;max-width:100%;max-height:100%;object-fit:contain}}</style></head>'
       + `<body><img src="${url}" alt="${esc(label(item))}"></body></html>`,
-      { autoprint: true },
+      item, kind,
     );
-    done(item, kind);
   }
 
   // ── 2. THE LIST ───────────────────────────────────────────────────────────
-  // The Driver's FIRST option — "that's what the whole app was about": the list
-  // itself as a print-paginated table with a prayer checkbox per row.
+  // The FIRST option, and what the whole app is about: the list itself as a
+  // print-paginated table with a prayer checkbox per row.
   async function printList(item, { columns, title } = {}) {
     if (busy()) return;
-    const kind = 'List';
-    set(item, kind, 'fetch', 'fetching records', 30);
+    const kind = tr('wall.hud.kindList', 'List');
+    set(item, kind, 'fetch', tr('wall.hud.fetchingRecords', 'fetching records'), 30);
     try {
       const data = await rows(item);
       const cols = columns || [
@@ -167,9 +239,9 @@ export function usePosterPrints(opts = {}) {
         return `<td${c.cls ? ` class="${c.cls}"` : ''}>${esc(v)}</td>`;
       }).join('') + '<td class="c-pray">□</td></tr>').join('');
 
-      set(item, kind, 'render', `laying out ${data.length} rows`, 70);
+      set(item, kind, 'render', tr('wall.hud.layingOutRows', 'laying out {n} rows', { n: data.length }, data.length), 70);
       const docTitle = title || `${label(item)} — ${data.length}`;
-      openPrintFrame(
+      await deliver(
         `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(docTitle)}</title>`
         + '<style>'
         + '@page{size:letter portrait;margin:14mm 12mm}'
@@ -189,9 +261,8 @@ export function usePosterPrints(opts = {}) {
         + `<p>${data.length} entries · pray for them by name</p></div>`
         + `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
         + '</body></html>',
-        { autoprint: true },
+        item, kind,
       );
-      done(item, kind);
     } catch (e) { fail(item, kind, e); }
   }
 
@@ -200,18 +271,17 @@ export function usePosterPrints(opts = {}) {
   // than letter paper. The geometry lives in the shared card renderer.
   async function printCardDeck(item) {
     if (busy()) return;
-    const kind = 'Card Deck';
-    set(item, kind, 'fetch', 'fetching records', 30);
+    const kind = tr('wall.hud.kindCardDeck', 'Card Deck');
+    set(item, kind, 'fetch', tr('wall.hud.fetchingRecords', 'fetching records'), 30);
     try {
       const data = await rows(item);
       const [{ createCardRenderer }, strings] = await Promise.all([
         import('../packet/card-render.js'),
-        opts.strings ? opts.strings() : import('../scripts/posters/packet-strings.json').then((m) => m.default || m),
+        opts.strings ? opts.strings() : loadPacketStrings(opts.assetsBase ? opts.assetsBase() : null),
       ]);
-      set(item, kind, 'render', `laying out ${data.length} cards`, 70);
+      set(item, kind, 'render', tr('wall.hud.layingOutCards', 'laying out {n} cards', { n: data.length }, data.length), 70);
       const R = createCardRenderer({ strings, lang: lang(), stock: stock() });
-      openPrintFrame(R.buildDeck(item, data), { autoprint: true });
-      done(item, kind);
+      await deliver(R.buildDeck(item, data), item, kind);
     } catch (e) { fail(item, kind, e); }
   }
 
@@ -231,35 +301,71 @@ export function usePosterPrints(opts = {}) {
   // to 'full', so every existing caller keeps printing exactly what it prints today.
   // The poster's <svg>, lifted into the packet's map page. Exported-shape helper so the lift is
   // unit-testable against a real generated poster without a fetch.
-  function liftPosterSvg(html, R) {
-    const svg = String(html).match(/<svg[\s\S]*?<\/svg>/);
-    if (!svg) return '';
-    return `<style>${R.mapCss(html)}</style>`
-      + `<div style="position:absolute;left:0;top:250px;width:${R.W}px;`
-      + `transform:scale(0.62);transform-origin:top center">${svg[0]}</div>`;
+  // ★ DELEGATES TO THE RENDERER. This used to carry its own copy of the page-1 wrapper (250px down,
+  // scale 0.62), one of three identical copies; packet-render.js liftMap is now the only one.
+  function liftPosterSvg(html, R, labelFor = null) {
+    return R.liftMap(html, { labelFor });
+  }
+
+  // The map's country names in the packet's language (packet/mapLabels.js). The sheet is drawn in
+  // English from the generator's ISO3 -> name table, and that table is PLUGIN data this library cannot
+  // import, so the host supplies it (opts.iso3Names, a loader). Without it, or in English, or on any
+  // failure: null, and the sheet prints exactly as drawn. The wall path had no such seam, so a zh
+  // packet printed from the wall kept INDIA, CHINA … on page 1 while the list's own path relabelled.
+  async function mapLabelFor() {
+    if (!opts.iso3Names) return null;
+    try {
+      const [iso3Name, { makeCountryLabelFor }, countryName] = await Promise.all([
+        Promise.resolve().then(() => opts.iso3Names()),
+        import('../packet/mapLabels.js'),
+        import('../utils/countryName.js').then((m) => m.countryName || m.default),
+      ]);
+      return makeCountryLabelFor({ iso3Name, countryName, lang: lang() });
+    } catch (_) { return null; }
+  }
+
+  // The first page-1 map sheet this bundle serves, in the renderer's preference order (the map-only
+  // vertical sheet, then the poster). '' when none is reachable — the packet still prints, and page 1
+  // says the map is missing.
+  async function fetchMapSheet(base, id, R) {
+    for (const file of R.mapSheetFiles(id)) {
+      try {
+        const res = await fetch(`${base}/posters/${file}`, { cache: 'force-cache' });
+        if (!res.ok) continue;
+        const html = await res.text();
+        // A 200 that is not a map sheet (an SPA fallback page) lifts to '' — keep looking.
+        if (R.liftMap(html)) return html;
+      } catch (_) { /* try the next file */ }
+    }
+    return '';
   }
 
   async function printPacket(item, { mapSvg = '', funnel = null, variant = 'full' } = {}) {
     if (busy()) return;
-    const kind = 'Prayer Packet';
-    set(item, kind, 'fetch', 'fetching people groups', 30);
+    const kind = tr('wall.hud.kindPacket', 'Prayer Packet');
+    set(item, kind, 'fetch', tr('wall.hud.fetchingGroups', 'fetching people groups'), 30);
     try {
       const data = await rows(item);
-      // `christian` is the flock-wide evangelical share behind the packet's %-evangelical page. The
-      // Node generator passes it (packet.mjs reads data/people-groups/christian-share.json); this
-      // path did not, so buildPacket's christianPage returned '' and a browser print had one sheet
-      // fewer with nothing to say so. Same seam as strings: a host may supply its own figure.
+      // `christian` is the evangelical share behind the packet's %-evangelical page — of THIS packet's
+      // own groups, summed from the per-group table (evangelicalShare.js), because the page says each
+      // box is a share of the people in this list. It used to be one DOXA-wide figure in every packet.
+      // Same seam as strings: a host may still supply its own figure (opts.christian), which wins.
       // `nearTable` feeds the FULL packet's bounded/centered sets page. Same seam as strings and
       // christian: a host that can reach the served asset pool supplies a loader (opts.sets), and a
       // host that cannot simply prints a packet without that page — setsPage's ''-without-data rule.
       // .catch(() => null): the sets page is the one page whose absence must never block a print.
-      const [{ createPacketRenderer }, { buildPacketSets }, strings, christian, nearTable] = await Promise.all([
+      const [{ createPacketRenderer }, { buildPacketSets }, { evangelicalShareFor }, strings, hostChristian, evTable, nearTable] = await Promise.all([
         import('../packet/packet-render.js'),
         import('../packet/packetSets.js'),
-        opts.strings ? opts.strings() : import('../scripts/posters/packet-strings.json').then((m) => m.default || m),
-        opts.christian ? opts.christian() : import('../../data/people-groups/christian-share.json').then((m) => m.default || m),
+        import('../packet/evangelicalShare.js'),
+        opts.strings ? opts.strings() : loadPacketStrings(opts.assetsBase ? opts.assetsBase() : null),
+        opts.christian ? opts.christian() : Promise.resolve(null),
+        opts.christian ? Promise.resolve(null)
+          : import('../../data/people-groups/evangelical-by-slug.json').then((m) => m.default || m).catch(() => null),
         opts.sets ? Promise.resolve().then(() => opts.sets()).catch(() => null) : Promise.resolve(null),
       ]);
+      // No table and no host figure: null, and the page is omitted — never a DOXA-wide stand-in.
+      const christian = hostChristian || evangelicalShareFor(data, evTable);
       // ★ THE DESCRIBER IS COMPOSED HERE AND INJECTED, because this is the BROWSER path and only it
       // can reach the Vite-only pieces. packet-render.js runs under Node too (the offline generator),
       // where importing describeGroup's country resolver would be fatal — it resolves through the
@@ -281,7 +387,7 @@ export function usePosterPrints(opts = {}) {
       const photos = new Map(
         data.filter((g) => g.image_url).map((g) => [g.slug, g.image_url]),
       );
-      set(item, kind, 'render', `printing ${data.length} people groups`, 70);
+      set(item, kind, 'render', tr('wall.hud.printingGroups', 'printing {n} people groups', { n: data.length }, data.length), 70);
       // The join runs over the SAME rows the packet prints, so the sets page cannot describe a
       // different population than the profile table beside it.
       // ── DEFAULT SUPPLIERS for hosts that pass nothing — the wall printed a packet MISSING two
@@ -295,16 +401,31 @@ export function usePosterPrints(opts = {}) {
           .then((m) => { const raw = m.default || m; return raw && Array.isArray(raw.steps) && raw.steps.length ? { steps: raw.steps } : null })
           .catch(() => null);
       }
-      // The map default lifts this bundle's own poster — the same file printPoster already reads.
-      if (!mapSvg && opts.assetsBase) {
-        try {
-          const res = await fetch(`${opts.assetsBase()}/posters/${item.id}.html`, { cache: 'force-cache' });
-          if (res.ok) mapSvg = liftPosterSvg(await res.text(), R);
-        } catch (_) { /* a cover without the map beats no packet */ }
+      // PAGE 1'S MAP, in order: the caller's explicit mapSvg; then a map the HOST GENERATES
+      // (opts.mapImage(item) -> an image URL / data: URL of its live map, e.g. a country map that has
+      // no stored sheet); then this bundle's own stored sheet. A failed or empty mapImage falls through
+      // to the sheet, and a packet with neither says so on page 1 rather than printing it blank.
+      // A sheet the host GENERATES now (opts.sheet, the map-only 'packet' format) comes before any
+      // image or stored sheet, and its drawn country names relabel like a stored sheet's.
+      // `item.mapId` names the sheet when it is not the item's own id (a custom list built from one
+      // zone prints that zone's map); `mapId: null` says the item has no sheet (a multi-zone selection),
+      // so nothing is generated or fetched and page 1 says the map is missing.
+      const mapId = item && 'mapId' in item ? item.mapId : item?.id;
+      if (!mapSvg && opts.sheet && mapId) {
+        const target = mapId === item?.id ? item : { ...item, id: mapId };
+        const html = await Promise.resolve().then(() => opts.sheet(target, 'packet')).catch(() => '');
+        if (html) mapSvg = R.liftMap(html, { labelFor: await mapLabelFor() });
+      }
+      if (!mapSvg && opts.mapImage) {
+        const src = await Promise.resolve().then(() => opts.mapImage(item)).catch(() => null);
+        mapSvg = src ? R.mapFromImage(src) : '';
+      }
+      if (!mapSvg && opts.assetsBase && mapId) {
+        const [sheet, labelFor] = await Promise.all([fetchMapSheet(opts.assetsBase(), mapId, R), mapLabelFor()]);
+        mapSvg = liftPosterSvg(sheet, R, labelFor);
       }
       const sets = nearTable ? buildPacketSets(data, nearTable) : null;
-      openPrintFrame(R.buildPacket(item, data, photos, mapSvg, funnel, christian, variant, sets), { autoprint: true });
-      done(item, kind);
+      await deliver(R.buildPacket(item, data, photos, mapSvg, funnel, christian, variant, sets), item, kind);
     } catch (e) { fail(item, kind, e); }
   }
 

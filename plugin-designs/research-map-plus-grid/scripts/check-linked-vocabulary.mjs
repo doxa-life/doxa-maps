@@ -101,7 +101,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   // ★ LISTEN BEFORE THE PAGE RUNS. The grid reports its total on its FIRST filter pass, which can happen
   // before an evaluate() after goto attaches a listener; the gate then read "the grid never reported a
-  // total" while the grid had reported one (rega, ded4b3c1). Every total is recorded from the start.
+  // total" while the grid had reported one (measured, ded4b3c1). Every total is recorded from the start.
   await page.addInitScript(() => {
     window.__lvTotals = []
     document.addEventListener('groups-filtered', (e) => { window.__lvTotals.push(e.detail?.total ?? null) }, true)

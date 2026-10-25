@@ -68,6 +68,10 @@ const GATES = [
   { script: 'verify:5-caps',            why: 'all 5 capability levels mount and render' },
   { script: 'smoke:embeds',             why: 'every shipped leaf page mounts its element' },
   { script: 'verify:map-paint',         why: 'every map leaf paints a real canvas' },
+  // verify:map-paint proves SOME engine painted. This is the only gate that asserts the MAPBOX
+  // engine drew: the canvas class plus rendered features, per curated production tab. Exits 75
+  // rather than failing when the sandbox token's tileset entitlement blocks the measurement.
+  { script: 'check:mapbox-drew',        why: 'the Mapbox engine drew on every production map tab (75 without a real token)' },
   // verify:map-paint proves a canvas painted; this proves the gospel map's PINS are on it
   // and answer a tap. It also scans every link in the index against the screened-publisher
   // list, which is a doctrine boundary rather than a rendering one.
@@ -89,6 +93,20 @@ const GATES = [
   // mounted grid was unreachable and a real wheel gesture moved 0px. Asserts with a WHEEL, not with
   // scrollHeight — scrollHeight > innerHeight was the FALSE PASS that closed this bug twice.
   { script: 'check:shell-scroll',       why: 'a wheel gesture in the cap-5 shell actually reaches the grid below the dashboard' },
+  // It crashed on load for four days (a missing import) and nothing noticed, because it ran only by hand.
+  // In this list, the one-command suite runs it; check:no-free-identifiers now reads internal/ as well.
+  { script: 'smoke:legend-info',        why: "the UPG-100 legend's info buttons speak the reader's language" },
+  // The engine rule since 2026-09-28: the default ('auto') is MapLibre whether or not a token is present.
+  // Case 2, a host token alone, is the one no other gate measured. First run, on 5b05f019e in the
+  // browser slot: 1 no token -> maplibre, 0 Mapbox requests, 2,076 colours; 2 host token alone ->
+  // maplibre, 0 Mapbox requests, 2,107 colours; 3 ?provider=mapbox + the token -> mapbox, carrying it.
+  { script: 'check:auto-engine',        why: 'the default engine is MapLibre with or without a host token; provider mapbox draws Mapbox with it' },
+  // The runtime half of "the engine it was asked for, or a visible failure": 2 providers x 3 load states
+  // on gospel's resources map, PASS on 5b05f019e. Its --poison run cannot fail by design (the six runtime
+  // cases would need the defect rebuilt into a bundle); the arm that can is check:no-silent-engine's
+  // --self-test, a source gate in gates:post.
+  { script: 'check:engine-contract',    why: "gospel's resources map uses the engine it was asked for, or fails visibly" },
+  { script: 'check:control-inset',      why: 'the band the popup pan reserves is the band the map controls really occupy, on both engines' },
 ]
 
 // ── PRECONDITION 1: a built tree ────────────────────────────────────────────
@@ -151,12 +169,12 @@ try {
 // ★ "TOKEN PRESENT" USED TO MEAN "A STRING WAS OBTAINED", NOT "A TOKEN THAT WORKS", and the two
 // differ. The only source here was https://doxa.life/api/maps/token, which serves a token
 // URL-RESTRICTED to doxa.life: measured 2026-09-23, a tile request without that Referer returns 403,
-// so every basemap renders blank while the pins draw fine — the exact symptom the Driver reported as
-// "loading the pins, but not the actual underlying map". This banner still said "(token present)".
+// so every basemap renders blank while the pins draw fine — the exact symptom reported: the pins
+// loading, but not the underlying map. This banner still said "(token present)".
 //
 // Order matters: the BUILD CONFIG token is tried first because it is the one that works from a local
 // gate (measured: config token 200, endpoint token 403, same request). It is a `pk.` public key baked
-// deliberately (Driver ruling 2026-09-21), protected by URL restrictions rather than secrecy;
+// deliberately (ruled 2026-09-21), protected by URL restrictions rather than secrecy;
 // check:public-hygiene allows pk. and fails the build on sk./tk.. The endpoint stays as a fallback
 // because a future config may legitimately carry no baked token.
 //

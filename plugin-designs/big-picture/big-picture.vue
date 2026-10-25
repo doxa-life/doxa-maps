@@ -105,17 +105,40 @@ const heading = computed(() => config.value.title
 //
 // Set on the HOST rather than on .bp-root, deliberately: `dir` takes effect through the inherited
 // CSS `direction`, and inheritance crosses shadow boundaries — so one attribute covers this
-// element's own chrome AND both nested elements beneath it. Only ever SET, never cleared: a host
+// element's own chrome AND both nested elements beneath it. Set and CLEARED, but only ever ours: a host
 // page that already declares its own dir owns that decision.
 const textDir = computed(() => {
   const l = hostLang.value || getRuntimeLocale() || detectLocale()
   return RTL_LOCALES.has(l) ? 'rtl' : 'ltr'
 })
 const _self = getCurrentInstance()
+// ★ WE CLEAR ONLY THE DIRECTION WE SET. The line below used to be a one-way
+// `if (rtl) setAttribute('dir','rtl')` with no else, so a reader who switched from an RTL locale to
+// an LTR one (ar -> zh) kept a right-to-left layout for the rest of the session: Chinese laid out
+// backwards, which reads as a broken page rather than a stale setting.
+// The original reason for never clearing is still honoured, and is why this remembers rather than
+// just removing: a host page that declares its OWN dir owns that decision, so the value found before
+// we first wrote is restored verbatim, and removed only when there was none.
+// ★ CAPTURED AT MOUNT, NOT AT FIRST WRITE. The capture used to sit inside the rtl branch, so it
+// recorded whatever `dir` happened to be on the host the first time WE wrote — and if anything else
+// had already set rtl by then, that value was recorded as "the page's own" and faithfully restored
+// forever after. MEASURED on the Big Picture leaf: ar left rtl, and zh put rtl straight back.
+// Reading it on the FIRST call instead, before any write of ours, is the only moment the attribute
+// is certainly the page's and not ours.
+let _hostDir = null
+let _weSetDir = false
 function reflectDir() {
   try {
     const host = _self?.proxy?.$el?.getRootNode?.()?.host
-    if (host && textDir.value === 'rtl') host.setAttribute('dir', 'rtl')
+    if (!host || !host.setAttribute) return
+    if (_hostDir === null) _hostDir = host.getAttribute('dir') || ''
+    if (textDir.value === 'rtl') {
+      host.setAttribute('dir', 'rtl')
+      _weSetDir = true
+    } else if (_weSetDir) {
+      if (_hostDir) host.setAttribute('dir', _hostDir); else host.removeAttribute('dir')
+      _weSetDir = false
+    }
   } catch (_) { /* no host (SSR/tests) — nothing to reflect */ }
 }
 onMounted(reflectDir)
@@ -123,7 +146,7 @@ watch(textDir, reflectDir)
 
 // The host's people-group LIST (library/lists/), handed to both children as the only key of their
 // profile-config, so nothing else about them changes. Absent = the default list.
-// ★ THE LOCALE TRAVELS WITH THE LIST (rega, row 47: big-picture rendered 31 Arabic text nodes
+// ★ THE LOCALE TRAVELS WITH THE LIST (measured: big-picture rendered 31 Arabic text nodes
 // through profile-config against 79 through ?lang=, and check:host-locale-contract measured 402
 // against 888). This handed each child ONLY the list, so the one documented channel a partner has
 // for asking a nested element to speak Arabic — its profile-config — arrived empty of any locale.
@@ -132,7 +155,7 @@ watch(textDir, reflectDir)
 // Threading it costs nothing and is what ProfileLoader would have done had one existed beneath this
 // composite, which is exactly the (C) failure mode: a composite that BAKES its children in has no
 // ProfileLoader under it, so it must do that job itself.
-// This is ONE identified gap, not a claim to have closed the whole 402/888 difference; rega
+// This is ONE identified gap, not a claim to have closed the whole 402/888 difference; a later pass
 // re-measures.
 const listConfig = computed(() => {
   const cfg = {}
@@ -152,7 +175,8 @@ const languageCode = computed(() => config.value.languageCode || '')
 
 // ── Cross-element wiring state (props/events, no shared bus) ──────────────────
 // filter: set by the HEADER via its `research-filter` event, read by the GRID as props.
-//         The FOUR real grid axes (Country excluded per Driver).
+//         The FOUR real grid axes. Country is deliberately excluded: provisional, pending a
+//         product decision.
 const filter = reactive({ query: '', wagfRegion: '', wagfBlock: '', rop1: '', religion: '' })
 // matched: set by the GRID via its `groups-filtered` event, read by the HEADER as :count.
 const matched = ref(null)
@@ -191,8 +215,8 @@ function onGroupsFiltered(payload) {
     <!-- show-total=false: the header above already shows "<N> shown" (bound to this same
          @groups-filtered total, see onGroupsFiltered), 139px above the grid's own "Total:"
          line. Measured live 2026-09-23: both rendered "2107 shown" / "Total: 2,107" — the exact
-         same number twice, above the fold, which is the redundant-header shape the Driver's
-         standing rule (hint lives in the EXISTING header, never a second one) forbids. The grid
+         same number twice, above the fold, which is the redundant-header shape the
+         standing rule forbids: a hint lives in the EXISTING header, never in a second one. The grid
          keeps its own line when embedded ALONE, where it is the only total — same pattern
          already applied in dashboard-plus-grid.vue. -->
     <div class="bp-body">

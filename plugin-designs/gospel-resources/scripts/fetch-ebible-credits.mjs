@@ -1,7 +1,7 @@
 /**
  * fetch-ebible-credits.mjs — WHO translated the Scripture this map links to.
  *
- * WHY. The brief asks for real leads: real translators and the real organisations that do the
+ * WHY. The aim is real leads: real translators and the real organisations that do the
  * work, not just a URL. A mobiliser who finds a neighbouring language already has Scripture
  * wants to know who produced it, because that organisation is the one with the linguists, the
  * relationships and very often a field team already in that country. The link answers "where";

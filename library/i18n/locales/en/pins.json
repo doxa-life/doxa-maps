@@ -1,4 +1,4 @@
 {
-  "approximate": "The dot marks where this people is found, not a town or a boundary.",
-  "sharedPoint": "It sits on the same point as {names} — {n} groups share this coordinate, so the position tells you the locality and not which group is where."
+  "approximate": "The dot marks a people group, not a town or a boundary.",
+  "sharedPoint": "It sits on the same point as {names} — {n} groups share this dot."
 }

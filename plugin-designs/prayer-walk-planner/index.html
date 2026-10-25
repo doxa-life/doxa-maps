@@ -10,9 +10,9 @@
     /* ★ FULL-VIEWPORT MOUNT (BUG-PRAYER-WALK-PLANNER-MAP-DOES-NOT-FILL-THE-PAGE). This page used
        to stage the element inside a centred 1100px card with a fixed 640px .frame — measured on
        the dev server, the map painted a 781x584 window at y=206 in a 1440x900 viewport, which is
-       exactly the Driver's report: "the map is showing up but it's not filling the full page."
+       exactly the reported defect: the map showed, but did not fill the page.
        The BUILT leaf already mounts full-viewport; the dev harness now matches it (two-host rule:
-       what the Driver sees on the dev server must be what the leaf ships). The client-side API
+       what a tester sees on the dev server must be what the leaf ships). The client-side API
        note lives in the component header now — a planner is a full-page tool, not a demo card:
        document.querySelector('prayer-walk-planner').addPolygon(coords, title) /
        window.PrayerWalkPlanner.first(). */

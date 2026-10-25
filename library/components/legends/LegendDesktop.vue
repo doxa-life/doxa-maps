@@ -13,6 +13,7 @@ import { retryableAsyncComponent } from '../../composables/retryableAsyncCompone
 import LegendRows from './LegendRows.vue'
 import PeopleGroupDetail from '../PeopleGroupDetail.vue'
 import ApproxPinNote from './ApproxPinNote.vue'
+import LegendCollapseCaret from './LegendCollapseCaret.vue'
 import { buildColocationIndex, colocatedWith } from '../../utils/colocation.js'
 // Async-import the heavier branches so the boot bundle stays lean.
 const LegendMobile = retryableAsyncComponent(() => import('./LegendMobile.vue'))
@@ -37,9 +38,10 @@ useShadowStyles(`
    left:8px, width:380px) so the LegendDesktop card and the SemanticTreeLegend
    sit at exactly the same position+size — no visible jump when the user
    clicks a pin and the detail panel swaps in over the language-family legend
-   (qa: 2026-05-02). */
-.legend-container{position:absolute;top:60px;inset-inline-start:8px;width:var(--map-legend-width,380px);max-height:calc(100vh - 80px);background:#fff;border-radius:var(--map-radius,16px);box-shadow:0 2px 8px rgba(0,0,0,0.12),0 1px 3px rgba(0,0,0,0.08);z-index:1000;overflow:hidden;display:flex;flex-direction:column;transition:width 200ms cubic-bezier(0.2,0,0,1),max-height 200ms cubic-bezier(0.2,0,0,1),min-width 200ms cubic-bezier(0.2,0,0,1),border-radius 200ms linear,box-shadow 200ms linear;will-change:width,max-height;}
-/* ── DESKTOP TYPE SCALE for the LegendRows-based card (Driver, 2026-09-16: larger, more
+   The cap is the MAP's height (100%), never the window's (100vh): a window-height cap followed a phone's URL bar.
+   */
+.legend-container{position:absolute;top:60px;inset-inline-start:8px;width:var(--map-legend-width,380px);max-height:calc(100% - 80px);background:#fff;border-radius:var(--map-radius,16px);box-shadow:0 2px 8px rgba(0,0,0,0.12),0 1px 3px rgba(0,0,0,0.08);z-index:1000;overflow:hidden;display:flex;flex-direction:column;transition:width 200ms cubic-bezier(0.2,0,0,1),max-height 200ms cubic-bezier(0.2,0,0,1),min-width 200ms cubic-bezier(0.2,0,0,1),border-radius 200ms linear,box-shadow 200ms linear;will-change:width,max-height;}
+/* ── DESKTOP TYPE SCALE for the LegendRows-based card (2026-09-16: larger, more
    readable desktop legends). The semantic-tree panel's scale lives in SemanticTreeLegend.vue
    (it renders without this card on some maps). Size only, never layout. ── */
 .legend-container .lrg-title{font-size:15px;}
@@ -68,11 +70,6 @@ useShadowStyles(`
    LegendRows. Matches SemanticTreeLegend's .stl-collapse-btn look:
    22x20px, rounded-rect, subtle dark bg + border, right-chevron SVG
    that rotates 180deg when expanded. */
-.legend-collapse-caret{background:rgba(110,118,129,0.15);border:1px solid #30363d;border-radius:5px;color:#8b949e;cursor:pointer;width:22px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:color 0.1s,background 0.1s,transform 0.18s;outline:none;-webkit-tap-highlight-color:transparent;padding:0;}
-.legend-collapse-caret:focus{outline:none;}
-.legend-collapse-caret:hover{color:#c9d1d9;background:rgba(59,70,61,0.18);border-color:#73A17F;}
-.legend-collapse-caret svg{transition:transform 0.18s;transform:rotate(180deg);}
-.legend-collapse-caret.rotated svg{transform:rotate(0deg);}
 /* Light mode caret — mirrors STL's [data-theme="light"] .stl-collapse-btn */
 .legend-container:not(.legend-dark) .legend-collapse-caret{background:rgba(208,215,222,0.4);border-color:#d0d7de;color:#57606a;}
 .legend-container:not(.legend-dark) .legend-collapse-caret:hover{background:rgba(59,70,61,0.12);border-color:#3b463d;color:#3b463d;}
@@ -86,8 +83,14 @@ useShadowStyles(`
    above the PeopleGroupDetail sticky header (.detail-header z-index:10) so
    it is always tappable even when the detail panel scrolls. The button is
    only rendered in the detail-mode template branch (see <template> below). */
-.detail-collapse-btn{position:absolute;top:10px;inset-inline-start:10px;z-index:20;background:transparent;border:none;color:transparent;cursor:pointer;width:28px;height:28px;padding:0;outline:none;-webkit-tap-highlight-color:transparent;}
-.detail-collapse-btn:focus{outline:none;}
+/* The detail-mode collapse control was an INVISIBLE 28x28 hit target (transparent fill, no
+   border, transparent colour) sitting over the panel's own corner. Keeping it invisible is
+   deliberate: making it suddenly visible is a look change nobody asked for. The slot keeps the
+   position and the 28x28 target; the shared caret inside it supplies the semantics the old
+   bare <button> lacked — aria-expanded, a direction-aware label, a focus ring. */
+.detail-collapse-slot{position:absolute;top:10px;inset-inline-start:10px;z-index:20;width:28px;height:28px;display:flex;align-items:center;justify-content:center;}
+.detail-collapse-slot .legend-collapse-caret{background:transparent;border-color:transparent;color:transparent;width:28px;height:28px;}
+.detail-collapse-slot .legend-collapse-caret:focus-visible{outline:2px solid #73A17F;outline-offset:2px;}
 /* Inside the detail panel: leave a 32px left gutter on the title text so the
    absolute-positioned .detail-collapse-btn at top:10px/left:10px does not
    overlap the people-group name. Targets the .pg-name-lead inside any
@@ -122,7 +125,7 @@ useShadowStyles(`
 
 /* Desktop slim rows — scoped to .legend-container so mobile (.legend-mobile-sheet)
    keeps its 44px tap targets. Original desktop rows were 36px tall with 6px
-   pill padding — too clunky per user feedback 2026-04-27. */
+   pill padding — too clunky in QA review (2026-04-27). */
 .legend-container .lrg-row,
 .legend-container .lft-row{min-height:24px;}
 .legend-container .lrg-item-inner,
@@ -180,6 +183,14 @@ useShadowStyles(`
 .legend-dark .legend-item-selected{outline-color:rgba(255,255,255,0.5)!important;}
 .legend-dark .legend-tree-caret{color:rgba(243,243,241,0.7)!important;}
 .legend-dark .legend-content::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.18);}
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .legend-container, .legend-reopen, .legend-collapse-caret, .legend-collapse-caret svg { transition: none !important; animation: none !important; }
+}
 `, 'legend-component')
 
 const props = defineProps({
@@ -385,12 +396,11 @@ onBeforeUnmount(() => {
          selected (LegendRows + its #title-caret slot are not on screen in
          this branch). Lives at top-left, mirroring the caret position in
          data-view, so collapse is always one tap away regardless of mode. -->
-    <button
-      v-if="legendMode === 'detail'"
-      class="detail-collapse-btn"
-      @click.stop="toggleCollapse"
-      :aria-label="t('aria.toggleLegend')"
-    ></button>
+    <!-- The detail-mode collapse control, third copy of the same caret and carrying the same two
+         gaps. Same shared control, positioned by .detail-collapse-slot. -->
+    <span v-if="legendMode === 'detail'" class="detail-collapse-slot">
+      <LegendCollapseCaret :open="!isCollapsed" :t="t" @toggle="toggleCollapse" />
+    </span>
     <button
       v-if="legendMode === 'detail'"
       class="detail-close-btn"
@@ -431,12 +441,9 @@ onBeforeUnmount(() => {
         @filter-click="handleRowFilterClick"
       >
         <template #title-caret>
-          <button class="legend-collapse-caret" @click.stop="toggleCollapse" :aria-label="t('aria.toggleLegend')">
-            <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-              <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg);transform-origin:center"/>
-            </svg>
-          </button>
+          <!-- The caret is the shared control now: it carries aria-expanded and the RTL arrow,
+               neither of which this copy had. State stays here; only the rendering moved. -->
+          <LegendCollapseCaret :open="!isCollapsed" :t="t" @toggle="toggleCollapse" />
         </template>
       </LegendRows>
       <ApproxPinNote v-if="legendMode !== 'detail'" :dark="isDark" />

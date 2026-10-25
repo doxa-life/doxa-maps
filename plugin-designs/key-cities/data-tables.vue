@@ -2,15 +2,14 @@
 /**
  * data-tables.vue — the CITIES DATA list view: every research table, one tab each.
  *
- * Four validated Tabulator tables from the flight's research corpora, each with
+ * Four validated Tabulator tables from the research corpora, each with
  * sortable/filterable columns, CSV+JSON export, and its caveats rendered IN the UI.
  *
- * > design note 2026-08-01: "all the tabulator data and trees for all the multiple
- * > various tabulator tables for all this data all organized in list format with
- * > full granularity."
+ * Design intent: present all the tabulator data and trees for the various tables
+ * in list format, at full granularity.
  *
  * The tables are produced by library/scripts/research/build-tabulator-tables.mjs
- * (the M+V of IEMV) — flat scalar rows, one row per fact, validated before write.
+ * — flat scalar rows, one row per fact, validated before write.
  *
  * WHY THE CAVEATS RENDER: a list view strips context. Someone reading
  * "Internet 12.6%" needs to know it is a NATIONAL figure, and someone reading a
@@ -28,14 +27,15 @@ const profileConfig = inject('profileConfig', ref(null))
 const isDark = computed(() => profileConfig.value?.isDark === true)
 const assetsBase = computed(() => resolveAssetsBase(profileConfig.value))
 
+// Tab labels are keyCities.tables.tabs.<id> (the template translates them).
 const TABS = [
-  { id: 'cities',    label: 'Key Cities',      file: 'key-cities' },
+  { id: 'cities',    file: 'key-cities' },
   // PER-CITY languages: 30 clusters have a bridge language spoken RIGHT THERE
   // that already carries a resource while the group's own language does not.
-  { id: 'langcity', label: 'Languages Here', file: 'languages-per-city' },
-  { id: 'languages', label: 'By Country',    file: 'languages-by-country' },
-  { id: 'operators', label: 'ISPs & Carriers', file: 'network-operators' },
-  { id: 'messaging', label: 'Messaging Apps',  file: 'messaging-channels' },
+  { id: 'langcity',  file: 'languages-per-city' },
+  { id: 'languages', file: 'languages-by-country' },
+  { id: 'operators', file: 'network-operators' },
+  { id: 'messaging', file: 'messaging-channels' },
   // Field-access/visa data is PRIVATE (kept outside the repo — release governance):
   // publishing it could accelerate access closures. Tab removed from the
   // public build; the dataset stays available for internal analysis.
@@ -98,7 +98,7 @@ useShadowStyles(
     <!-- :key forces a fresh Tabulator per tab rather than mutating one in place;
          swapping both columns AND data on a live instance is where column state
          (frozen, widths, filters) desynchronises from the new schema. -->
-    <div v-if="loadErr" class="ct-err">{{ loadErr }}</div>
+    <div v-if="loadErr" class="ct-err" role="alert">{{ $t('keyCities.loadFailed', { detail: loadErr }) }}</div>
     <div v-else-if="!table" class="ct-load">{{ $t('keyCities.tables.loading', { name: $t('keyCities.tables.tabs.' + current.id) }) }}</div>
     <DataTable
       v-else

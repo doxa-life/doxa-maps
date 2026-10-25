@@ -24,6 +24,8 @@ import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
 import { setDataBase, ensureD3 } from './src/utils/pplrData.js'
 import { usePplrT } from './src/composables/usePplrT.js'
+import { useHostedHelp } from '@map/composables/useHostedHelp.js'
+import { useOptionalT } from '@map/composables/useOptionalT.js'
 
 const profileConfig = inject('profileConfig')
 const cfg = computed(() => profileConfig?.value || {})
@@ -32,17 +34,21 @@ setDataBase(resolveAssetsBase(cfg.value))
 // Order and labels follow the original showcase page's tab bar.
 // Tab labels are the chrome a reader sees first; they come from pplr.json (all 11 locales).
 const t = usePplrT()
+// The hub's "?" asks its HOST for this map's help (doxa:help); it shows only where a host answers.
+const { hosted: helpHosted, askForHelp } = useHostedHelp()
+const tb = useOptionalT('buttons')
+// Each view's name is its tKey (pplr.tabs.*), translated where it is shown.
 const VIEWS = [
-  { key: 'pplr-religion',          label: 'Religion', tKey: 'pplr.tabs.religion',                  load: () => import('./src/views/pplr-religion.vue') },
-  { key: 'pplr-rop-tree',          label: 'ROP Tree', tKey: 'pplr.tabs.ropTree',                  load: () => import('./src/views/pplr-rop-tree.vue') },
-  { key: 'pplr-language-families', label: 'Language Families', tKey: 'pplr.tabs.languageFamilies',         load: () => import('./src/views/pplr-language-families.vue') },
-  { key: 'pplr-semantic-trees',    label: 'Semantic Trees', tKey: 'pplr.tabs.semanticTrees',            load: () => import('./src/views/pplr-semantic-trees.vue') },
-  { key: 'pplr-translations',      label: 'PG Name Locales', tKey: 'pplr.tabs.nameLocales',           load: () => import('./src/views/pplr-translations.vue') },
-  { key: 'pplr-d3-tree',           label: 'ROP Sunburst', tKey: 'pplr.tabs.ropSunburst',              load: () => ensureD3().then(() => import('./src/views/pplr-d3-tree.vue')) },
-  { key: 'pplr-pins',              label: 'All PG-in-country pins', tKey: 'pplr.tabs.allPins',    load: () => import('./src/views/pplr-pins.vue') },
-  { key: 'pplr-rosetta-cards',     label: 'Cross-system ID Rosetta', tKey: 'pplr.tabs.rosetta',   load: () => import('./src/views/pplr-rosetta-cards.vue') },
-  { key: 'pplr-coverage',          label: 'Translation coverage', tKey: 'pplr.tabs.coverage',      load: () => import('./src/views/pplr-coverage.vue') },
-  { key: 'pplr-index',             label: 'Index', tKey: 'pplr.tabs.index',                     load: () => import('./src/views/pplr-index.vue') },
+  { key: 'pplr-religion',          tKey: 'pplr.tabs.religion',                  load: () => import('./src/views/pplr-religion.vue') },
+  { key: 'pplr-rop-tree',          tKey: 'pplr.tabs.ropTree',                  load: () => import('./src/views/pplr-rop-tree.vue') },
+  { key: 'pplr-language-families', tKey: 'pplr.tabs.languageFamilies',         load: () => import('./src/views/pplr-language-families.vue') },
+  { key: 'pplr-semantic-trees',    tKey: 'pplr.tabs.semanticTrees',            load: () => import('./src/views/pplr-semantic-trees.vue') },
+  { key: 'pplr-translations',      tKey: 'pplr.tabs.nameLocales',           load: () => import('./src/views/pplr-translations.vue') },
+  { key: 'pplr-d3-tree',           tKey: 'pplr.tabs.ropSunburst',              load: () => ensureD3().then(() => import('./src/views/pplr-d3-tree.vue')) },
+  { key: 'pplr-pins',              tKey: 'pplr.tabs.allPins',    load: () => import('./src/views/pplr-pins.vue') },
+  { key: 'pplr-rosetta-cards',     tKey: 'pplr.tabs.rosetta',   load: () => import('./src/views/pplr-rosetta-cards.vue') },
+  { key: 'pplr-coverage',          tKey: 'pplr.tabs.coverage',      load: () => import('./src/views/pplr-coverage.vue') },
+  { key: 'pplr-index',             tKey: 'pplr.tabs.index',                     load: () => import('./src/views/pplr-index.vue') },
 ]
 // The library wrapper, not Vue's raw async component: Vue caches a REJECTED loader, so one network blip
 // left that tab dead until a full reload. retryableAsyncComponent retries the import instead.
@@ -65,22 +71,38 @@ useShadowStyles(
   'border-bottom:1px solid #d1d4cd;overflow-x:auto;z-index:50}' +
   '.pdm-brand{font:700 12px/1 ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:#3b463d;white-space:nowrap}' +
   '.pdm-seg{display:inline-flex;gap:4px;flex-wrap:nowrap}' +
+  '.pdm-help{margin-inline-start:auto;width:28px;height:28px;border-radius:50%;border:1px solid #d1d4cd;background:#fff;' +
+  'color:#3b463d;font:700 15px/1 Georgia,serif;cursor:pointer;flex:0 0 auto}' +
+  '.pdm-help:focus-visible{outline:2px solid #3f8f5a;outline-offset:2px}' +
   '.pdm-seg button{border:1px solid #d1d4cd;background:#fff;color:#3b463d;cursor:pointer;white-space:nowrap;' +
   'font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:7px 11px;border-radius:999px}' +
   '.pdm-seg button.on{background:#92b195;border-color:#92b195;color:#fff}' +
   '.pdm-seg button:hover:not(.on){border-color:#92b195}' +
-  '.pdm-stage{flex:1 1 0;position:relative;min-height:0}',
+  '.pdm-stage{flex:1 1 0;position:relative;min-height:0}' +
+  // PHONE (390×844): the view tabs ran past the right edge with no scroll cue ("Semantic Trees" at
+  // x=460). Wrapped, the ten tabs took five rows (160 px of an 844 px phone). On a phone the brand
+  // steps aside and the views are ONE select in one row; a wide screen keeps the tabs.
+  '.pdm-select{display:none}' +
+  '@media (max-width:640px){.pdm-bar{padding:6px 8px;gap:8px}.pdm-brand{display:none}.pdm-seg{display:none}' +
+    '.pdm-select{display:block;flex:1 1 auto;min-width:0;min-height:34px;border:1px solid #d1d4cd;border-radius:8px;' +
+    'background:#fff;color:#3b463d;font:600 13px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:0 8px}}',
   'pplr-data-maps')
 </script>
 
 <template>
   <div class="pdm-root">
     <div class="pdm-bar">
-      <span class="pdm-brand">PPLR data maps</span>
+      <span class="pdm-brand">{{ t('pplr.title') }}</span>
+      <!-- PHONE: the same views as one select (the tabs below are hidden there). -->
+      <select class="pdm-select" :aria-label="t('pplr.ui.chooseView')" :value="view" @change="setView($event.target.value)">
+        <option v-for="v in VIEWS" :key="v.key" :value="v.key">{{ t(v.tKey) }}</option>
+      </select>
       <div class="pdm-seg" role="tablist" :aria-label="t('pplr.ui.chooseView')">
         <button v-for="v in VIEWS" :key="v.key" role="tab" :aria-selected="view === v.key"
                 :class="{ on: view === v.key }" @click="setView(v.key)">{{ t(v.tKey) }}</button>
       </div>
+      <button v-if="helpHosted" type="button" class="pdm-help" :aria-label="tb('aboutThisMap')" :title="tb('aboutThisMap')"
+              @click="askForHelp($event.currentTarget)">?</button>
     </div>
     <div class="pdm-stage">
       <component :is="COMPONENTS[view]" :key="view" />

@@ -17,5 +17,6 @@
   "ruleAll": "Fiecare rând din datele IMB despre grupuri etnice: un grup etnic într-o țară.",
   "ruleUnreached": "Prioritatea de pierzare IMB 0–2: sub 2% evanghelici.",
   "ruleFrontier": "Prioritatea de pierzare IMB 0: sub 0,1% evanghelici. O submulțime a celor neatinse.",
-  "ruleDoxa": "Fiecare grup de pe lista de rugăciune DOXA, potrivit cu datele IMB după popor și țară. Nu toate sunt de frontieră."
+  "ruleDoxa": "Fiecare grup de pe lista de rugăciune DOXA, potrivit cu datele IMB după popor și țară. Nu toate sunt de frontieră.",
+  "about": "Despre această hartă"
 }

@@ -15,8 +15,8 @@
  * file was cut to the provinces where the unreached peoples actually are.
  *
  * ⚠ AND THE ASSIGNMENT IS ONLY AS GOOD AS THE PIN. A group's province comes from a
- * point-in-polygon test on a coordinate that marks where a PEOPLE is found, not a settlement —
- * 108 groups even share a coordinate with another group. Near a border that point can fall on
+ * point-in-polygon test on a coordinate that marks a PEOPLE group, not a settlement, and whose position
+ * is approximate — 108 groups even share a coordinate with another group. Near a border that point can fall on
  * the wrong side. So every row carries `approximate: true`, the unassigned are COUNTED rather
  * than dropped, and no surface may present a province as a fact about a group.
  *   Measured: 9 of 855 Indian groups and 2 of 154 Chinese ones land outside every polygon.
@@ -313,8 +313,8 @@ if (!assigned || assigned < 900) {
         grain: 'one row per PLACED people group; the four that fall outside every polygon are in the aggregate file\'s `unassigned`',
         rows: assignments.length,
         agrees_with: 'gospel-by-province.json — per-province counts and the assigned total are reconciled at build time, and neither file is written if they differ',
-        approximate: 'Every row is approximate. The coordinate marks where a PEOPLE is found, not a ' +
-          'settlement, and near a border it can fall on the wrong side. No surface may present a ' +
+        approximate: 'Every row is approximate. The coordinate marks a PEOPLE group, not a ' +
+          'settlement; its position is approximate, and near a border it can fall on the wrong side. No surface may present a ' +
           'province as a fact about a group.',
       },
       columns: [
@@ -373,8 +373,8 @@ if (!assigned || assigned < 900) {
           'It is a NEIGHBOUR, not a recommendation: whether a group actually speaks it is a ' +
           'question for someone on the ground.',
         approximate: 'A province is assigned by point-in-polygon on the group\'s coordinate, and ' +
-          'that coordinate marks where a PEOPLE is found, not a settlement — 108 groups across the ' +
-          'roster even share a coordinate with another group. Near a border the point can fall on ' +
+          'that coordinate marks a PEOPLE group, not a settlement; its position is approximate, and 108 ' +
+          'groups across the roster even share a coordinate with another group. Near a border the point can fall on ' +
           'the wrong side. Every row is flagged approximate and the unassigned are counted, never ' +
           'dropped. No surface may present a province as a fact about a group.',
       },

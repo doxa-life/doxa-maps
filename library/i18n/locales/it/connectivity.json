@@ -64,5 +64,10 @@
     "rural": "Rurale",
     "source": "NFHS-5 (2019–21), persone di 15–49 anni: quota di chi ha mai usato internet. Un’indagine sulle persone, non un conteggio di abbonamenti.",
     "missing": "Ancora nessun confine statale per {names}: i loro dati sono nel dataset, non sulla mappa."
+  },
+  "loading": "Disegno della mappa…",
+  "ui": {
+    "showKey": "Espandi la legenda",
+    "hideKey": "Comprimi la legenda"
   }
 }

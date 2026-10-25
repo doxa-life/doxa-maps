@@ -11,7 +11,7 @@
  *
  * ⚠ THE TREE IS READY; THE FILTER IS NOT. Mapping a GROUP to a zone still runs through
  * admin-to-list.json, which exp measured as an older partition — 69 groups land in the wrong
- * printable zone and 436 in Unassigned. That is the Driver's row 87. So this builds and counts
+ * printable zone and 436 in Unassigned. That is row 87. So this builds and counts
  * the tree, and the caller must not filter rows on it until the fold lands.
  */
 import { resolveAssetsBase } from '@map/utils/embedBase.js'

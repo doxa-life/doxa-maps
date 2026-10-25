@@ -111,7 +111,7 @@ export function buildSearchIndex(opts = {}) {
   // ── (3b) Territories — ADM0 countries (by ISO3 → display name) ──────────────
   // The tapestry ADM0 features carry ONLY props.iso3, so target.shapeName holds
   // the ISO3 and the fly-to predicate matches f.properties.iso3. The LABEL is the
-  // human name (live countryNameMap preferred, ISO3_NAME fallback) so a design note
+  // human name (live countryNameMap preferred, ISO3_NAME fallback) so a reader
   // typing "Nepal" finds NPL. De-dup: a name already covered as an ADM1 admin
   // (none collide today, but guard anyway) isn't re-added.
   const nameMap = countryNameMap || iso3Names;

@@ -5,7 +5,7 @@
  * WHY: the shared legend (.stl-panel, its reopen button, the detail buttons, the tree-guide hairlines) used
  * `left: 8px`. MapToolbar uses `inset-inline-end`, which mirrors under dir="rtl"; a physical `left` does not.
  * So in Arabic the controls moved left onto a legend that stayed left, on three production maps at once
- * (Simple Research, Prayer Progress, UPG-100; rega's survey at 52eeb0db). The fix is inset-inline-start /
+ * (Simple Research, Prayer Progress, UPG-100; a browser survey at 52eeb0db). The fix is inset-inline-start /
  * inset-inline-end; this gate keeps a physical left/right from coming back.
  *
  * WHAT IT READS: every CSS declaration in library/components/legends/*.vue (comments stripped). A
@@ -22,14 +22,26 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const DIR = join(ROOT, 'library/components/legends')
+// ★ THE SHARED CHROME, NOT ONLY THE LEGENDS. This check began as a legends check, and that scope is
+// exactly why three physical declarations survived in ShareButton — the share menu is chrome every
+// production map renders, but it lives one directory away and was never read. A reader in Arabic
+// does not know which folder a control came from. Audited 2026-09-29: ShareButton had padding-left
+// on the step list and margin-right on both the tab spacing and the auto-spacer, so under `ar` the
+// gap fell on the wrong side of every share tab.
+const DIRS = [
+  join(ROOT, 'library/components/legends'),
+  join(ROOT, 'library/components/map-controls'),
+]
+// Files are addressed as "<dir-name>/<file>" so two directories cannot collide on a base name and so
+// the ALLOWED keys below stay unambiguous.
+const shortOf = (dir, f) => `${dir.split('/').pop()}/${f}`
 
 // file -> substrings of declarations that may stay physical, each with its reason.
 const ALLOWED = {
-  'LegendMobile.vue': [
+  'legends/LegendMobile.vue': [
     ['.mapboxgl-ctrl-attrib.mapboxgl-compact{margin-right', "the engine's own attribution control, which the engine places"],
   ],
-  'LegendProgressBar.vue': [
+  'legends/LegendProgressBar.vue': [
     ['.lpb-pop{', 'the popover is placed by JS (popLeft) over the bar segment it describes'],
   ],
 }
@@ -38,7 +50,19 @@ const PHYSICAL = /(^|[;{\s])((?:padding|margin)-(?:left|right)|left|right)\s*:\s
 
 function findings(file, src) {
   const out = []
-  const styles = [...src.matchAll(/<style[^>]*>([\s\S]*?)<\/style>|`([^`]*\{[^`]*\}[^`]*)`/g)].map((m) => m[1] ?? m[2])
+  // ★ THE BACKTICK ARM USED TO MISS MOST OF A BIG SHADOW-CSS LITERAL, AND THAT IS HOW THREE PHYSICAL
+  // DECLARATIONS HID IN ShareButton. `([^`]*\{[^`]*\}[^`]*)` matches a literal containing ONE brace
+  // pair; a 600-line useShadowStyles(`…`) block has hundreds, so the scan captured 7 fragments
+  // totalling 7,003 chars of a 629-line file and never saw .share-tab's margin-right at all. The
+  // gate then reported PASS on a directory it was barely reading — the worst kind of green.
+  // A <style> block is still matched as before; a template literal is now taken WHOLE, from its
+  // opening backtick to its closing one, and only kept when it actually looks like CSS.
+  const styles = []
+  for (const m of src.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) styles.push(m[1])
+  for (const m of src.matchAll(/`([\s\S]*?)`/g)) {
+    const body = m[1]
+    if (/\{[\s\S]*:[\s\S]*\}/.test(body)) styles.push(body)
+  }
   const allowed = ALLOWED[file] || []
   for (const css of styles) {
     const clean = css.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -59,25 +83,47 @@ function findings(file, src) {
   return out
 }
 
+function eachFile() {
+  const out = []
+  for (const dir of DIRS) {
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.vue')).sort()) out.push([dir, f])
+  }
+  return out
+}
+
 function run(read) {
   const all = []
-  for (const f of readdirSync(DIR).filter((f) => f.endsWith('.vue')).sort()) all.push(...findings(f, read(f)))
+  for (const [dir, f] of eachFile()) all.push(...findings(shortOf(dir, f), read(dir, f)))
   return all
 }
 
-const readReal = (f) => readFileSync(join(DIR, f), 'utf8')
+const readReal = (dir, f) => readFileSync(join(dir, f), 'utf8')
 
 if (process.argv.includes('--self-test')) {
-  const poisoned = (f) => {
-    const s = readReal(f)
-    return f === 'SemanticTreeLegend.vue' ? s.replace('inset-inline-start: 8px; top: var(--stl-top', 'left: 8px; top: var(--stl-top') : s
+  const poisoned = (dir, f) => {
+    const s = readReal(dir, f)
+    if (f === 'SemanticTreeLegend.vue') return s.replace('inset-inline-start: 8px; top: var(--stl-top', 'left: 8px; top: var(--stl-top')
+    // ★ POISON THE NEW DIRECTORY TOO. The legends arm alone would still pass with map-controls
+    // unscanned, so a self-test that only poisons a legend proves the check works on the half it
+    // always covered. This one puts back the exact declaration the 2026-09-29 audit found live in
+    // the share menu — if the widened scan ever silently narrows again, this fails.
+    if (f === 'ShareButton.vue') return s.replace('margin-inline-end:20px;', 'margin-right:20px;')
+    return s
   }
   const hit = run(poisoned)
-  if (!hit.some((h) => h.includes('.stl-panel') && h.includes('left: 8px'))) {
+  const legendCaught = hit.some((h) => h.includes('.stl-panel') && h.includes('left: 8px'))
+  const controlCaught = hit.some((h) => h.includes('ShareButton.vue') && h.includes('margin-right'))
+  if (!legendCaught) {
     console.error('LEGEND-LOGICAL-INSETS self-test: FAIL — a poisoned `.stl-panel { left: 8px }` was not caught')
     process.exit(1)
   }
-  console.log('LEGEND-LOGICAL-INSETS self-test: PASS — a physical `left: 8px` on .stl-panel is caught')
+  if (!controlCaught) {
+    console.error('LEGEND-LOGICAL-INSETS self-test: FAIL — a poisoned `margin-right:20px` in ShareButton was not caught.\n' +
+      '  That means map-controls/ is not being scanned, which is the exact gap that let three physical\n' +
+      '  declarations live in the share menu until 2026-09-29.')
+    process.exit(1)
+  }
+  console.log('LEGEND-LOGICAL-INSETS self-test: PASS — a physical inset is caught in BOTH scanned directories (legends and map-controls)')
   process.exit(0)
 }
 

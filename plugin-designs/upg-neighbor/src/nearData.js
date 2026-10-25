@@ -82,8 +82,12 @@ export function fmtNum(n) {
 // CSV download that works from inside a shadow root (the anchor is appended to document.body).
 export function downloadCsv(filename, header, rows) {
   const cell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
-  const text = [header, ...rows].map((r) => r.map(cell).join(',')).join('\n') + '\n'
-  const url = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }))
+  downloadText(filename, [header, ...rows].map((r) => r.map(cell).join(',')).join('\n') + '\n', 'text/csv')
+}
+
+// Any text file, UTF-8 with a BOM (so Windows editors read Arabic, Hindi and Chinese correctly).
+export function downloadText(filename, text, type = 'text/plain') {
+  const url = URL.createObjectURL(new Blob(['﻿' + text], { type: type + ';charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.style.display = 'none'
   document.body.appendChild(a); a.click(); a.remove()

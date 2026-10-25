@@ -72,7 +72,7 @@ a widget target without a corner (or a corner without the target), and a `backen
 
 - `internal/profile-meta.mjs:28` reads the field (string entries only) and `:36` carries it into
   the manifest, so every consumer of the manifest sees it.
-- **The Research Gallery skips a bundle whose every profile is a widget or lacks the `web`
+- **Deep Research skips a bundle whose every profile is a widget or lacks the `web`
   target** — `plugin-designs/doxa-maps-spa/doxa-maps-spa.vue:605`:
 
   ```js

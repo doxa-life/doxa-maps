@@ -64,5 +64,10 @@
     "rural": "Rural",
     "source": "NFHS-5 (2019–21), pessoas de 15 a 49 anos: proporção que já usou a internet. Uma pesquisa com pessoas, não uma contagem de assinaturas.",
     "missing": "Ainda não há limite estadual para {names}: os números estão nos dados, não no mapa."
+  },
+  "loading": "Desenhando o mapa…",
+  "ui": {
+    "showKey": "Expandir a legenda",
+    "hideKey": "Recolher a legenda"
   }
 }

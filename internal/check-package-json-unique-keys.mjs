@@ -5,7 +5,7 @@
  * WHY: JSON.parse keeps the LAST of two equal keys and says nothing, so a duplicate silently kills the
  * first entry. "check:religion-label-not-value" sat twice in //scripts, one description dead, while
  * check:doc-scripts passed (it reads the parsed object, where only one survives). It was a merge artifact:
- * the landing tooling unions both sides' package.json additions. Found by regions-plugin; only Bun's parser
+ * the landing tooling unions both sides' package.json additions. Found during a landing; only Bun's parser
  * warned, while running something unrelated.
  *
  * HOW: a small JSON scanner that tracks every object's keys by position, so it sees what JSON.parse

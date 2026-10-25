@@ -646,9 +646,9 @@ ${dev ? LADDER_JS : ''}</body>
 // ── CLI: the ARCHIVED gallery, public/__gallery/index.html ──────────────────────────────────
 //
 // ★ THE ROOT PAGE IS THE STUDIO NOW; THE GALLERY IS ARCHIVED BESIDE IT (2026-09-22).
-// DRIVER: "We need to back up and ARCHIVE the stuff that is old. Instead of editing it, just back
-// it up and archive it... We just need a functional plugin studio with all our plugins working. We
-// do not need these old staging index.html that get in the way of everything."
+// THE DIRECTION: back up and ARCHIVE what is old instead of editing it. What is needed is a
+// functional Plugin Studio with every plugin working, not the old staging index.html pages that
+// get in the way.
 //
 // The BUILT tree now behaves exactly like the DEV server (internal/plugin-gallery/dev-plugin.mjs,
 // which made this move first): `/` mounts <plugin-studio>, and the gallery stays reachable at the
@@ -676,7 +676,7 @@ function main() {
   const nProfiles = baked.reduce((n, b) => n + b.p.length, 0)
   const nInstances = baked.reduce((n, b) => n + b.p.reduce((k, p) => k + (p.in ? p.in.length : 0), 0), 0)
   const nOverrides = baked.reduce((n, b) => n + b.p.reduce((k, p) => k + (p.em ? 1 : 0) + (p.in || []).filter(x => x.em).length, 0), 0)
-  // ARCHIVED OUT OF public/ (Driver decision, card BUILD-OUTPUT-IS-ONE-FOLDER): public/ holds only the
+  // ARCHIVED OUT OF public/ (decision, card BUILD-OUTPUT-IS-ONE-FOLDER): public/ holds only the
   // output folder + README.md, and the studio at <tree>/index.html is the front page. The last
   // generated copy is kept in the umbrella's _qa-cycle/archive/. This still renders on request, into a
   // directory you name — never into public/.

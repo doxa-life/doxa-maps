@@ -215,7 +215,7 @@ useShadowStyles(
                @click="board.openGroup(r.slug)" @keydown="onRowKey($event, r)"
                @mouseenter="bus.setHover(r.slug)" @mouseleave="bus.setHover(null)">
             <div class="gig-td gig-chk" role="cell" @click.stop>
-              <!-- a 24 px hit area around the 15 px box (WCAG 2.5.8 target size; rega RS2) -->
+              <!-- a 24 px hit area around the 15 px box (WCAG 2.5.8 target size) -->
               <label class="gig-hit"><input type="checkbox" :checked="isSel(r.slug)" :aria-label="T('gospelInternet.grid.selectRow', 'Select {name}', { name: r.people_group })" @change="bus.toggleSelect(r.slug)" /></label>
             </div>
             <div v-for="c in visibleCols" :key="c.key" class="gig-td" :class="{ num: c.num, 'gig-sticky': c.sticky }" :style="{ width: c.w + 'px' }" role="cell">

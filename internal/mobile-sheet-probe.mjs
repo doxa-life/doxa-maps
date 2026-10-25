@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * mobile-sheet-probe.mjs — REPRODUCE, with numbers, the two driver-reported mobile bugs
+ * mobile-sheet-probe.mjs — REPRODUCE, with numbers, the two reported mobile bugs
  * of the legend bottom sheet (library/components/legends/LegendMobile.vue), on a phone
  * viewport, through the real touch pipeline:
  *
@@ -14,7 +14,7 @@
  *          a rect×rect overlap of the sheet against .mapboxgl-ctrl-bottom-left/-right
  *          (their VISIBLE children) in every sheet state.
  *
- * WHY: "it feels wrong on my phone" is not evidence a fix can be checked against. This
+ * WHY: a sense that the sheet feels wrong on a phone is not evidence a fix can be checked against. This
  * probe turns the gesture into a per-step table (finger delta vs measured sheet height),
  * the release into an expected/actual state, and the attribution into overlap px² —
  * run it BEFORE a fix (baseline json) and AFTER (same json shape) and diff.

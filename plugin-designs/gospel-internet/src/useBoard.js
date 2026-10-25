@@ -37,7 +37,7 @@ export function useBoard() {
   const sort = ref({ key: 'population', dir: -1 })
   const openSlug = ref('')                 // the group in the detail drawer ('' = closed)
   // ── the centre panel: the geographic map or the language tree (loaded on first use) ───────────────
-  const centre = ref('tree')                // the Driver: people come for the language tree; the map is one tap away
+  const centre = ref('tree')                // people come for the language tree; the map is one tap away
   const tree = shallowRef(null)              // indexTree(doc) + { meta }
   const resources = shallowRef(null)         // { meta, rows } — gospel links for the board's languages
   const treeNode = ref('')                   // the tree node the board is narrowed to ('' = none)
@@ -73,7 +73,7 @@ export function useBoard() {
         const x = readiness.value.byIso.get(r.iso639_3)
         // The column RANKS languages WITHOUT a New Testament (the translation question): a language that has
         // one scored 5 (its Bible counted as Scripture) and sorted to the top, the opposite of what a
-        // translation team needs (rega, pre-landing T1). Blank sorts last; the drawer still shows the signals.
+        // translation team needs. Blank sorts last; the drawer still shows the signals.
         r.open_data = x && !x.nt ? x.signals : null
         r.open_grammar = x && x.grammar ? x.grammar : ''
         r.open_scripture_books = x ? x.scripture_books : null
@@ -108,7 +108,7 @@ export function useBoard() {
     }
     return treeLoading
   }
-  // The centre panels, in the order the Driver asked for them. This is a LIST rather than
+  // The centre panels, in the required order. This is a LIST rather than
   // a pair because the previous form — `mode === 'tree' ? 'tree' : 'map'` — silently
   // resolved every unknown id to the map. Adding a panel to the tab strip without adding
   // it here would have rendered the map under the new tab's label: no error, no empty
@@ -153,7 +153,7 @@ export function useBoard() {
   let pendingTree = ''
   // A ?tree= link applies only once BOTH the tree and the rows are loaded, whichever arrives last:
   // setTreeNode keeps the node's languages that are on the board, and with no rows yet that is the empty
-  // set, so the grid restored to 0 (rega F1: "6 of 2,107" before a reload, 0 after).
+  // set, so the grid restored to 0 ("6 of 2,107" before a reload, 0 after).
   function applyPendingTree() {
     if (!pendingTree || !tree.value || !all.value.length) return
     setTreeNode(pendingTree)
@@ -217,7 +217,7 @@ export function useBoard() {
     if (!writeUrl.value || typeof history === 'undefined') return
     let keep = location.search
     // A tree node is shared as ?tree=<glottocode> ALONE: its language list (hundreds of codes for a big
-    // family) made links that break in chat apps and SMS, the field's channel (dx-shepherd GOFAM). The
+    // family) made links that break in chat apps and SMS, the field's channel. The
     // kit writes `language` from the bus; this writer runs after it (flush:'post') and removes it while a
     // node is active. On load, ?tree= restores the node, which re-applies its languages itself.
     if (treeNode.value) { const q = new URLSearchParams(keep); q.delete('language'); keep = q.toString() ? '?' + q.toString() : '' }

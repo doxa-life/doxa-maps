@@ -3,16 +3,14 @@
  * check-heartbeat-threshold.mjs — THE HEARTBEAT THRESHOLD MUST COME FROM CONFIG, NOT A LITERAL.
  *
  * WHAT A HEARTBEAT ZONE IS. The top bin of the research-dashboard choropleth: the countries
- * holding the most people groups. Driver: "the heartbeat zones are the most people groups in
- * them... that's going to be 150 plus people groups in those heartbeat zones."
+ * holding the most people groups: 150 or more in each heartbeat zone.
  *
  * ★ THE DEFECT THIS CATCHES, AND WHY NOTHING ELSE COULD. The ramp's edges were a 5-stop array
  * literal — `upTo: 5, 20, 60, 150, Infinity` — sitting in DashboardMapPanel.vue. Those numbers are
  * not a property of choropleths; they are a property of THIS DATASET (~2000 people groups). Point
  * the dashboard at a 200-group dataset and every country falls in the bottom bin: the map renders
- * uniformly pale and says nothing. Driver: "that filter of 150 ... should be a variable. It
- * shouldn't be a static ... I need to be able to reuse this dashboard for other maps, other data
- * sets." A dataset assumption wearing the costume of a constant.
+ * uniformly pale and says nothing. The 150 has to be a variable, not a static, so the dashboard can
+ * be reused for other maps and other datasets. A dataset assumption wearing the costume of a constant.
  *
  * That failure is INVISIBLE to every other gate in this repo. The code is correct, it parses, it
  * builds, it renders, it throws nothing, and the screenshot looks like a map. Only the MEANING is
@@ -71,7 +69,7 @@
  * ★ THE FIRST VERSION OF THIS GATE SHIPPED WITH [literal] ONLY, and its header said it had been
  * "negative-tested" — true of that case, misleading overall. Testing that THE FEATURE WORKS (a
  * configured threshold moves the edge) is NOT testing that THE REGRESSION IS CAUGHT (the default
- * silently changing), and only the second protects the Driver. One negative test per regression
+ * silently changing), and only the second protects the shipped map. One negative test per regression
  * claimed. A gate that cannot fail is worse than no gate — this repo has shipped one.
  *
  * NOT COVERED, deliberately: this gate reasons about BIN ASSIGNMENT and LABELS only. It says
@@ -93,8 +91,8 @@ const SELF_TEST = process.argv.includes('--self-test')
 //
 // ★ THE TOP LABEL IS MATCHED BY PROPERTY, NOT BY EQUALITY — a correction this gate earned on its
 // FIRST RUN. It originally demanded the top label equal exactly "150+", and immediately failed
-// CORRECT code: the label reads "150+ · heartbeat zone", because naming the band in the Driver's
-// own words is a requirement of this work, not a defect. An over-strict gate that fires on correct
+// CORRECT code: the label reads "150+ · heartbeat zone", because naming the band in the
+// specified words is a requirement of this work, not a defect. An over-strict gate that fires on correct
 // code gets switched off, and then the real regression walks through. So the assertion is the
 // property that actually matters: the top label must CARRY THE CURRENT THRESHOLD (so a moved edge
 // can never leave a stale number on the legend) and must NAME THE ZONE. Any prose around those is
@@ -127,7 +125,7 @@ function makeResolver(mapCfg, srcOverride) {
   const body = srcOverride !== undefined ? srcOverride : resolverSource()
   // The slice calls the panel's `T(key, en)` (DashboardMapPanel.vue: `const T = (key, en) => tStatic(key)
   // || en`), which lives above the slice. Hand it the same shape answering in English, so the "names
-  // the zone" assertion still reads the Driver's words.
+  // the zone" assertion still reads the specified words.
   const fn = new Function('cfg', 'T', body + '\nreturn resolveBins;')
   return fn({ map: mapCfg }, (key, en) => en)
 }
@@ -218,7 +216,7 @@ function run(srcOverride) {
   expectHistorical(def, 'A', 'With no config supplied the panel must fall back to EXACTLY the historical ramp.')
 
   // ── A2. THE SHIPPED CONFIGURATION RENDERS THE HISTORICAL RAMP ───────────────────────────────
-  // ★ THIS IS THE ASSERTION THAT PROTECTS THE DRIVER, AND IT WAS MISSING. A alone proves the
+  // ★ THIS IS THE ASSERTION THAT PROTECTS THE SHIPPED MAP, AND IT WAS MISSING. A alone proves the
   // PANEL'S FALLBACK is intact — a strictly weaker property than "the map still looks the same",
   // because the running app resolves with dashboard.config.js's map.* layered ON TOP of that
   // fallback. Assertion F only checked that heartbeatThreshold was DECLARED, never what it was
@@ -293,7 +291,7 @@ function run(srcOverride) {
 // ★ TWO CASES, BECAUSE THERE ARE TWO DISTINCT REGRESSIONS AND THEY ARE NOT THE SAME ASSERTION.
 // This gate originally shipped with case 1 only, and its header claimed it was "negative-tested".
 // That was true of case 1 and MISLEADING overall: case 2 — the one that actually protects the
-// Driver's "today's map must not change" requirement — was unasserted, and a one-line edit to
+// "today's map must not change" requirement — was unasserted, and a one-line edit to
 // dashboard.config.js changed the shipped ramp while the gate printed PASS. Verified by
 // reproducing it, not by reasoning about it.
 //

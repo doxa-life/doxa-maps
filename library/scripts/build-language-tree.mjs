@@ -6,7 +6,7 @@
  * LAYOUT IS COMPUTED HERE, ONCE, AT BUILD TIME, so a phone does none of it, and the output is projected
  * to lng/lat so a map engine can draw it undistorted on the GPU.
  *
- * ★ WHY THIS IS IN library/ AND WHAT DELIBERATELY IS NOT (Driver brief §B, "make it reusable"). This was
+ * ★ WHY THIS IS IN library/ AND WHAT DELIBERATELY IS NOT (the brief: make it reusable). This was
  * extracted from gospel-internet's scripts/build-language-tree.mjs, which does TWO jobs in one file: this
  * layout, and a classification of each language from eBible, FCBH verse scopes and a screened link table.
  * Moving the file whole would have put those sources inside library/ and a fork building the tree from
@@ -159,8 +159,8 @@ export function buildLanguageTree({
   // ★ HOW MUCH OF THE SQUARE THE TAPESTRY SPANS DECIDES HOW FAR A READER CAN ZOOM OUT, and that is the
   // whole reason this number is a parameter with a measured default. The engines stop at zoom 0 (the
   // whole Mercator square), so the SMALLER the drawing, the more room there is below its opening view.
-  // At 68% there was about one level of room (Driver, 2026-09-27: "I need to be able to zoom out a bit
-  // more"); at 0.17 there are two.
+  // At 68% there was about one level of room, and zooming out a bit further was needed; at 0.17
+  // there are two.
   // The conversion moved to library/maps/whiteboard-projection.js so a second whiteboard chart cannot
   // re-derive it — gospel's set charts were about to scale linearly into degrees, which Mercator then
   // renders as ovals. Behaviour here is unchanged and check:whiteboard-projection asserts that over a

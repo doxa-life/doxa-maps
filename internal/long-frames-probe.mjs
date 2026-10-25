@@ -22,7 +22,7 @@
  *     "is Mapbox rendering at idle?" number, no handle to the map object needed;
  * and, on Chromium, a raw CDP session that asks the page's PerformanceMonitor for the same
  * violations DevTools prints (Log.startViolationsReport: recurringHandler ≥ 50 ms) and
- * captures every "[Violation] … requestAnimationFrame …" entry — the Driver's exact
+ * captures every "[Violation] … requestAnimationFrame …" entry — the exact
  * complaint, counted. Phases: 'boot' (first canvas → +--boot ms), 'idle' (--idle ms, no
  * input), 'interaction' (--interact ms: two mouse drags across the canvas, wheel zoom in
  * and out, a third drag, then clicks on the first 2 visible legend rows `.stl-rows

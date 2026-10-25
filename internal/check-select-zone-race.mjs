@@ -2,7 +2,7 @@
 /**
  * check-select-zone-race — "Show on map" works on the FIRST click, not the second.
  *
- * THE DEFECT (PRODUCTION-MATRIX:422, measured by rega): the composite's list pane dispatches
+ * THE DEFECT (PRODUCTION-MATRIX:422, measured in a browser): the composite's list pane dispatches
  * 'doxa:select-zone' at the map pane, but the map pane attaches its listener in onMounted and the
  * pane mounts lazily. So the first click landed before any listener existed, did nothing, and only
  * a SECOND click selected the zone. A control you must press twice reads as broken.
@@ -19,7 +19,7 @@
  *                 Delivery and arrival both succeeding still lost the selection without this.
  *
  * Source-level and headless: the race is a lifecycle ordering between two custom elements, which a
- * DOM-less runner cannot stage and which the browser seat measures end to end (rega owns that).
+ * DOM-less runner cannot stage and which the browser seat measures end to end.
  * What this pins is that none of the three mechanisms quietly disappears.
  *
  * Exit 0 pass · 1 fail.
@@ -58,7 +58,7 @@ ok(/addEventListener\('doxa:select-zone'/.test(LIST),
 
 // ── 3. EFFECT: retained while unready, drained at the readiness signal ─────────────────────────
 // ⚠ THE SUBTLEST LAYER. Delivery and arrival can both succeed and the selection still not hold,
-// because onLegendSelect returns early while the tapestry layer is down. rega read that state
+// because onLegendSelect returns early while the tapestry layer is down. A browser check read that state
 // twice, 13 ms apart, with the correct id.
 // ⚠ TWO DISTINCT RETAIN SITES, and a single /_pendingZoneId = zoneId/ match passes while ONE of
 // them is deleted — measured: removing the not-found retain left the gate green on the other.

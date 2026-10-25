@@ -9,9 +9,9 @@
  *   composed by TAG + BUNDLE URL (the stack-demo `element`/`src` contract), so each one boots
  *   through its OWN bundle entry and stays individually embeddable.
  *
- * ── WHY THIS EXISTS AS A SEPARATE PLUGIN (Driver 2026-09-22) ─────────────────────────────────
+ * ── WHY THIS EXISTS AS A SEPARATE PLUGIN (decided 2026-09-22) ─────────────────────────────────
  * The first idea was ONE cap-4 plugin that SWAPS its top element by aspect ratio — research
- * dashboard on desktop, research map on mobile. The Driver reversed that mid-message, verbatim:
+ * dashboard on desktop, research map on mobile. That was reversed mid-decision:
  * "We made the wrong choice of saying that we should swap elements based on mobile and desktop...
  * That would be really complex. It'd be easier just to have two separate capability-4 plugins."
  *
@@ -51,7 +51,7 @@
  * OFF (show-search=false, show-filters=false) because the research dashboard's header owns those
  * controls and drives the grid through props — two search bars would be a duplicate. The research
  * map has NO such header, so switching them off here would leave the grid with no way to be
- * searched or filtered at all. Driver, verbatim: the grid's search bar + filters must be toggled
+ * searched or filtered at all. The requirement: the grid's search bar + filters must be toggled
  * ON via prop. This is why the swap-inside-one-element idea was genuinely complex: the two top
  * elements do not merely look different, they imply OPPOSITE control ownership below.
  */
@@ -152,7 +152,7 @@ const hostList = computed(() => (typeof hostConfig.value?.list === 'string' ? ho
 // Set on the custom-element HOST rather than on the layout inside it, deliberately: `dir` takes
 // effect through the inherited CSS `direction`, and inheritance crosses shadow boundaries — so one
 // attribute on the host covers this composite's own chrome AND every nested element beneath it,
-// which is the half the audit found missing. Only ever SET, never cleared: a host page that already
+// which is the half the audit found missing. Set and CLEARED, but only ever ours: a host page that already
 // declares its own dir owns that decision.
 const textDir = computed(() => {
   const l = hostLang.value || getRuntimeLocale() || detectLocale()
@@ -168,10 +168,33 @@ const textDir = computed(() => {
 // it is". Measured in this tree before, under Vue 3.5.42, when research-map.vue's emitFilterState
 // died the same way; the fix is its _selfInstance, and this is the same fix.
 const _selfInstance = getCurrentInstance()
+// ★ WE CLEAR ONLY THE DIRECTION WE SET. The line below used to be a one-way
+// `if (rtl) setAttribute('dir','rtl')` with no else, so a reader who switched from an RTL locale to
+// an LTR one (ar -> zh) kept a right-to-left layout for the rest of the session: Chinese laid out
+// backwards, which reads as a broken page rather than a stale setting.
+// The original reason for never clearing is still honoured, and is why this remembers rather than
+// just removing: a host page that declares its OWN dir owns that decision, so the value found before
+// we first wrote is restored verbatim, and removed only when there was none.
+// ★ CAPTURED AT MOUNT, NOT AT FIRST WRITE. The capture used to sit inside the rtl branch, so it
+// recorded whatever `dir` happened to be on the host the first time WE wrote — and if anything else
+// had already set rtl by then, that value was recorded as "the page's own" and faithfully restored
+// forever after. MEASURED on the Big Picture leaf: ar left rtl, and zh put rtl straight back.
+// Reading it on the FIRST call instead, before any write of ours, is the only moment the attribute
+// is certainly the page's and not ours.
+let _hostDir = null
+let _weSetDir = false
 function reflectDir() {
   try {
     const host = _selfInstance?.proxy?.$el?.getRootNode?.()?.host
-    if (host && textDir.value === 'rtl') host.setAttribute('dir', 'rtl')
+    if (!host || !host.setAttribute) return
+    if (_hostDir === null) _hostDir = host.getAttribute('dir') || ''
+    if (textDir.value === 'rtl') {
+      host.setAttribute('dir', 'rtl')
+      _weSetDir = true
+    } else if (_weSetDir) {
+      if (_hostDir) host.setAttribute('dir', _hostDir); else host.removeAttribute('dir')
+      _weSetDir = false
+    }
   } catch (_) { /* no host (SSR/tests) — nothing to reflect */ }
 }
 onMounted(reflectDir)
@@ -203,7 +226,36 @@ const SHARE_URL = absoluteEmbedUrl('research-map-plus-grid/research-map-plus-gri
 // Pinning min === max gives it a definite height to fill while the page keeps growing below.
 // svh (small viewport height) avoids the mobile URL-bar jump — which matters MORE here than on the
 // desktop sibling, because this composite is the mobile one.
-const MAP_H = '88svh'
+// ★ AND IT ENDS ON THE FIRST SCREEN. 88svh assumes the band starts near the top of the window.
+// Under a host page's header it does not: measured 2026-09-30 on DX Life at 390x844, the band ran
+// from y132 to y875. The legend sheet's bottom and its COLLAPSED strip began 31px below the fold,
+// so a reader who collapsed the legend could not reopen it without scrolling first. sizeBand() below
+// shortens the band to what is visible beneath its own top (never more than 88svh). The fallback is
+// the old 88svh. It is measured once, and again only when the WIDTH changes (a rotation), never on a
+// height change: the URL bar showing and hiding must not resize the map.
+const MAP_H = 'var(--sr-band-h, 88svh)'
+function scrollParentOf(el) {
+  for (let n = el.parentElement || el.getRootNode?.()?.host; n; n = n.parentElement || n.getRootNode?.()?.host) {
+    const oy = getComputedStyle(n).overflowY
+    if (oy === 'auto' || oy === 'scroll') return n
+  }
+  return null
+}
+let _bandWidth = 0
+function sizeBand() {
+  try {
+    const host = _selfInstance?.proxy?.$el?.getRootNode?.()?.host
+    if (!host || !host.style || typeof window === 'undefined') return
+    const box = scrollParentOf(host)
+    const bottom = Math.min(window.innerHeight, box ? box.getBoundingClientRect().bottom : window.innerHeight)
+    const h = Math.floor(Math.min(bottom - Math.max(0, host.getBoundingClientRect().top), window.innerHeight * 0.88))
+    // Below 320px the map is worse than a band that runs past the fold, so keep the fallback there.
+    if (h >= 320) host.style.setProperty('--sr-band-h', h + 'px')
+    else host.style.removeProperty('--sr-band-h')
+    _bandWidth = window.innerWidth
+  } catch (_) { /* no layout (SSR/tests): the 88svh fallback stands */ }
+}
+function onBandResize() { if (window.innerWidth !== _bandWidth) sizeBand() }
 
 // src is resolved by the browser relative to THIS leaf page, which is served two levels deep
 // (doxa-maps/research-map-plus-grid/research-map-plus-grid/index.html) — so go UP TWO to reach a
@@ -223,7 +275,7 @@ const MAP_H = '88svh'
 const bundleSrc = (bundle, file) =>
   import.meta.env.DEV ? `/plugin-designs/${bundle}/index.js` : `../../${bundle}/${file}.js`
 
-// ─── ONE FILTER STATE, TWO HALVES (BUILD-LINKED-FILTERING, Driver 2026-09-25) ───────────────
+// ─── ONE FILTER STATE, TWO HALVES (decided 2026-09-25) ───────────────
 // The composite owns the filter; the children report theirs upward and accept ours downward. The
 // four facets are the HONEST OVERLAP between what a research map filters by and what a people-group
 // grid filters by — region, religion, language, engagement. Country, bloc and cluster live on only
@@ -259,8 +311,8 @@ const bundleSrc = (bundle, file) =>
 // link matching nothing the moment the grid's data followed the URL's language — and an empty
 // intersection reads as "no results", not as a broken wire.
 // `language.codes` is every ISO code the current language selection covers — one for a real
-// language, many for a legend TIER like "Arabic". It is what lets gridLanguage() tell "I can
-// express this" from "I cannot", instead of guessing from an empty code.
+// language, many for a legend TIER like "Arabic". It is what lets gridLanguage() tell a coverable selection
+// from an uncoverable one, instead of guessing from an empty code.
 const linked = reactive({ region: { value: '', label: '' }, religion: '', language: { value: '', label: '', codes: [] } })
 
 // ★ WHAT THE LIST IS SHOWING, so the map can go there (BUILD-GRID-SELECTION-FLIES-THE-MAP).
@@ -369,7 +421,7 @@ function onMapFiltered(ev) {
   })
 }
 
-// ★ AN AXIS THIS GRID CANNOT EXPRESS MUST NOT NARROW IT TO NOTHING (rega, 2026-09-26: Languages >
+// ★ AN AXIS THIS GRID CANNOT EXPRESS MUST NOT NARROW IT TO NOTHING (measured: Languages >
 // Language > "Arabic" took the grid 2,107 -> 0 in BOTH locales, reading as "no results").
 //
 // This line used to be `linked.language.value || linked.language.label`, and the fallback was the
@@ -423,6 +475,19 @@ function pushToChildren() {
     let cfg = {}
     try { cfg = JSON.parse(map.getAttribute('profile-config') || '{}') } catch (_) { cfg = {} }
     cfg.externalFilters = { region: linked.region.value, religion: linked.religion, language: linked.language.label, fitSlugs: gridSlugs.value }
+    // ★ AND THE LOCALE. This rewrote the FILTERS and nothing else, so a live language switch moved
+    // the composite's own chrome and never reached the panes: the outer element got the new
+    // profile-config, this re-parsed the child's EXISTING attribute, and the boot `lang` survived
+    // every push. MEASURED: the map stayed English on a live en->ar switch while the composite
+    // around it changed. The leaf's own chain is fully reactive and was never at fault — it is
+    // reactive to its own prop, and its prop was frozen.
+    // BOTH KEYS, and `locale` is the one that decides. Every reader takes locale FIRST and falls
+    // back to lang — ProfileLoader.vue:189 and people-groups-grid.vue:273/380 all read
+    // `config.locale || config.lang`. Writing only `lang` is therefore correct exactly while no
+    // child config carries a `locale`, and silently stops working the day one does: a stale locale
+    // from a boot copy or a host-list path would shadow every fresh lang we push, forever. Writing
+    // both keeps the two in step whatever put them there.
+    if (hostLang.value) { cfg.lang = hostLang.value; cfg.locale = hostLang.value }
     map.setAttribute('profile-config', JSON.stringify(cfg))
   }
   const grid = rootEl.querySelector('people-groups-grid')
@@ -433,8 +498,22 @@ function pushToChildren() {
     // so a stable ISO code matches in every locale while a display name only matches in the one it
     // was fetched in.
     grid.setAttribute('primary-language', gridLanguage())
+    // The grid's three linked facets travel as their own attributes, but its LANGUAGE does not —
+    // it reads that from profile-config, which this composite set only when a host list was
+    // supplied, and never again. Same frozen-prop defect as the map above, one channel over.
+    if (hostLang.value) {
+      let gcfg = {}
+      try { gcfg = JSON.parse(grid.getAttribute('profile-config') || '{}') } catch (_) { gcfg = {} }
+      if (gcfg.lang !== hostLang.value || gcfg.locale !== hostLang.value) {
+        gcfg.lang = hostLang.value
+        gcfg.locale = hostLang.value
+        grid.setAttribute('profile-config', JSON.stringify(gcfg))
+      }
+    }
   }
 }
+// A locale change has to reach the panes too; `linked` and `gridSlugs` only cover filter state.
+watch(hostLang, pushToChildren)
 watch(linked, pushToChildren, { deep: true })
 // The slug set changes without any facet changing (a search term, a cleared filter), so it needs
 // its own trigger — `linked` alone would leave the camera behind.
@@ -444,15 +523,19 @@ onMounted(() => {
   rootEl = getCurrentInstance()?.proxy?.$el?.getRootNode?.() || null
   rootEl?.addEventListener?.('groups-filtered', onGridFiltered)
   rootEl?.addEventListener?.('map-filtered', onMapFiltered)
+  // After the first layout, so the host page's header has its height.
+  requestAnimationFrame(sizeBand)
+  window.addEventListener('resize', onBandResize)
 })
 onBeforeUnmount(() => {
   rootEl?.removeEventListener?.('groups-filtered', onGridFiltered)
   rootEl?.removeEventListener?.('map-filtered', onMapFiltered)
+  window.removeEventListener('resize', onBandResize)
 })
 
 const sections = computed(() => [
   // No section title: the research map self-titles through its own chrome, so a StackLayout title
-  // here would render the name twice — the duplicate-header bug the Driver rejected on the desktop
+  // here would render the name twice — the duplicate-header bug rejected on the desktop
   // sibling (BUG-RESEARCH-DASHBOARD-HEADER-STACK-WRONG). One header per element.
   {
     key: 'map',
@@ -495,7 +578,7 @@ const sections = computed(() => [
         profile: 'research-map',
         dataSource: 'pray-tools',
         instanceId: 'rmpg-research-map',
-        // ★ NO FLY/CLUSTER TOOLBAR IN THE COMPOSITE (Driver, 2026-09-23).
+        // ★ NO FLY/CLUSTER TOOLBAR IN THE COMPOSITE (decided 2026-09-23).
         // LegendTools renders at top:14px centred on the legend column — the search bar's exact
         // slot — so on the Regions and Languages tabs (the legendTypes its predicate allows) it
         // reads as having REPLACED the search bar. In a stack whose bottom half is a grid the
@@ -511,6 +594,8 @@ const sections = computed(() => [
         ...(hostProvider.value ? { provider: hostProvider.value } : {}),
         ...(hostLang.value ? { lang: hostLang.value } : {}),
         ...(hostList.value ? { list: hostList.value } : {}),
+        // The host's name for this map (the gallery's tab label), for the map-print header (mapPrintTemplate.js).
+        ...(hostConfig.value?.mapTitle ? { mapTitle: hostConfig.value.mapTitle } : {}),
         // The composite's filter state, in the map's inbound shape. Absent keys are ignored there.
         externalFilters: { region: linked.region.value, religion: linked.religion, language: linked.language.label, fitSlugs: gridSlugs.value },
         assetsBase: '../../assets',

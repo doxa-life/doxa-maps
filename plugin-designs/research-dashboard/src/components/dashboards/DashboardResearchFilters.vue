@@ -37,7 +37,7 @@
  */
 import { inject, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { tStatic } from '@map/i18n/index.js'
+import { tStatic, formatList } from '@map/i18n/index.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import SearchFilterHeader from '@map/components/search/SearchFilterHeader.vue'
 import { getPrayerLevel, LABELS as PRAYER_LABELS } from '@map/colors/prayer-progress.js'
@@ -52,8 +52,8 @@ const rows = computed(() => dash?.rows?.value || [])
 const filterSet = bus?.filterSet || {}
 
 // ── ★ THE PRAYER AXIS (card BUILD-ADD-A-PRAYER-FILTER-FIRST-IN-THE-ROW) ──
-// DRIVER: "we want to add a new filter called prayer… it should probably be the first drop down."
-// He described it once as a toggle and once as a dropdown, and the card makes the ordering explicit:
+// Asked: add a new filter called prayer, probably as the first dropdown.
+// It was described once as a toggle and once as a dropdown; the card makes the ordering explicit:
 // MEASURE THE DATA FIRST, then pick the control — boolean is a toggle, levels are a dropdown.
 //
 // THE MEASUREMENT, and it did not need inventing: `people_praying` is already a LIVE per-row field
@@ -64,7 +64,7 @@ const filterSet = bus?.filterSet || {}
 //
 // It is NOT a boolean: it is a COUNT, and the app already splits that count THREE ways —
 // library/colors/prayer-progress.js, the prayer map's colour strategy: none (0/null) / partial
-// (0 < n < 144) / full (n >= 144). Three levels => a DROPDOWN, which is also where the Driver
+// (0 < n < 144) / full (n >= 144). Three levels => a DROPDOWN, which is also where the requirement
 // landed. We reuse getPrayerLevel + its LABELS rather than re-deriving the split here, so the
 // filter can never disagree with the colour of the pin it filters to — one threshold, one owner.
 //
@@ -111,7 +111,9 @@ const dropdownKeys = computed(() => {
   const configured = rf.value.dropdowns || ['wagf_region', 'wagf_block', 'country_code', 'people_group', 'religion']
   return [PRAYER_KEY, ...configured.filter((k) => k !== PRAYER_KEY)]
 })
-const searchPlaceholder = computed(() => rf.value.searchPlaceholder || 'Search people groups, place, language, religion…')
+// locale.value is read and passed for the same reason as the search chip below: without it this
+// computed never re-runs, and the placeholder stays in the boot language after a switch.
+const searchPlaceholder = computed(() => rf.value.searchPlaceholder || tStatic('dashboard.search_placeholder', locale.value) || 'Search people groups, place, language, religion…')
 
 // Apply a filter-set (facetKey -> label) to a row list — reused for cross-filtered counts.
 function applyWith(fset, list) {
@@ -186,11 +188,15 @@ const activeChips = computed(() => {
     // a two-value pick renders as "A,B" with no spacing. LATENT, not live: nothing in this plugin
     // calls toggleFilterValue, so no caller produces a prayer array today. Closed here because the
     // next caller that does would not think to look in a chip label for the reason.
-    const shown = k === PRAYER_KEY ? (Array.isArray(v) ? v.join(', ') : v) : labelFor(k, v)
+    // DISJUNCTION, not a plain list: several values of ONE facet are ALTERNATIVES. The bus matches a
+    // row if ANY of them matches (useSelectionBus some(), DashboardDataTable includes()), so a
+    // comma-joined "Islam, Hinduism" reads as "and" in any language with an explicit connector —
+    // stating the opposite of what the filter does.
+    const shown = k === PRAYER_KEY ? (Array.isArray(v) ? formatList(v, { type: 'disjunction' }) : v) : labelFor(k, v)
     return { name: k, label: `${FACETS.value[k]?.label || k}: ${shown}` }
   })
-  // ★ THE TYPED SEARCH IS A FILTER AND MUST LOOK LIKE ONE (Driver 2026-09-23: "I searched Bhutan
-  // and it did not switch the toggle to show the country was selected"). MEASURED: typing narrows
+  // ★ THE TYPED SEARCH IS A FILTER AND MUST LOOK LIKE ONE: searching "Bhutan" did not show that a
+  // country was now selected. MEASURED: typing narrows
   // the scope live via bus.searchTerm (2,107 -> 13) while filterSet stays empty, so the data
   // changed and no control anywhere said why -- invisible state, the same class as the silent
   // grey pane. The conventional faceted-search answer is that free text is its OWN chip beside
@@ -236,11 +242,11 @@ useShadowStyles(`
      KPI strip below, so the stack's edges formed a 2px staircase instead of a line — measured,
      not guessed. The horizontal value must never be re-literalised.
      ★ The VERTICAL padding drops 8px -> 5px: it is part of "the white space underneath the
-     filters" the Driver named (card BUILD-SELECTED-ROW-MUCH-THINNER-AND-CENTRED). The band's own
+     filters" the spec named (card BUILD-SELECTED-ROW-MUCH-THINNER-AND-CENTRED). The band's own
      padding, the header's inter-row gap and the selections row's height are three different
      owners of what looks like one strip of white space, which is why trimming any one of them
      alone has never been enough. */
-  /* ★ 5px -> 3px. The band's own padding is the FOURTH owner of what the Driver sees as one
+  /* ★ 5px -> 3px. The band's own padding is the FOURTH owner of what reads as one
      strip of white space, and the measurement is what made it worth touching: at 1600x900 the
      band read 67px and decomposed exactly — 10px of this padding + 56px of header. Two of those
      ten are the cheapest px in the budget because nothing sits in them. */

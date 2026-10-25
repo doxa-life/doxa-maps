@@ -129,10 +129,16 @@ for (const fn of ['onLegendExport', 'makeSelectionPacket', 'makeSelectionPoster'
   // silently becomes a no-op.
   ok(/String\(kind\)\.split\(':'\)/.test(VUE),
     'onLegendExport no longer splits the kind — a packet:<variant> emit would fall through as an unknown kind and print nothing')
+  // The bases the handler BRANCHES on, read from it (`base === '<kind>'`), plus the poster it falls through
+  // to — not a fixed pair. The legend's menu grows (the card deck joined it); a fixed list would either
+  // reject the new kind or, widened by hand, stop checking that the handler actually handles it.
+  // ⚠ ANCHORED ON `if (`: the busy label's ternary also reads `base === 'cards'`, and matching the bare
+  // comparison counted that as a branch — the gate stayed green with the cards branch deleted.
+  const handled = new Set(['poster', ...[...VUE.matchAll(/if \(base === '([a-z]+)'/g)].map((m) => m[1])])
   for (const kind of emitted) {
     const [base] = kind.split(':')
-    ok(base === 'poster' || base === 'packet',
-      `the legend emits '${kind}', whose base '${base}' is neither poster nor packet — the plugin's handler has no branch for it`)
+    ok(handled.has(base),
+      `the legend emits '${kind}', but the plugin's handler has no branch for '${base}' (it branches on: ${[...handled].join(', ')})`)
   }
   // The variant must actually travel to the renderer. Asserting the split alone would pass while
   // the parsed value was dropped on the floor.
@@ -145,7 +151,10 @@ for (const fn of ['onLegendExport', 'makeSelectionPacket', 'makeSelectionPoster'
     'the parsed variant is not passed to printPrayerPacket — the menu would offer two packets and print one')
   ok(/async function printPrayerPacket\([^)]*variant/.test(VUE),
     'printPrayerPacket does not accept a variant')
-  ok(/printPacket\(zone,\s*\{[\s\S]{0,120}variant/.test(VUE),
+  // Any first argument: the call is asserted by SHAPE (the variant inside the options object), not by what
+  // the zone variable happens to be called. It read `zone` literally, and a rename to `titled` (the zone with
+  // its localized title) failed this while the variant was still forwarded.
+  ok(/printPacket\(\w+,\s*\{[\s\S]{0,120}variant/.test(VUE),
     'printPrayerPacket does not forward the variant to printPacket — the choice would be parsed, held, and never used')
   // ⚠ AND THE STRINGS THE MENU RENDERS MUST EXIST. A missing key prints the raw key, which reads as
   // a broken translation rather than a missing string — and the explainer is the only place a
@@ -155,6 +164,27 @@ for (const fn of ['onLegendExport', 'makeSelectionPacket', 'makeSelectionPoster'
     ok(EN_LEGEND.export && EN_LEGEND.export[k],
       `legend.json export.${k} is missing — the menu would render the raw key`)
   }
+}
+
+// ── 4. A TAPPED FEATURE RESOLVES AT ITS REAL LEVEL, FROM ITS REAL PROPERTIES ──────────────────────
+// Sections 1-2 start from hand-made KEYS ('adm0:IND'), so they could not see the resolver itself
+// misfile a country: once the world ADM0 boundaries carried a shapeName, "shapeName → ADM1" turned
+// every tapped country into a province (key 'adm1:Sudan', count null, 0 UUPG), and the Prayer List
+// refused it (reported from a phone, 2026-09-30). These are the properties the map ACTUALLY hands the
+// click handler (read off the live tapestry), so a resolver that keys on the wrong field fails here.
+{
+  const { resolveTerritory, COUNTRY_COUNTS, ADM1_COUNTS } = await import(resolve(ROOT, 'plugin-designs/my-upg-100-list/data/territory-counts.js'))
+  const country = resolveTerritory({ shapeGroup: 'SDN', shapeName: 'Sudan', iso3: 'SDN', zoneKey: 'sudan', zoneLabel: 'Sudan' })
+  ok(country && country.kind === 'adm0' && country.key === 'adm0:SDN',
+    `a tapped COUNTRY (shapeName + iso3, no listId) resolved as ${JSON.stringify(country)}, not adm0:SDN — every country tap would count 0 UUPG`)
+  ok(country && country.count === COUNTRY_COUNTS.SDN && country.count > 0,
+    `a tapped country's count is ${country && country.count}, not its COUNTRY_COUNTS entry (${COUNTRY_COUNTS.SDN})`)
+  const state = resolveTerritory({ iso3: 'IND', shapeGroup: 'IND', listId: 'asia-india-madhya-pradesh', shapeName: 'Madhya Pradesh', zoneKey: 'asia-india-madhya-pradesh' })
+  ok(state && state.kind === 'adm1' && state.key === 'adm1:Madhya Pradesh' && state.count === ADM1_COUNTS['Madhya Pradesh'],
+    `a tapped India STATE (listId + shapeName + iso3) resolved as ${JSON.stringify(state)}, not adm1 with its ADM1_COUNTS entry`)
+  const nepal = resolveTerritory({ shapeGroup: 'NPL', shapeName: 'Nepal', iso3: 'NPL', zoneKey: 'asia-india-uttarakhand' })
+  ok(nepal && nepal.kind === 'adm0' && nepal.key === 'adm0:NPL',
+    `a country drawn inside an Asia zone (zone.adm0, no listId) resolved as ${JSON.stringify(nepal)}, not adm0:NPL`)
 }
 
 if (fails.length) {

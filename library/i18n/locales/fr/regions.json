@@ -74,5 +74,6 @@
   "Countries: %count%": "Pays: %count%",
   "Regions: %count%": "Régions: %count%",
   "countryCount": "{n} pays | {n} pays | {n} pays",
-  "regionCount": "{n} régions | {n} région | {n} régions"
+  "regionCount": "{n} région | {n} de régions | {n} régions",
+  "Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it.": "Bientôt — une liste de prière sera générée pour chaque pays, nommant chaque groupe de population non atteint qui s'y trouve."
 }

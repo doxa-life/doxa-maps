@@ -17,6 +17,7 @@ import { computed, provide } from 'vue'
 import { createSelectionBus } from '@map/composables/useSelectionBus.js'
 import DashboardFilterChips from '@map/components/dashboards/DashboardFilterChips.vue'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
+import { formatList } from '@map/i18n/index.js'
 import { useBoardState } from '../useBoard.js'
 import { useGiT } from '../useGiT.js'
 import { filterRows, label, FACET_RAIL } from '../model.js'
@@ -45,11 +46,20 @@ function labelFor(key, value) {
     const n = board.tree.value.byId.get(board.treeNode.value)
     if (n) return n.n
   }
-  return [].concat(value).map((v) => labelOne(key, v)).join(', ')
+  // DISJUNCTION, from the matcher rather than from what reads better: useSelectionBus.js:299 tests
+  // `cur.includes(value)` and toggleFilterValue ADDS to the list, so two values on one facet WIDEN the
+  // result set. "Africa and Asia" would claim the opposite of what the filter does — and a chip saying
+  // ALL while the data shows ANY is worse than a comma, because a comma is merely ambiguous where
+  // "and" is confidently wrong.
+  return formatList([].concat(value).map((v) => labelOne(key, v)), { type: 'disjunction' })
 }
 provide('selectionBus', bus)
-provide('dashboardConfig', {
-  facets: {
+// ★ THE FACET LABELS ARE A COMPUTED, NOT A LITERAL. Evaluated once inside provide() they froze in
+// the boot language: T() runs at setup, the object is handed to the consumer, and a live switch to
+// Arabic left every facet name in English. check:frozen-labels cannot see this — the call sites ARE
+// keyed and the keys DO resolve; what is wrong is WHEN they were read. A computed re-evaluates when
+// the locale ref changes, so the same keys now follow the reader.
+const facets = computed(() => ({
     access_level: { label: T('gospelInternet.facet.access', 'Access in their own language') },
     access_detail: { label: T('gospelInternet.col.access', 'In own language') },
     band: { label: T('gospelInternet.facet.band', 'Country internet use') },
@@ -60,7 +70,10 @@ provide('dashboardConfig', {
     religion: { label: T('gospelInternet.facet.religion', 'Religion') },
     way_in: { label: T('gospelInternet.facet.wayIn', 'Way in when nothing is in their language') },
     messaging: { label: T('gospelInternet.facet.messaging', 'Top messaging app (country)') },
-  },
+}))
+provide('dashboardConfig', {
+  // A getter, so a consumer reading .facets re-reads the computed rather than a snapshot of it.
+  get facets() { return facets.value },
   facetRail: FACET_RAIL,
   legend: { labelFor },
 })
@@ -103,7 +116,7 @@ useShadowStyles(
   '.gic2{grid-area:combos;display:flex;align-items:center;gap:10px;padding:6px 14px;background:#fff;border-bottom:1px solid #d1d4cd;' +
   'min-width:0;font:12.5px/1.3 Roboto,-apple-system,"Segoe UI",sans-serif;color:#3b463d}' +
   '.gic2-h{flex:none;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#6d766e}' +
-  // The selection side is BOUNDED at 40% (rega r82: the placeholder ran under "Try a combination"), but only
+  // The selection side is BOUNDED at 40% (the placeholder ran under "Try a combination"), but only
   // its chips and placeholder clip: they scroll or ellipsize. No overflow here and no min-width:0, so the
   // flex:none label sets the minimum width and is never cut ('YOUR S…' at 390, the zh/ru/hi/ar labels at 1280).
   '.gic2-sel{display:flex;align-items:center;gap:6px;flex:0 1 auto;max-width:40%}' +

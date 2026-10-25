@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file; prose.english is the one translated line that says so.",
   "prose": {
     "english": "नीचे दी गई व्याख्यात्मक टिप्पणियाँ अंग्रेज़ी में हैं।"
   },
@@ -12,7 +11,8 @@
     "clear": "खोज साफ़ करें",
     "none": "इस नाम, भाषा या कोड से कुछ भी मेल नहीं खाता।",
     "placeholderShort": "जनसमूह, भाषा या ISO कोड",
-    "showingOf": "{total} मिलानों में से {shown} दिखाए जा रहे हैं — सीमित करने के लिए टाइप करते रहें।"
+    "showingOf": "{total} मिलानों में से {shown} दिखाए जा रहे हैं — सीमित करने के लिए टाइप करते रहें।",
+    "aria": "जनसमूह, भाषा या ISO कोड खोजें"
   },
   "legend": {
     "title": "ऐसे जनसमूह जिन तक सुसमाचार नहीं पहुँचा और कोई संसाधन नहीं मिला",
@@ -78,7 +78,17 @@
     "everyResource": "में सभी संसाधन",
     "alsoSpeak": "यह भी बोलते हैं",
     "share": "साझा करें",
-    "linkCopied": "लिंक कॉपी हो गया"
+    "linkCopied": "लिंक कॉपी हो गया",
+    "seeLargest": "सबसे बड़े {n} देखें →",
+    "alreadyPraying": "{n} पहले से प्रार्थना कर रहे",
+    "everyIn": "{country} में उपयोग किया गया हर संसाधन",
+    "found": "मिले सुसमाचार संसाधन ({n})",
+    "none": "कोई संसाधन नहीं मिला ({n})",
+    "showingOf": "{total} में से {shown} दिखाए जा रहे हैं।",
+    "popSuffix": "· {pop} लोग",
+    "hasResources": "संबंधित: {lang} के पास संसाधन हैं",
+    "loadingTable": "{table} लोड हो रहा है…",
+    "popCountries": "{pop} लोग · {countries}"
   },
   "res": {
     "scripture": "पवित्र शास्त्र",
@@ -166,7 +176,9 @@
     "allLanguages": "सभी भाषाएँ",
     "peopleGroup": "जनसमूह",
     "peopleGroups": "जनसमूह",
-    "scriptureHere": "इस भाषा में पवित्र शास्त्र"
+    "scriptureHere": "इस भाषा में पवित्र शास्त्र",
+    "noTextMeans": "“कोई पाठ नहीं” का अर्थ।",
+    "pageLists": "यह पृष्ठ सूचीबद्ध करता है"
   },
   "columns": {
     "People group": "जनसमूह",
@@ -334,7 +346,9 @@
     "c2Unit": "उन जनसमूहों के लोग जिनकी मुख्य भाषा यही है — भाषा के सभी वक्ता नहीं",
     "c3Title": "सबसे अधिक असेवित भाषाओं वाले देश",
     "c3Sub": "{n} देश जिनमें सबसे अधिक भाषाओं के लिए कुछ नहीं मिला। बार की लंबाई उस देश में मौजूद हर भाषा है।",
-    "c3Unit": "देश में मौजूद भाषाएँ (सीमा-पार भाषा हर देश में गिनी जाती है)"
+    "c3Unit": "देश में मौजूद भाषाएँ (सीमा-पार भाषा हर देश में गिनी जाती है)",
+    "noneHero": "{nLang} में से {nNone} भाषाओं में {noScripture} — ये {popNone} लोगों की भाषाएँ हैं।",
+    "noneHeroFound": "जाँचे गए स्रोतों में न पवित्रशास्त्र मिला, न फ़िल्म"
   },
   "filter": {
     "showingOnly": "केवल {what} दिखाए जा रहे हैं।",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "{organisation} पहले से ही {countries} में SUN सिखा रहा है।"
+  },
+  "gap": {
+    "popLine": "{pop} लोग · {iso3}",
+    "wayIn": "पहुँच: {via}",
+    "hasNoText": "{what} है — कोई पाठ नहीं मिला",
+    "showingOnly": "केवल {what} दिखाए जा रहे हैं।",
+    "seeLargest": "सबसे बड़े {n} देखें →",
+    "kind": {
+      "none": "जिन समूहों के लिए कुछ नहीं मिला",
+      "some": "कुछ संसाधन वाले समूह",
+      "hnr": "वे समूह जो सुसमाचार सुन सकते हैं पर जाँचे गए स्रोतों में लिखित पवित्रशास्त्र नहीं है",
+      "all": "पवित्रशास्त्र और फ़िल्म वाले समूह"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "पवित्रशास्त्र, {medium} · {source}",
+    "bibleVideoOf": "बाइबल वीडियो · {source}",
+    "loading": "संसाधन लोड हो रहे हैं…",
+    "peopleWord": "लोग",
+    "alreadyPraying": "पहले से प्रार्थना कर रहे",
+    "exhausted": "समाप्त",
+    "together": "के साथ"
+  },
+  "gapHero": {
+    "hero": "{groups} जनसमूह {growing} {noFound} {pop} लोग, अनुमानित {deaths} मृत्यु प्रतिदिन।",
+    "growing": "बढ़ रहे हैं",
+    "found": "जाँचे गए स्रोतों में न पवित्रशास्त्र, न फ़िल्म —"
+  },
+  "ui": {
+    "noCode": "कोई कोड नहीं",
+    "unnamed": "अनाम भाषा",
+    "hideKey": "लेजेंड संक्षिप्त करें",
+    "showKey": "लेजेंड विस्तृत करें",
+    "largest": "सबसे बड़े समूह जिनके लिए कुछ नहीं मिला",
+    "nobodyPraying": "कुछ नहीं मिला, और कोई प्रार्थना नहीं कर रहा",
+    "concentrates": "अंतर कहाँ केंद्रित है",
+    "linkUnchecked": "यह लिंक जाँचा नहीं गया है।"
+  },
+  "rows": {
+    "scriptureHere": "इस भाषा में पवित्रशास्त्र",
+    "audio": "पवित्रशास्त्र",
+    "bibleVideo": "बाइबल वीडियो",
+    "gospelPresentation": "सुसमाचार प्रस्तुति",
+    "studyNotes": "अध्ययन टिप्पणियाँ",
+    "readOnline": "ऑनलाइन पढ़ें",
+    "audioScripture": "ऑडियो पवित्रशास्त्र",
+    "listenBrowser": "ब्राउज़र में सुनें",
+    "inBrowser": "ब्राउज़र में — {media}",
+    "readHere": "इस भाषा में पढ़ें",
+    "listenHere": "इस भाषा में सुनें",
+    "wordsOfLife": "जीवन के वचन — {name}",
+    "gospelAudio": "सुसमाचार ऑडियो",
+    "discipleship": "{brand} शिष्यत्व प्रशिक्षण"
   }
 }

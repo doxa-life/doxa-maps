@@ -8,7 +8,7 @@ import { emissivePaint, isMapboxMap, engineFor } from './useMapProvider.js';
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
-const GO_ORANGE          = '#1a1a1a';   // Black indicator (was '#FF6600' — qa: 2026-05-06 user wants simple black/white pin)
+const GO_ORANGE          = '#1a1a1a';   // Black indicator (was '#FF6600'; a plain black/white pin reads best)
 const HIGHLIGHT_LAYER_ID = 'selected-pin-highlight';
 
 /**
@@ -79,7 +79,7 @@ export function useSelectedPin(options = {}) {
     let _markerEl  = null;
     let _marker    = null;
 
-    // Dynamic pin color (qa: 2026-05-06 — pin matches the active tab's
+    // Dynamic pin color (the pin matches the active tab's
     // dot color so a click on a green dot shows a green pin, red shows red,
     // etc.). Falls back to the literal GO_ORANGE constant if the parent
     // profile didn't provide a resolver.

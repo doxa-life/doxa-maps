@@ -2,9 +2,9 @@
 /**
  * check-embed-url-absolute — a share/embed url must never be relative.
  *
- * THE DEFECT (Driver, 2026-09-28, testing live): the link copied from Simple Research was
+ * THE DEFECT (2026-09-28, found testing live): the link copied from Simple Research was
  * `research-map-plus-grid/research-map-plus-grid/index.html` while the page was
- * `http://127.0.0.1:5192/#f=…` — "the perfect example of how embeddability is not working".
+ * `http://127.0.0.1:5192/#f=…`, a clear case of an embed that could not work.
  *
  * WHY IT SURVIVED SO LONG, and it is the reason this is a gate rather than a fix: a relative share link
  * WORKS WHEN CLICKED. The browser resolves it against the page you copied it from, so the person testing
@@ -42,7 +42,7 @@ const LEAF = 'research-map-plus-grid/research-map-plus-grid/index.html'
 const got = absoluteEmbedUrl(LEAF)
 if (!/^https?:\/\//i.test(got)) {
   fails.push(`absoluteEmbedUrl returned a RELATIVE url with no tree root: "${got}".\n`
-    + '      That is the exact value the Driver copied. It must resolve against the runtime origin.')
+    + '      That is the exact value that was copied. It must resolve against the runtime origin.')
 }
 if (got !== 'http://127.0.0.1:5192/' + LEAF) {
   fails.push(`absoluteEmbedUrl did not resolve against the page origin: "${got}"`)

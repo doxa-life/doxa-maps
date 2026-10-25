@@ -31,7 +31,8 @@
     "readyRosetta": "Pronto · marcadores: {pins} · amostras Rosetta: {samples} (★ dourada)",
     "readyPins": "Pronto · marcadores: {pins} · clique num marcador",
     "readyLanguage": "Pronto · marcadores: {pins} · cobertura de famílias {coverage}% · top 25 = {top}%",
-    "readyReligion": "Marcadores: {pins} · mais comum: {religion} ({count})"
+    "readyReligion": "Marcadores: {pins} · mais comum: {religion} ({count})",
+    "d3Failed": "Não foi possível carregar a biblioteca de gráficos."
   },
   "ui": {
     "chooseView": "Escolha uma vista",
@@ -56,7 +57,8 @@
     "sunburst": "Hierarquia ROP · bloco de afinidade → agrupamento de povos · role para ampliar",
     "pins": "Todos os marcadores povo-país · clique para ver os identificadores dos sistemas",
     "coverage": "Cobertura de tradução · cor = média de idiomas preenchidos por país · clique num marcador ou num país",
-    "rosetta": "Rosetta de identificadores · cor = identificadores existentes · ★ = linha de exemplo"
+    "rosetta": "Rosetta de identificadores · cor = identificadores existentes · ★ = linha de exemplo",
+    "translations": "Nome do povo · {n} idiomas · clique num ponto"
   },
   "legendTitle": {
     "avgLocales": "Média de idiomas / {n}",
@@ -88,5 +90,10 @@
   },
   "card": {
     "nameInLocales": "Nome em {n} idiomas"
+  },
+  "title": "Mapas de dados do PPLR",
+  "index": {
+    "title": "Validação dos dados do PPLR",
+    "help": "Clique num cartão ou escolha uma vista acima."
   }
 }

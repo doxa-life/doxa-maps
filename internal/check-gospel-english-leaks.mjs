@@ -1,7 +1,7 @@
 /**
  * check-gospel-english-leaks.mjs — a translated key must not render in English.
  *
- * THE METHOD, from rega by way of dx-shepherd. A string is a LEAK when the catalogue has a
+ * THE METHOD, taken from the browser review. A string is a LEAK when the catalogue has a
  * DIFFERENT value for the locale and the page still shows the English one. That is a render
  * or wiring fault, and it is a different thing from an untranslated string, which is a
  * catalogue gap. Only the first is this check's business.
@@ -75,7 +75,7 @@ try {
       /* ═══ WHOLE LABELS, NOT SUBSTRINGS — the third correction, and the last ═══════════
        * Substring matching over the rendered blob reported keys that were never rendered at
        * all: "Language" matched inside the DATA — the people-group language "Sign Language" —
-       * and "Region" inside a region name. Those are exactly the data strings rega's method
+       * and "Region" inside a region name. Those are exactly the data strings the method
        * excludes, and no amount of length filtering separates a label from a word that
        * happens to sit inside one.
        * So the unit is an ELEMENT'S OWN LABEL: the trimmed text a leaf element renders. A

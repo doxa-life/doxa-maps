@@ -5,15 +5,14 @@
  * @description Four validated research tables, one tab each, with sortable and filterable columns, CSV and JSON
  *   export, and each table's caveats rendered in the UI rather than hidden in a footnote.
  *
- * Four validated Tabulator tables from the flight's research corpora, each with
+ * Four validated Tabulator tables from the research corpora, each with
  * sortable/filterable columns, CSV+JSON export, and its caveats rendered IN the UI.
  *
- * > design note 2026-08-01: "all the tabulator data and trees for all the multiple
- * > various tabulator tables for all this data all organized in list format with
- * > full granularity."
+ * Design intent: present all the tabulator data and trees for the various tables
+ * in list format, at full granularity.
  *
  * The tables are produced by library/scripts/research/build-tabulator-tables.mjs
- * (the M+V of IEMV) — flat scalar rows, one row per fact, validated before write.
+ * — flat scalar rows, one row per fact, validated before write.
  *
  * WHY THE CAVEATS RENDER: a list view strips context. Someone reading
  * "Internet 12.6%" needs to know it is a NATIONAL figure, and someone reading a
@@ -37,14 +36,14 @@ const assetsBase = computed(() => resolveAssetsBase(profileConfig.value))
 // i18n is OPTIONAL: useI18n() throws on a host that never installed it, so English from the
 // shipped catalog is the fallback, never a blank or a key. Region and country names are data.
 // C4 wave 3b: the guard is library/composables/useOptionalT.js now, and the fallback resolves through
-// tStatic — the RUNTIME LOCALE first, English as the last resort. exp-shepherd's call as this
-// plugin's owner (2026-09-26), on the same reasoning gospel-plugin gave: the bundle already carries
+// tStatic — the RUNTIME LOCALE first, English as the last resort. This plugin owns that
+// choice, on the same reasoning the other map plugins use: the bundle already carries
 // all 11 catalogues, so a partner embedding without vue-i18n being served English is a bug, not a
 // decision. The old enLookup was English-only, which is exactly what that served.
 // The local fill() is gone with the guard: fillParams applies the same interpolation, except it leaves
 // a placeholder for a NULL value where this fill() rendered the string "null".
 const t = useOptionalT('connectivity')
-// NUMERALS ARE HELD for the Driver (dx-shepherd, 2026-09-26): a locale-following format would switch
+// NUMERALS ARE HELD by design: a locale-following format would switch
 // 'ar' to Arabic-Indic digits. Until that is decided, numbers keep the browser-default format they
 // had before this pass; only the TEXT is translated.
 const num = (n) => (Number(n) || 0).toLocaleString()
@@ -88,6 +87,12 @@ watch(current, (t) => t && ensure(t.file), { immediate: true })
 const table = computed(() => cache.value[current.value?.file] || null)
 
 useShadowStyles(
+  // ★ THE TABLE MUST STAY INSIDE ITS HOST BOX — the same defect and the same fix as connectivity-list.
+  // With no :host rule the element is inline with no height, and .ct (position:absolute;inset:0)
+  // resolved against the partner page's positioned ancestor instead of this element. Measurement showed
+  // content painting to y=1,698, which is 1,254px BELOW a 420px host box.
+  // .ct already has overflow-y:auto, so containing it is enough to make the table scroll in the box.
+  ':host{display:block;position:relative;width:100%;height:100%;min-height:320px}' +
   '.ct{position:absolute;inset:0;overflow-y:auto;padding:18px;background:#f6f7f9;color:#0f1419;' +
   "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}" +
   '.ct.is-dark{background:#0a1410;color:#e5e7eb}' +

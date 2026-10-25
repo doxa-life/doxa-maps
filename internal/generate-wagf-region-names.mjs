@@ -2,13 +2,13 @@
 /**
  * generate-wagf-region-names.mjs — the WAGF region names, in the reader's language, from vendored CLDR.
  *
- * ★ THE DEFECT (rega KA3, 3d64bcad, ?lang=ar). Big Picture's region chart labels its bars with the
+ * ★ THE DEFECT (KA3, 3d64bcad, ?lang=ar). Big Picture's region chart labels its bars with the
  * prayer API's ENGLISH region names — "Africa", "Asia", "Latin America & Caribbean" — on an Arabic page.
  * They are not chrome and no catalogue held them: they are DATA labels, so every i18n gate was green
  * while the chart read English to every reader. The regions are a closed set of seven
  * (library/colors/wagf-region.js WAGF_REGIONS), which is what makes cataloguing them possible at all.
  *
- * ★ WHY GENERATED AND NOT HAND-AUTHORED. Ten locales x seven names is seventy strings I cannot write.
+ * ★ WHY GENERATED AND NOT HAND-AUTHORED. Ten locales x seven names is seventy strings that cannot be hand-written reliably.
  * Five of the seven ARE standard UN M49 macro-regions, so CLDR already names them in every locale we
  * ship, and Node's own ICU is the same data library/utils/countryName.js already trusts for countries.
  * Generating is what keeps a translation out of my hands: the strings are copied from CLDR, committed,
@@ -21,7 +21,7 @@
  *     Egypt). Naming it "Western Asia" in ten locales would silently redraw the region.
  *   · north_america_&_non-spanish_caribbean — M49 021 is "Northern America", which excludes the
  *     Caribbean this bucket exists to include.
- *   Both stay English until the Driver rules on a translation source. An English label a reader can
+ *   Both stay English, provisional, pending a product decision on a translation source. An English label a reader can
  *   still match to the map beats a localized label that names the wrong territory.
  *
  * ★ AND ONE SCOPE NOTE ON 419: CLDR's long name is "Latin America" while our label says

@@ -110,7 +110,6 @@ internal/*/out/**
 # Agent/internal working docs live here and are NEVER published. The repo's
 # public surface stays architecture + code + contributor docs; internal process
 # notes, lessons-learned and agent instructions stay out of it.
-_qa-cycle/
 
 # ── GENERATOR OUTPUT — regenerable render artifacts, never committed ──────────
 # internal/<tool>/out/ holds what the poster/research generators RENDER
@@ -135,7 +134,7 @@ _qa-cycle/
 # library/scripts/research/build-tabulator-tables.mjs). Guard against re-creation.
 data-private/
 
-# ── public/ is the OUTPUT FOLDER + README.md only (Driver decision, BUILD-OUTPUT-IS-ONE-FOLDER, 2026-09-25) ──
+# ── public/ is the OUTPUT FOLDER + README.md only (decision BUILD-OUTPUT-IS-ONE-FOLDER, 2026-09-25) ──
 # These rules used to live in public/.gitignore, which was itself a tracked file INSIDE the generated
 # folder (so `rm -rf public && bun run build` deleted it). Local-only files stay untracked:
 /public/token.local.js
@@ -152,4 +151,12 @@ data-private/
 /.pb/
 # bun run desktop:build <plugin>: the staged plugin and the built sidecar engines (never committed)
 /.desktop/
+# gated bundles (gatedProfiles) build here, never into public/ (vite.config.js)
+/.gated/
 /deployment/src-tauri/binaries/
+
+# vite writes these beside the config while it bundles it; never commit one (it embeds absolute paths)
+vite.config.js.timestamp-*
+
+# build artifacts (generic — no secret names)
+capacitor/android/**/build/

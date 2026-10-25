@@ -78,7 +78,8 @@ useShadowStyles(
   '.seg button:hover{ color:var(--ui-text,#3b463d); }' +
   '.seg button:hover::after{ background:var(--ui-border,#d1d4cd); }' +
   '.seg button[aria-pressed="true"]{ color:var(--ui-primary,#92b195); font-weight:600; }' +
-  '.seg button[aria-pressed="true"]::after{ background:var(--ui-primary,#92b195); }',
+  '.seg button[aria-pressed="true"]::after{ background:var(--ui-primary,#92b195); }'
+  + '/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,\n   and no generated leaf ships one anyway (measured: 0 across the whole tree). Additive only. */\n@media (prefers-reduced-motion: reduce) {\n  .vs-root, .vs-opt, .vs-menu, .vs-btn { transition: none !important; animation: none !important; }\n}\n',
   'view-select'
 )
 </script>

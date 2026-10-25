@@ -9,7 +9,7 @@
  *         data/boundaries/gb-IND-ADM1-full.geojson  the boundary file the map draws (all 36)
  * WRITES  data/tables/internet-by-adm1.json           served as assets/tables/internet-by-adm1.json
  *
- * THE TABLE IS GENERIC ON PURPOSE (other plugins and go-int reuse it). One row per
+ * THE TABLE IS GENERIC ON PURPOSE (other plugins reuse it). One row per
  * (iso3, adm1, measure, sex, area): no India-specific shape, so a second country or a second
  * measure is more rows, not a new format. `meta.boundaries[iso3]` names the geometry file and the
  * property its `adm1` joins on; `meta.measures` and `meta.sources` say what each number is.

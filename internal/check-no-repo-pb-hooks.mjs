@@ -5,7 +5,7 @@
  * WHY: the cloud container pulls this repo every few seconds. A PocketBase hook is server-side JS; one pushed
  * by any plugin writer would run on the team backend within seconds, which is the rogue-writer hole the
  * roundtable test closed. The container never points PocketBase at the repo (--hooksDir is outside the
- * pulled tree; the one team sign-in hook is baked into the image and pinned, deployment/cloud/Dockerfile).
+ * pulled tree; the one team sign-in hook is baked into the image and pinned, in the repo-root Dockerfile).
  * This gate keeps anyone from adding a hooks folder that LOOKS like it would run, or that a later recipe
  * change could start running.
  *
@@ -26,7 +26,7 @@ const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT }).toString(
 const bad = offending(tracked)
 if (bad.length) {
   console.error(`✗ PocketBase hooks in the repo (server-side JS must never ride the live pull):\n${bad.map((p) => '  ' + p).join('\n')}`)
-  console.error('  The team sign-in hook is baked into the image (deployment/cloud/Dockerfile); anything else needs a design review.')
+  console.error('  The team sign-in hook is baked into the image (the repo-root Dockerfile); anything else needs a design review.')
   process.exit(1)
 }
 console.log(`✓ no PocketBase hooks among ${tracked.length} tracked files`)

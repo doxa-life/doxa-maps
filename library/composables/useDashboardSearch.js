@@ -45,8 +45,8 @@ export function buildSearchAccessors(config) {
  * array from buildSearchAccessors(config). Case-insensitive substring over each accessor's value.
  */
 export function makeSearchMatcher(bus, accessors) {
-  // ★ FUZZY, NOT SUBSTRING (Driver 2026-09-23: "add an n to the end of a country name" must
-  // still find it -- check what DX-life's search bar bakes in). DX-life runs real Fuse.js with
+  // ★ FUZZY, NOT SUBSTRING: a country name with an n added must still find it (matching what
+  // DX-life's search bar bakes in). DX-life runs real Fuse.js with
   // { threshold: 0.4, ignoreLocation: true, minMatchCharLength: 3 } (UupgsList.vue:288), so its
   // search tolerates typos. This matcher was a plain .includes() -- the one search surface that
   // silently lost that behaviour in the migration (measured: 'Bhutan' 13 rows, 'Bhutann' 0).
@@ -75,8 +75,8 @@ export function makeSearchMatcher(bus, accessors) {
 /**
  * Apply the TIERED search to a row set:
  *   1. exact substring -- an exact term returns exactly the rows the equivalent facet selects.
- *   2. facet-VALUE resolution (Driver: "Austrian or Canadian... a selection of that country --
- *      the table under the map shows the result for that country"): the term is resolved by
+ *   2. facet-VALUE resolution (Austrian or Canadian selects that country, and the table under the
+ *      map shows its result): the term is resolved by
  *      whole-value edit distance against each accessor's DISTINCT values, and the rows returned
  *      are those carrying a resolved value -- byte-identical to picking it as a filter.
  *   3. the generic windowed fuzzy rescue, only when nothing resolves.

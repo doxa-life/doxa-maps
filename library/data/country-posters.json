@@ -960,7 +960,7 @@
    "iso3": "USA",
    "label": "United States of America",
    "count": 3,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -178.228,
     13.246,
@@ -1006,7 +1006,7 @@
   {
    "id": "country-kos",
    "iso3": "KOS",
-   "label": "KOS",
+   "label": "Kosovo",
    "count": 3,
    "region": "Europe",
    "bbox": [
@@ -1152,7 +1152,7 @@
    "iso3": "CCK",
    "label": "Cocos (Keeling) Islands",
    "count": 2,
-   "region": "Other",
+   "region": "Oceania",
    "bbox": [
     96.831418,
     -12.185468,
@@ -1232,7 +1232,7 @@
    "iso3": "GUF",
    "label": "French Guiana",
    "count": 2,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -54.601,
     2.179,
@@ -1344,7 +1344,7 @@
    "iso3": "AND",
    "label": "Andorra",
    "count": 1,
-   "region": "Other",
+   "region": "Europe",
    "bbox": [
     1.412,
     42.43,
@@ -1424,7 +1424,7 @@
    "iso3": "VIR",
    "label": "Virgin Islands, U.S.",
    "count": 1,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -64.904,
     17.68,
@@ -1536,7 +1536,7 @@
    "iso3": "BMU",
    "label": "Bermuda",
    "count": 1,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -64.886,
     32.248,
@@ -1568,7 +1568,7 @@
    "iso3": "VGB",
    "label": "Virgin Islands, British",
    "count": 1,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -64.716,
     18.389,
@@ -1648,7 +1648,7 @@
    "iso3": "CXR",
    "label": "Christmas Island",
    "count": 1,
-   "region": "Other",
+   "region": "Oceania",
    "bbox": [
     105.672,
     -10.426,
@@ -1744,7 +1744,7 @@
    "iso3": "DMA",
    "label": "Dominica",
    "count": 1,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -61.48,
     15.21,
@@ -1888,7 +1888,7 @@
    "iso3": "GLP",
    "label": "Guadeloupe",
    "count": 1,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -61.809,
     15.947,
@@ -2192,7 +2192,7 @@
    "iso3": "MCO",
    "label": "Monaco",
    "count": 1,
-   "region": "Other",
+   "region": "Europe",
    "bbox": [
     7.416,
     43.733,
@@ -2208,7 +2208,7 @@
    "iso3": "MSR",
    "label": "Montserrat",
    "count": 1,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -62.232,
     16.675,
@@ -2240,7 +2240,7 @@
    "iso3": "NIU",
    "label": "Niue",
    "count": 1,
-   "region": "Other",
+   "region": "Oceania",
    "bbox": [
     -169.949,
     -19.155,
@@ -2272,7 +2272,7 @@
    "iso3": "NFK",
    "label": "Norfolk Island",
    "count": 1,
-   "region": "Other",
+   "region": "Oceania",
    "bbox": [
     167.9544,
     -29.0338,
@@ -2352,7 +2352,7 @@
    "iso3": "BLM",
    "label": "Saint Barthélemy",
    "count": 1,
-   "region": "Other",
+   "region": "North America & Non-Spanish Caribbean",
    "bbox": [
     -62.868,
     17.879,
@@ -2400,7 +2400,7 @@
    "iso3": "SMR",
    "label": "San Marino",
    "count": 1,
-   "region": "Other",
+   "region": "Europe",
    "bbox": [
     12.404,
     43.896,
@@ -2544,7 +2544,7 @@
    "iso3": "TKL",
    "label": "Tokelau",
    "count": 1,
-   "region": "Other",
+   "region": "Oceania",
    "bbox": [
     -172.47,
     -8.557,
@@ -2608,7 +2608,7 @@
    "iso3": "WLF",
    "label": "Wallis and Futuna",
    "count": 1,
-   "region": "Other",
+   "region": "Oceania",
    "bbox": [
     -176.251,
     -13.352,

@@ -1,6 +1,6 @@
 /**
  * columns.js — the grid's columns and the CSV's columns: ONE list, so what a reader sees is what the file
- * holds (SPEC-GOSPEL-INTERNET-DASHBOARD section 5 and 9). `hidden` columns are off in the grid until the
+ * holds (see ../README.md, "Columns and export"). `hidden` columns are off in the grid until the
  * picker turns them on, and the CSV exports exactly the columns that are ON.
  *
  * `csv` is the raw value (codes, numbers, URLs) — a spreadsheet joins on it, so it is never translated.
