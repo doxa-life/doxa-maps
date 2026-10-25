@@ -24,7 +24,7 @@ import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { useCsvExport } from '@map/composables/useCsvExport.js'
 import { formatCount } from '@map/utils/formatCount.js'
 import { useTreeLegendLabels } from '../../composables/useTreeLegendLabels.js'
-import { lbl } from '../../composables/useDashboardAggregations.js'
+import { lbl } from '@map/composables/useFacetAggregation.js'
 
 const dash = inject('dashboardData', null)
 const bus = inject('selectionBus', null)
@@ -96,8 +96,8 @@ const moreInfoHref = computed(() => {
   const def = `${origin}/research/${encodeURIComponent(r.slug || '')}/?utm_source=${utm}`
   return resolveUrl(detailCfg.value.moreInfoUrl, r, def)
 })
-const prayLabel = computed(() => detailCfg.value.prayLabel || 'Pray for this people group')
-const moreInfoLabel = computed(() => detailCfg.value.moreInfoLabel || 'More information')
+const prayLabel = computed(() => detailCfg.value.prayLabel || T('dashboard.pray_for_group', 'Pray for this people group'))
+const moreInfoLabel = computed(() => detailCfg.value.moreInfoLabel || T('dashboard.more_information', 'More information'))
 
 function exportThis() {
   if (!exporter || !bus) return

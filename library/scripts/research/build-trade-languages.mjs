@@ -5,11 +5,10 @@
 //     -> out/tables/gaps-and-opportunities.json
 //
 // ═══ THE QUESTION THIS ANSWERS ══════════════════════════════════════════════
-// design note 2026-08-01: "the gospel resources map needs research into trade languages
-// for each country and city, and key languages in order of most prevalent, and map
-// that to gospel" … "goal is to get the gospel into all people groups through the
-// internet, so we need to use gospel resources and also languages and maps, and
-// map this out to find GAPS and OPPORTUNITIES."
+// The gospel resources map needs the trade languages of each country and city, with the
+// key languages ordered by prevalence and mapped to gospel resources. The goal is to get
+// the gospel to every people group through the internet, so resources, languages and maps
+// are combined to find GAPS and OPPORTUNITIES.
 //
 // A people group with no scripture in its HEART language is not necessarily
 // unreachable. It may already speak a widely-used language of its country that
@@ -21,7 +20,7 @@
 // all lack resources is a GAP — nothing existing reaches them.
 //
 // ═══ HOW A "TRADE LANGUAGE" IS DERIVED, AND WHY NOT FROM A LIST ═════════════
-// I tried restcountries for official languages: the v3.1 API is DEPRECATED and
+// restcountries was tried for official languages: the v3.1 API is DEPRECATED and
 // returns an error body. Rather than hand-type a 175-row table of national
 // languages from memory — which is exactly where a confident error would enter —
 // this derives prevalence FROM THE DX CORPUS ITSELF:
@@ -54,8 +53,8 @@ const raw = JSON.parse(readFileSync(RECORDS, 'utf8'));
 const records = Array.isArray(raw) ? raw : (raw.records || raw.data || []);
 const res = JSON.parse(readFileSync(join(OUT, 'language-resources.json'), 'utf8'));
 // ENVIRONMENT — an opportunity is not just "a resource exists". It is a resource
-// they can REACH. Brief: "opportunities exist in many places where resources and
-// environment are all aligned for the gospel work to happen."
+// they can REACH. An opportunity is a place where the resources and the environment
+// line up for gospel work.
 // So the alignment test is THREE things, not one:
 //   RESOURCE   does something exist in a language they plausibly use
 //   REACH      is there internet to receive it

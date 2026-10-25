@@ -119,7 +119,7 @@ try {
  *   2. MAPBOX 403 — the shared pk. token is URL-restricted to doxa.life, so every tileset request
  *      403s from any other origin. Mapbox then throws its own internal errors (`qt` at
  *      mapbox-gl.js) BECAUSE of those 403s, which is why one restriction produces ~20 lines.
- *      Tracked as a P0 the Driver must fix in the Mapbox account — not a code defect here.
+ *      Tracked as a P0 to fix in the Mapbox account — not a code defect here.
  *   3. TERMINAL — "No Mapbox access token provided": the ladder is EXHAUSTED. The map genuinely
  *      cannot paint, so this MUST still fail.
  *

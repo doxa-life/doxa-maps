@@ -15,16 +15,18 @@
 // the correct product behaviour and the one BUILD-POSTERS-GENERATE-ON-DEMAND-DROP-52MB
 // claims in prose. This turns that claim into an assertion.
 //
-// ⚠ IT MUST BE RUN AGAINST THE TREE ROOT, NOT public/. A leaf resolves assetsBase
-// to '../../assets', which from <tree>/<bundle>/<profile>/ is <tree>/assets. Serving
-// public/ instead puts public/assets on that path — a directory that still holds
-// 378 posters in a dev checkout — and the poster then loads with a 200, so this gate
-// would silently test the opposite of what it claims. Measured 2026-09-24: the same
-// click returned 200 under `--directory public` and 404 under
-// `--directory public/doxa-maps`. Serve the TREE.
+// ★ THE CONDITION IS FORCED, NOT FOUND. This gate used to look for a tree that served
+// neither file and SKIP (exit 0) on any other. Two changes made that tree unreachable:
+// the served tree now SHIPS the poster sources (the prayer packet's map needs them), and
+// a wall whose host passes `sheet` GENERATES the poster first from the served
+// lib/poster-render.js, so "no stored file" no longer means "nothing to print". It
+// skipped every time, and the skip read as a pass. So the browser is now told the
+// truth of the worst case directly: every posters/*.webp and *.html answers 404, and
+// the generator does not load. What the reader is then shown is what this asserts, on
+// any tree, whichever directory is served.
 //
-// Usage: node internal/check-poster-degrades-honestly.mjs <wallUrl> [zoneId]
-import { chromium } from './lib/playwright-guarded.mjs'
+// Usage: node internal/check-poster-degrades-honestly.mjs <wallUrl>
+import { chromium, NOT_MEASURED } from './lib/playwright-guarded.mjs'
 import { requireThisTree } from './_serves-this-tree.mjs'
 import { resolve as _resolvePath, dirname as _dirnamePath } from 'node:path'
 import { fileURLToPath as _fileURLToPath } from 'node:url'
@@ -39,25 +41,9 @@ const ROOT = _resolvePath(_dirnamePath(_fileURLToPath(import.meta.url)), '..')
 // A file:// target passes straight through — there is no server there to be wrong about.
 await requireThisTree(WALL, ROOT, 'POSTER-DEGRADES-HONESTLY')
 if (!WALL) {
-  console.log('POSTER-DEGRADES: SKIP — no wall url given.')
-  console.log('  Serve the TREE ROOT (public/<name>), not public/, or assetsBase resolves')
-  console.log('  outside the tree and the poster loads when it should 404.')
-  process.exit(0)
-}
-
-// The precondition is the INVERSE of the other gate's: there must be NO poster and
-// NO source. If either is reachable this is the wrong tree to be testing.
-const probeId = process.argv[3] || 'laos'
-const srcUrl = new URL(`../../assets/posters/${probeId}.html`, WALL).href
-const imgUrl = new URL(`../../assets/posters/${probeId}.webp`, WALL).href
-let reachable = []
-for (const [name, u] of [['html', srcUrl], ['webp', imgUrl]]) {
-  try { const r = await fetch(u); if (r.ok) reachable.push(name) } catch { /* unreachable is the point */ }
-}
-if (reachable.length) {
-  console.log(`POSTER-DEGRADES: SKIP — this tree DOES serve the poster ${reachable.join(' and ')}.`)
-  console.log('  That is the check:poster-print-fallback case. This gate asserts the tree with NEITHER.')
-  process.exit(0)
+  // NOT MEASURED, not a pass: with no wall there is nothing to click, and exit 0 here read as green.
+  console.log('POSTER-DEGRADES: NOT MEASURED — no wall url given (argv[2] or POSTER_WALL_URL).')
+  process.exit(NOT_MEASURED)
 }
 
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] })
@@ -68,6 +54,12 @@ let downloads = 0
 page.on('download', () => { downloads += 1 })
 const posterHits = []
 page.on('response', (r) => { if (/\/posters\//.test(r.url())) posterHits.push(`${r.url().split('/').pop()}=${r.status()}`) })
+
+// THE WORST CASE, forced (see the header): no stored poster, no source, no generator.
+// Card thumbnails live under previews/ and still load, so the wall looks as it does to a reader.
+let generatorBlocked = 0
+await page.route(/\/posters\/[^/?]+\.(webp|html)(\?|$)/, (route) => route.fulfill({ status: 404, contentType: 'text/plain', body: 'not found' }))
+await page.route(/\/lib\/poster-render(\.global)?\.js(\?|$)/, (route) => { generatorBlocked += 1; route.abort() })
 
 await page.goto(WALL, { waitUntil: 'load', timeout: 45000 })
 await page.waitForTimeout(8000)
@@ -151,6 +143,7 @@ console.log('POSTER-DEGRADES')
 console.log(`  wall          : ${WALL}`)
 console.log(`  clicked       : ${clicked || '(nothing)'}`)
 console.log(`  poster fetches: ${JSON.stringify(posterHits)}`)
+console.log(`  generator     : ${generatorBlocked} request(s) aborted${generatorBlocked ? '' : ' (this wall generated nothing first)'}`)
 console.log(`  print frames  : ${printFrames}   downloads: ${downloads}`)
 console.log(`  told the user : ${JSON.stringify(said) || '(nothing)'}`)
 

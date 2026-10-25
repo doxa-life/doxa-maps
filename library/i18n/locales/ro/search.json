@@ -23,5 +23,12 @@
     "dialect": "Dialect",
     "religionKind": "Religie"
   },
-  "upg100Placeholder": "Caută popor, listă UPG-100 sau regiune…"
+  "upg100Placeholder": "Caută popor, listă UPG100 sau regiune…",
+  "tabPlaceholder": {
+    "languageFamilies": "Caută familie de limbi, limbă, dialect/variantă",
+    "affinityBlocks": "Caută bloc de afinitate, grup, popor",
+    "regions": "Caută regiune, țară, popor",
+    "religion": "Caută religie, popor"
+  },
+  "placeholderRegions": "Caută regiune, țară sau popor"
 }

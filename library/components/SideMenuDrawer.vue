@@ -157,6 +157,14 @@ useShadowStyles(`
 .smd-reload-btn:hover { background: rgba(0,0,0,0.09); color: #222; }
 .smd-drawer.dark .smd-reload-btn { border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: #ccc; }
 .smd-drawer.dark .smd-reload-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .smd-drawer, .smd-backdrop, .smd-item { transition: none !important; animation: none !important; }
+}
 `, 'side-menu-drawer')
 
 defineProps({

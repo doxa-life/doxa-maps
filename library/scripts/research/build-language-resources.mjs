@@ -30,7 +30,7 @@
 // No church, believer, meeting-point or fellowship data of any kind. This maps
 // PUBLISHED RESOURCE AVAILABILITY per language — "does a translation exist" — which
 // is public bibliographic fact. It must never gain a field describing where
-// Christians are. (design note boundary, 2026-08-01.)
+// Christians are. (A standing boundary since 2026-08-01.)
 //
 // HONESTY RULE: a language absent from eBible is recorded `has_scripture:false`
 // with `checked_pools:['ebible']`. That means "not found in the pools we checked",

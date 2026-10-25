@@ -7,7 +7,7 @@
  * It runs in Node with no layout engine, so it asserts the things that are TRUE OF THE MODEL: the
  * geometry closes, every group gets a row, the fit ladder picks the size it claims, the fallback
  * fires in all three states. It CANNOT assert that the rendered row is 73px tall in a browser —
- * that is rega's seat (internal/check-packet-render.mjs, which launches a browser and is exit-75
+ * that is the browser gate (internal/check-packet-render.mjs, which launches a browser and is exit-75
  * NOT MEASURED anywhere else). A character-count budget is a MODEL of wrapping, not a measurement
  * of it, and the honest place to say so is here rather than in a commit message nobody re-reads.
  *
@@ -40,7 +40,7 @@ const G = (i) => ({ slug: `g${i}`, name: `Group ${i}`, country_code: 'MYS', prim
 // which meant the assertion checked MY arithmetic against MY arithmetic and stayed green when the
 // source's ROWS changed — it was the pagination check that caught that mutant, by luck. PER_PAGE is
 // exported; the rest come out of the rendered geometry, so this compares the SOURCE to the sheet.
-const { PER_PAGE, W, H } = mk(describe)
+const { PER_PAGE, FD_FIRST, W, H } = mk(describe)
 const SRC = read('library/packet/packet-render.js')
 const numOf = (re, what) => {
   const m = SRC.match(re)
@@ -61,7 +61,7 @@ const CH = (H - 2 * M - HEAD - GUT * (PER_PAGE - 1)) / PER_PAGE
 // to fire: 20 rows (73px) and 21 rows (69px) pass because the content genuinely fits; 24 rows
 // (60px) and 28 fail. That is the boundary this is meant to guard.
 // ⚠ THE ROW IS A BORDER-BOX, so its padding and border come OUT of the declared height rather than
-// being added to it. rega measured 81px against a 73.25px model before `box-sizing:border-box` was
+// being added to it. A browser check measured 81px against a 73.25px model before `box-sizing:border-box` was
 // set — the rows were rendering 7.75px taller than the geometry that positions them, overlapping
 // their successors, while the stack still fitted the sheet (ending 8px INSIDE the bottom margin
 // rather than on it). Nothing clipped and nothing ran off the page, which is exactly why only a
@@ -91,7 +91,10 @@ for (const n of [1, 19, 20, 21, 45, 100]) {
   const rows = (html.match(/class="card"/g) || []).length
   ok(rows === n, `${n} groups rendered ${rows} rows — a layout rewrite dropped people`)
   const pages = R.listPages({ id: 'z', label: 'Z' }, Array.from({ length: n }, (_, i) => G(i)), new Map()).length
-  ok(pages === Math.ceil(n / 20), `${n} groups made ${pages} pages, expected ${Math.ceil(n / 20)}`)
+  // The first page gives its top to the explanation band (2026-10-02) and holds FD_FIRST rows; the rest PER_PAGE.
+  const want = 1 + Math.ceil(Math.max(0, n - FD_FIRST) / PER_PAGE)
+  ok(Number.isInteger(FD_FIRST) && FD_FIRST > 0 && FD_FIRST < PER_PAGE, `FD_FIRST should be a row count below PER_PAGE, got ${FD_FIRST}`)
+  ok(pages === want, `${n} groups made ${pages} pages, expected ${want} (${FD_FIRST} on the first, ${PER_PAGE} after)`)
 }
 
 // Each row must carry its three prayer boxes — the packet is a WORKING sheet, and a row without
@@ -104,7 +107,11 @@ for (const n of [1, 19, 20, 21, 45, 100]) {
 // ── 3. THE FIT LADDER PICKS THE SIZE IT CLAIMS, AND EVERY TIER FIRES ───────────────────────────
 // Budgets are recomputed here from the same inputs rather than hardcoded, so this tests the LADDER
 // and not my arithmetic twice.
-const DESC_W = 1036, ADV = 0.52, LINES = 2
+// DESC_W READ FROM THE SOURCE'S OWN INPUTS, not restated: it was a typed 1036 and went stale the moment the tally
+// cells widened (PRAY_CELL 84 → 96). The row is the sheet less its margins, the photo, the three tally cells and
+// two gutters.
+const PRAY_CELL = numOf(/const PRAY_CELL = (\d+)/, 'PRAY_CELL')
+const DESC_W = (W - 2 * M) - Math.min(CH - 8, 64) - 3 * PRAY_CELL - GUT * 2, ADV = 0.52, LINES = 2
 const budget = (px) => Math.floor(DESC_W / (px * ADV)) * LINES
 const probe = (txt) => {
   const html = mk(() => txt).listPages({ id: 'z' }, [G(0)], new Map()).join('')
@@ -114,7 +121,9 @@ const probe = (txt) => {
 const words = (n) => 'word '.repeat(n).trim()
 ok(probe(words(10)).px === 17, 'a short description did not render at the full 17px')
 ok(probe(words(Math.floor(budget(17) / 5))).px === 17, 'a description just inside the 17px budget stepped down anyway')
-ok(probe(words(Math.floor(budget(17) / 5) + 6)).px === 15,
+// Between the 17px and the 15px budgets, wherever they fall for this row width: '+6 words' was 30 characters, and
+// when the tally cells widened the gap between the two budgets shrank to 24, so the probe skipped 15 for 14.
+ok(probe(words(Math.floor((budget(17) + budget(15)) / 2 / 5))).px === 15,
   'a description over the 17px budget did not step to 15px')
 const long = probe(words(Math.floor(budget(14) / 5) + 40))
 ok(long.px === 14, `a very long description did not clamp at the smallest size (got ${long.px}px)`)
@@ -156,7 +165,7 @@ ok(long.text.endsWith('…'), 'a clamped description is not marked with an ellip
 }
 
 // ── 5. EVERY SHIPPED LOCALE FITS, MEASURED AGAINST THE REAL CATALOGUE ──────────────────────────
-// ★ This is the arm that would have caught a locale I cannot eyeball. The ladder is INSURANCE, not
+// ★ This is the arm that would have caught a locale no reviewer can read by eye. The ladder is INSURANCE, not
 // routine: if a real locale is routinely stepping down, the budget is wrong and the fix is the
 // budget, not the ladder. Longest today is German at 178 against a 234-char budget.
 {
@@ -177,4 +186,4 @@ if (fails.length) {
   for (const f of fails) console.error(`  ✗ ${f}`)
   process.exit(1)
 }
-console.log('PROFILE-TABLE: PASS — the row is tall enough for a name plus two description lines at the smallest ladder size, every group gets a row across page boundaries, the fit ladder steps 17→15→14 and cuts at a whole word only as a last resort, a missing or empty describer degrades to the metadata line, and every shipped locale fits at full size. NOT covered here: the RENDERED row height and whether the description actually wraps to two lines — those need a browser and are rega\'s seat.')
+console.log('PROFILE-TABLE: PASS — the row is tall enough for a name plus two description lines at the smallest ladder size, every group gets a row across page boundaries, the fit ladder steps 17→15→14 and cuts at a whole word only as a last resort, a missing or empty describer degrades to the metadata line, and every shipped locale fits at full size. NOT covered here: the RENDERED row height and whether the description actually wraps to two lines — those need a browser check.')

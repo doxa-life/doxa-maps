@@ -24,7 +24,7 @@
  *                                            fails on a CHANGE rather than on their existence.
  *   "no two zones overlap"                 → 2 non-bloc overlaps exist (cocos-malays, andorrans) because
  *                                            "Scattered / Diaspora" overlaps the regions it scatters
- *                                            across. Declared, pending the Driver.
+ *                                            across. Declared, pending a product decision.
  *
  * A gate that fails on the only correct example of the thing it checks teaches people to disable it.
  *

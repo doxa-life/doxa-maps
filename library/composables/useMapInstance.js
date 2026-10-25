@@ -40,7 +40,7 @@ const ENGINES = {
 
 // THE ENGINE'S OWN CONTROL LABELS ("Zoom in", "Toggle attribution", the gesture hints…) in the reader's
 // language. Both engines take a `locale` map of their UI strings at construction; without one they stay
-// English under ar/es (rega's row 30). Strings live in library/i18n/locales/<lc>/mapui.json. The keys are
+// English under ar/es (row 30). Strings live in library/i18n/locales/<lc>/mapui.json. The keys are
 // the engines' own; an engine ignores the ones it does not use. EXPORTED for the maps built RAW
 // (new gl.Map outside this composable, e.g. gospel-resources, cities-internet): pass
 // `locale: engineUiLocale(lang, provider)` to their constructor, or their controls stay English.
@@ -131,8 +131,8 @@ export function engineGlobal(provider) {
  * position:STATIC where Mapbox declares it absolute, .mapboxgl-canary at display:block (that
  * canary is Mapbox's OWN unstyled-detector), Mapbox's "missing CSS declarations" warning firing,
  * and 0 markers — because a canvas container with no positioning context gives every
- * absolutely-positioned child, .mapboxgl-marker included, nothing to anchor to. The Driver saw it
- * as "the polygons and map colors and pins are not showing up".
+ * absolutely-positioned child, .mapboxgl-marker included, nothing to anchor to. It showed as the
+ * polygons, the map colours and the pins all missing.
  *
  * Returns null for an engine with no stylesheet, so callers can skip injection rather than
  * inject undefined.
@@ -245,7 +245,7 @@ export async function ensureEngineCSS(element, cssUrl) {
  * back the raw `mapbox://styles/mapbox/standard` URL and the DARKNESS lives in the config
  * ({ basemap: { lightPreset: 'night' } }), which is a Mapbox-only mechanism. This function used to
  * collapse every mapbox:// style to ONE light constant, so flipping provider turned the research
- * map from the dark map the Driver knows into a LIGHT one — MEASURED by screenshotting it, not by
+ * map from its familiar dark look into a LIGHT one — MEASURED by screenshotting it, not by
  * any error: both maps mount, both paint, both report success. Interoperability had "worked" while
  * the product looked like a different product.
  * Reading the preset the Mapbox side would have applied keeps the two engines telling the same
@@ -324,8 +324,8 @@ export function useMapInstance({
   // Resolving here instead moves the decision to the one place every map already goes through, so
   // a partner running thousands of embeds sets ONE value and the whole tree follows.
   // An explicit caller still wins outright (prayer-walk-planner pins 'maplibre' deliberately), and
-  // With no switch set, resolveMapProvider decides 'auto': Mapbox when a token is available (this
-  // call's accessToken counts), MapLibre when none is.
+  // with no switch set, resolveMapProvider decides 'auto': MapLibre, whether or not a token is
+  // available. This call's accessToken authenticates a map that asked for Mapbox; it never chooses one.
   provider         = undefined,
   center           = [20, 10],
   zoom             = 2,
@@ -397,7 +397,7 @@ export function useMapInstance({
   const autoProvider = !provider && !explicitMapProvider(_pcForProvider)
   provider = provider || resolveMapProvider(_pcForProvider, { token: accessToken })
   let isMaplibre = provider === 'maplibre'
-  // Start the engine download during setup, not when initializeMap runs after mount: rega's waterfall had
+  // Start the engine download during setup, not when initializeMap runs after mount: a measured waterfall had
   // the engine requested only after the component tree had rendered. initializeMap awaits the same script
   // (ensureEngineScript is idempotent) and reports a failure there; it is swallowed here.
   if (typeof document !== 'undefined') ensureEngineScript(provider).catch(() => {})
@@ -474,7 +474,7 @@ export function useMapInstance({
       }
       if (!accessToken) {
         // ONE warn per page, not an error per map: the UI already says "Map unavailable", and a page with
-        // several maps logged this 7x as console.error, which breaks the 0-errors bar (dx-shepherd, TKWARN).
+        // several maps logged this 7x as console.error, which breaks the 0-errors bar (TKWARN).
         if (typeof window !== 'undefined' && !window.__doxaNoTokenWarned) {
           window.__doxaNoTokenWarned = true
           console.warn('No Mapbox access token provided. Pass "tk" in profile-config JSON or set window.MAP_TOKEN.')
@@ -646,8 +646,8 @@ export function useMapInstance({
 
         // ── CONSOLE ONLY — NO ON-SCREEN BANNER ──────────────────────────────────────────
         // An earlier version of this handler also appended a `.dx-tile-auth-note` corner
-        // banner to the map container. REMOVED on Driver instruction 2026-09-22: "the map
-        // should not have a popup that says basemap tiles blocked".
+        // banner to the map container. REMOVED: the map must not show a popup saying the
+        // basemap tiles are blocked.
         //
         // WHY THE INSTRUCTION IS RIGHT, so nobody re-adds it. The banner reported an
         // OPERATOR problem (one account setting, on one deployment origin) to the END USER,
@@ -788,7 +788,21 @@ export function useMapInstance({
       if (_clearSnap) { try { _clearSnap() } catch (_) {} _clearSnap = null }
       // Tear down the gray side-edge touch handlers (mirrors registration above).
       if (_detachEdgeBorders) { _detachEdgeBorders(); _detachEdgeBorders = null }
+      // ★ RELEASE THE LOGO CLAIM HERE, not only from the 'remove' listener. The listener below
+      // (`mapInstance.once('remove', ...)`) can only fire if this line is reached, so it cannot be
+      // the guarantee that the global is cleared — it is a consequence of the guarantee. Heap
+      // snapshots found window.__doxaLogoOwner -> Map -> div.rm-map-canvas -> ShadowRoot -> app,
+      // pinning an entire unmounted app, precisely because remove() had not run. Clearing the claim
+      // before removing means the global is dropped even if remove() itself throws part-way.
+      try {
+        const w = typeof window !== 'undefined' ? window : null
+        if (w && w.__doxaLogoOwner === map.value) w.__doxaLogoOwner = null
+      } catch (_) { /* a locked-down window is not a reason to skip the teardown below */ }
+      const dead = map.value
       map.value.remove()
+      // The container kept __doxaMap after teardown, holding the whole dead map (GL context, sources,
+      // tiles) reachable from the DOM. Clear it only if it is still this instance's.
+      try { if (containerRef && containerRef.value && containerRef.value.__doxaMap === dead) containerRef.value.__doxaMap = null } catch (_) {}
       map.value = null
       isMapReady.value = false
     }

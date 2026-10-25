@@ -10,7 +10,7 @@
  * component read:
  *     STANDALONE research-dashboard ....... dLeft=0   dTop=4     (six of six)
  *     INSIDE plugin-studio dashboard tab .. dLeft=256 dTop=111   (every one)
- * The Driver reported the menu appearing "in a random spot further down to the right" for days. It
+ * The menu was reported for days as appearing in a random spot further down to the right. It
  * was never random. 256 is the rail width, 111 the header height.
  *
  * ★ WHY NO EXISTING GATE SAW IT, AND WHY THAT IS THE INTERESTING PART. A probe DID exist and it DID

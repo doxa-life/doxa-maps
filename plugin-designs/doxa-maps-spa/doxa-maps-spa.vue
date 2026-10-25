@@ -33,7 +33,7 @@
 
     What the iframes COST was the actual defect: each tab carried a HARDCODED, BUILT-TREE page path
     ('dashboard-plus-grid/dashboard-plus-grid/index.html'). Those pages do not exist under the dev
-    server, so every tab 404'd there — the Driver saw exactly that in his browser console. A path is
+    server, so every tab 404'd there, visibly, in the browser console. A path is
     a deployment detail; the manifest's scriptUrl + element are identities that are correct in BOTH
     trees. Tabs now name a bundle+profile and resolve the rest from the manifest.
 
@@ -60,12 +60,14 @@
     :dir="uiDir"
     :lang="uiLocale"
     :labels="layoutLabels"
-    :title="heading"
+    :home-href="homeHref || cfg.homeHref || defaultHomeHref"
+    :home-label="homeLabel || cfg.homeLabel || ''"
+    :title="headingText"
     :nav-label="t('navLabel')"
     :header="showHeader"
     :groups="navGroups"
     :active="activeKey"
-    @update:active="onSelect">
+    @update:active="onRailSelect">
 
     <!-- #brand: the DX-Maps logo mark, left of the title (a compass-star glyph, self-drawn SVG — no
          external asset, offline/F-Droid safe; the accent green matches the admin shell). -->
@@ -110,6 +112,14 @@
       </div>
     </template>
 
+    <!-- THE LANGUAGE MENU OF A HEADER-OFF SHELL: the end of the layout's phone bar, and the bottom of the
+         desktop rail. ShellLanguageMenu first asks the host (a cancelable doxa-language-request). If the
+         host takes it, the host sets `language` and this gallery follows. If not, it emits 'switch' and the
+         gallery switches itself (pickLocale). `current` is uiLocale, so the select always has a matching
+         option. -->
+    <template #phone-end><ShellLanguageMenu :current="uiLocale" @switch="pickLocale" /></template>
+    <template #rail-end="{ collapsed }"><ShellLanguageMenu :current="uiLocale" :collapsed="collapsed" @switch="pickLocale" /></template>
+
     <!-- EVERY tab mounts its plugin's REAL custom element — there is no iframe mode. The tag is
          created imperatively into an EMPTY, Vue-unmanaged slot div (:ref, no children) after that
          bundle's script is injected once, so Vue never fights the custom element's own shadow DOM.
@@ -126,21 +136,27 @@
              dropped the OLDEST one and an already-visited tab went blank with NO error. -->
     <section
       v-for="(t, i) in tabs" :key="t.id" class="dms-pane"
-      v-show="i === activeIndex" :hidden="i !== activeIndex">
+      :ref="el => { if (el) paneEls[i] = el; else delete paneEls[i] }"
+      v-show="i === activeIndex" :hidden="i !== activeIndex"
+      :data-doxa-help="tabHasHelp(t) ? '' : null" data-doxa-gallery="">
 
       <template v-if="!t.heavy || i === activeIndex">
         <div v-if="showsMobileNotice(t.id)" class="dms-mobile-notice" role="status">
-          <span>{{ tr('mobileNotice') }}</span>
+          <span>{{ largerScreenText }}</span>
           <button type="button" class="dms-mobile-notice-x" :aria-label="tr('dismiss')" @click="dismissMobileNotice(t.id)">×</button>
         </div>
         <div class="dms-slot" :ref="el => setSlot(i, el)"></div>
+        <!-- The tab's "what can this do for you?" button (library MapInfo), from src/tabInfo.js. It sits
+             over the pane, top-right; profile-config info:false removes it. -->
+        <MapInfo v-if="infoFor(t)" :key="'info-' + t.id" v-bind="infoProps(t)" :style="infoStyle(t)" :placement="infoPos(t).placement || 'top-right'" :class="{ 'dms-info-raise': infoPos(t).raise }"
+          :assets-base="assetsBase" :locale="effectiveLocale" />
         <div v-if="t.state === 'loading'" class="dms-hint">{{ tr('loading', { label: tabLabel(t) }) }}</div>
         <div v-else-if="t.state === 'error'" class="dms-hint err">
           {{ tr('loadFailed', { label: tabLabel(t) }) }}<br><small>{{ t.error }}</small>
         </div>
         <!-- ★ THE FOURTH STATE, and the one that used to render NOTHING. A tab whose scriptUrl the
              manifest never supplied sits in state 'idle' forever: not loading, not errored, just an
-             empty slot — the grey pane the Driver reported four times. Covering it here means a
+             empty slot — the grey pane that kept coming back. Covering it here means a
              missing manifest now READS as a failure instead of looking like a blank app. -->
         <div v-else-if="t.state === 'idle' && !t.scriptUrl && manifestError" class="dms-hint err">
           {{ tr('loadFailed', { label: tabLabel(t) }) }}<br>
@@ -156,12 +172,12 @@
          whichever tab is currently active. -->
     <div v-if="disabledNotice" class="dms-notice" role="status">{{ disabledNotice }}</div>
 
-    <!-- THE EXPERIMENTAL "?" — what a shelf map is for and how to use it (src/experimentalHelp.js).
-         Shown only on a discovered tab that HAS an entry: a map with no text shows no button rather
-         than an empty dialog. Modal: focus moves to Close, Tab stays inside, Escape or Close returns
-         focus to the "?", and switching tab closes it. -->
-    <button v-if="activeHelp" ref="helpBtn" type="button" class="dms-help-btn"
-            :aria-label="tr('help')" :title="tr('help')" @click="openHelp">?</button>
+    <!-- THE EXPERIMENTAL MAP'S "?" — what a shelf map is for and how to use it (src/experimentalHelp.js).
+         The button is the MAP'S OWN "?" control, in its control column with zoom and fullscreen: it
+         dispatches a composed doxa:help event that this app answers (onHostedHelp). A pane whose tab
+         has text carries data-doxa-help, and a map's hosted "?" shows only under such a pane, so a map
+         with no text shows no button rather than an empty dialog. Modal: focus moves to Close, Tab
+         stays inside, Escape or Close returns focus to the "?" that opened it, and switching tab closes it. -->
     <div v-if="helpOpen && activeHelp" class="dms-help-scrim" @click.self="closeHelp"
          @keydown.esc.stop.prevent="closeHelp">
       <div class="dms-help" role="dialog" aria-modal="true" aria-labelledby="dms-help-title"
@@ -172,16 +188,35 @@
         <button ref="helpClose" type="button" class="dms-help-close" @click="closeHelp">{{ tr('close') }}</button>
       </div>
     </div>
+
+    <!-- ★ BACK TO TOP, BESIDE THE VIEW-LIST CIRCLE. The gallery owns both the circle
+         and the scroller, so this needs no shadow-root walking: the target is the ACTIVE .dms-pane,
+         which measured as the real scroller (clientHeight 712, scrollHeight 12,373) while the
+         document does not scroll and no .vtl-host exists in this composition.
+         Horizontal placement comes from --map-fab-beside, which VerticalTabsLayout publishes ONLY
+         while its circle renders (12px inset + 44px button + 8px gap), so the arrow sits next to the
+         circle rather than on it — and where there is no circle it falls back to the plain inset
+         instead of leaving a gap. Reading the var means the circle's geometry stays stated once, by
+         the component that owns it.
+         BackToTopButton refuses to appear when its target does not scroll (it tests scrollTop AND
+         scrollHeight), so a short pane shows nothing rather than a button that does nothing. -->
+    <BackToTopButton :target="activePaneEl" :labels="{ backToTop: tr('backToTop') }" />
   </VerticalTabsLayout>
 </template>
 
 <script>
 import { defineComponent, inject } from 'vue'
 import VerticalTabsLayout from '@map/layouts/VerticalTabsLayout.vue'
+import ShellLanguageMenu from '@map/components/ShellLanguageMenu.vue'
+import BackToTopButton from '@map/components/BackToTopButton.vue'
 import { SWITCHER_LANGUAGES, loadLocale, saveLocale, getLanguage } from '@map/layouts/app-wrapper-material/languages.js'
 import { translate, LOCALES, hasKey } from './src/strings.js'
+import { tStatic } from '@map/i18n/index.js'
 import { helpFor } from './src/experimentalHelp.js'
+import { TAB_INFO } from './src/tabInfo.js'
+import MapInfo from '@map/components/info/MapInfo.vue'
 import { loadScriptOnce, whenTagDefined } from '@map/utils/embedScript.js'
+import { readViewKeys, writeViewKeys, onAddressChange, urlOwnerOf, ownAddress } from '@map/composables/useViewAddress.js'
 
 // THE HOST PAGE'S LANGUAGE, by the same ladder every nested map already uses (library/i18n
 // detectLocale): ?lang= / ?locale= on the page URL, then <html lang>. '' when the page says nothing.
@@ -201,20 +236,15 @@ function detectHostLocale() {
   return ''
 }
 
-// The Driver's section/folder nav model, ported from app-wrapper-material/nav.js (the verified
-// source of the exact sections the Driver wants). Each entry is a GROUP for VerticalTabsLayout; each
+// The product's section/folder nav model, ported from app-wrapper-material/nav.js (the verified
+// source of the exact section list). Each entry is a GROUP for VerticalTabsLayout; each
 // `tab` names a REAL TAB_DEFS id so clicking a row still drives the SAME mount machinery (onSelect →
 // findIndex(t.id === key)). Sections/folders + icons are authored here; rows whose bundle does not
 // exist in this SPA are OMITTED (never paint a dead nav row — nav.js's own navForTarget prunes empty
 // groups the same way). `folder:true` (Experimental) renders collapsible, starting closed.
 const NAV_MODEL = [
-  // ── THREE SECTIONS, PER THE SPEC (2026-09-22 audio, transcribed to
-  //    _qa-cycle/01-ideation-research/SPEC-the-six-map-product-and-its-tab-order.md — that file is
-  //    AUTHORITATIVE; this comment explains how the code satisfies it, not the ruling itself).
-  //
-  //    Driver, verbatim: "in one of the earlier messages i mentioned i wanted 3 tab sections. one
-  //    called dashboards, one called prayer mobilization, one called gospel research. with two maps
-  //    inside of each of them."
+  // ── THREE SECTIONS: Dashboards, Prayer Mobilization and Gospel Research, each holding its own maps.
+  //    This comment explains how the code keeps that shape, not why the shape was chosen.
   //
   //    A PRIOR CUT REMOVED DASHBOARDS ENTIRELY (see git history / the spec's "duplicate-key trap"),
   //    because Big Picture had been declared TWICE — once as a one-row Dashboards section and once as
@@ -237,8 +267,7 @@ const NAV_MODEL = [
       //    map + People Groups grid composite — "the mobile dashboard" per the spec — and it stays
       //    reachable on desktop too, as the second dashboard row.
       { id: 'research-map-plus-grid',  icon: 'map' },
-      // 3. Regions — the THIRD dashboard the Driver named: "in the dashboard section I need to have
-      //    the Big Picture dashboard, the Simple Research dashboard and the Regions dashboard."
+      // 3. Regions — the third dashboard, beside Big Picture and Simple Research.
       //    Seven plugins across three sections was the ask; this row is the seventh.
       //
       //    ★ WHAT SHIPS TODAY IS TAB 1 OF 2. regions-dashboard currently builds a single profile,
@@ -251,19 +280,26 @@ const NAV_MODEL = [
       //
       //    Listing it now rather than waiting for tab 2: a working list that reaches the rail is
       //    worth more than a complete feature nobody can open, and its absence was the one real gap
-      //    between the Driver's seven and the six that shipped.
+      //    between the seven planned plugins and the six that shipped.
       { id: 'regions-dashboard',       icon: 'map' },
     ] },
   // Prayer Mobilization — now TWO rows only: the onboarding ramp's steps 2 and 3. Big Picture (former
   // step 1) moved to Dashboards above; Gospel Resources (former step 4) moved to Gospel Research below
-  // per the spec's table. UPG-100 BEFORE Prayer Progress is still the Driver's deliberate order —
-  // "if you're trying to mobilize prayer, UPG-100 list probably comes first because it's a NEW thing
-  // to people — you want them introduced to it first" — hand the newcomer the concrete new artifact,
-  // THEN ask them to pray it.
+  // per the spec's table. UPG-100 BEFORE Prayer Progress is a deliberate product order: to someone
+  // being mobilized to pray, the UPG-100 list is the NEW thing, so they meet it first — hand the
+  // newcomer the concrete new artifact, THEN ask them to pray it.
+  //
+  // THE POSTER ROWS (2026-09-30): the section now runs Prayer Progress, UPG 100 List Posters, Country Posters,
+  // then Poster Design. The same poster plugins also live in the Posterverse shell; each is ONE bundle, mounted
+  // by whichever shell opens it, under the same tab ids in both. A row whose bundle is not in the manifest is
+  // dropped without a word (resolveTabsFromManifest), so a row lands only after its bundle does.
   { key: 'prayer-mobilization', label: 'Prayer Mobilization', i18n: 'sec.prayer', icon: 'heart',
     tabs: [
-      { id: 'upg-100',    icon: 'list' },   // 1. UPG-100 List — the NEW thing, introduced first
-      { id: 'prayer-map', icon: 'embed' },  // 2. Prayer Progress — now pray the list
+      // Prayer Progress, UPG 100 List Posters, Country Posters, then Poster Design: the published order, fixed.
+      { id: 'prayer-map',      icon: 'embed' },
+      { id: 'upg-100',         icon: 'list' },
+      { id: 'country-posters', icon: 'poster' },
+      { id: 'poster-design',   icon: 'grid' },
     ] },
   // Gospel Research — RENAMED section (was "Research"). Cities with Internet then Gospel Resources,
   // per the spec's table (rows 5-6). The plain, uncomposited "Research Map" tab (doxa-research-map)
@@ -284,9 +320,8 @@ const NAV_MODEL = [
   //   exists in the tree but is not placed in a named section above lands here automatically. Add a
   //   new plugin to plugin-designs/ and it appears in this folder with ZERO edits to this file.
   //   WHY this matters: a hardcoded list fails SILENTLY — the next plugin author ships a bundle, it
-  //   builds fine, and it is simply invisible in the app with no error to notice. Same principle the
-  //   Driver set for the data bundler: handle every plugin generically, or the next author gets
-  //   nothing. The named sections above stay curated (they encode the teaching order); Experimental
+  //   builds fine, and it is simply invisible in the app with no error to notice. Same principle as
+  //   the data bundler: handle every plugin generically, or the next author gets nothing. The named sections above stay curated (they encode the teaching order); Experimental
   //   is the automatic catch-all so nothing can go missing.
   { key: 'experimental', label: 'Experimental', i18n: 'sec.experimental', icon: 'flask', folder: true, open: false, tabs: [] },
 ]
@@ -298,16 +333,27 @@ const NAV_MODEL = [
 //   - template-bundle: the copy-me scaffold for new plugin authors, not real content
 //   - people-groups-grid / research-dashboard / big-picture: the PARTS that are already composed
 //     into the ONE `dashboard-plus-grid` Big Picture tab — surfacing them separately is the exact
-//     redundancy the Driver removed ("we don't need multiple dashboards").
-// ── DEVICE RULES (Driver, 2026-09-28 16:50Z: DRV1650-MOBILE-GATING) ─────────────────────────
-// PRODUCTION maps that are not mobile-ready are BLOCKED on a narrow screen: the row stays in the rail,
-// disabled with a "desktop only" badge, and a tap explains why instead of mounting (Big Picture was the
-// first, and still works exactly that way). EXPERIMENTAL maps not built for mobile still OPEN on a
-// narrow screen, with a "not built for mobile" badge and a dismissible notice in the pane: an
-// experiment should be reachable, and honest about where it works. Add an id here, not a width test
-// anywhere else; check:mobile-gating holds the two sets to their shelves.
-const DESKTOP_ONLY = new Set(['dashboard-plus-grid'])
-const MOBILE_NOTICE = new Set(['gospel-internet'])
+//     redundancy that was removed on purpose: one dashboard, not several.
+// ── DEVICE RULES (SPEC-MOBILE-FLAG) ─────────────────────────────────────────────────────────────
+// A map that is not phone-ready says so ONCE, in its own <profile>.meta.json: "mobile": "desktop-only"
+// or "larger-screens". generate-tree carries the flag into the manifest, and this shell reads it from
+// there (mobileFlagsFromManifest), so the Gallery and the map's standalone leaf page follow the same
+// declaration and no id list lives here. On a narrow screen:
+//   desktop-only    the row stays in the rail, disabled with a "desktop only" badge; a tap explains why
+//                   instead of mounting (Big Picture was the first, and still works exactly that way)
+//   larger-screens  the map OPENS, with a "not built for mobile" badge and a dismissible notice in the
+//                   pane: reachable, and honest about where it works
+// check:mobile-gating holds the vocabulary, the leaf pages and this shell to that one source.
+function mobileFlagsFromManifest(manifest) {
+  const flags = {}
+  const bundles = (manifest && Array.isArray(manifest.bundles)) ? manifest.bundles : []
+  for (const b of bundles) {
+    for (const p of (Array.isArray(b && b.profiles) ? b.profiles : [])) {
+      if (p && (p.mobile === 'desktop-only' || p.mobile === 'larger-screens')) flags[b.bundle + '/' + p.profile] = p.mobile
+    }
+  }
+  return flags
+}
 
 const NOT_EXPERIMENTAL = new Set([
   'doxa-maps-spa',
@@ -323,9 +369,19 @@ const NOT_EXPERIMENTAL = new Set([
   // doxa-research-map is the PART already composed into the Simple Research tab
   // (research-map-plus-grid) -- same redundancy rule as research-dashboard/big-picture.
   'doxa-research-map',
-  // stack-demo is broken and Driver-DEFERRED; a broken tab in the giveaway shelf reads as
+  // stack-demo is broken and DEFERRED; a broken tab in the giveaway shelf reads as
   // product damage. It returns when someone fixes it (a tracked issue).
-  'stack-demo'
+  'stack-demo',
+  // posterverse is the OTHER capability-5 shell (the poster plugins). Shown here it would be a
+  // whole second rail inside this pane: a shell does not nest a shell, for the same reason this
+  // shell excludes itself above.
+  'posterverse',
+  // bible-posters lives on POSTERVERSE's Experimental shelf, and only there: one poster plugin, shown
+  // once, in the shell that gathers the poster plugins.
+  'bible-posters',
+  // poster-sections is a TEMPLATE plugin: the <dxm-poster-section> element other plugins and sites embed
+  // (the Regions list, DX Life's region pages). It stays in Plugin Studio, not on a reader's shelf.
+  'poster-sections'
 ])
 
 // ── EXPERIMENTAL ORDER = KINGDOM IMPACT, not the alphabet ────────────────────────────────
@@ -336,16 +392,15 @@ const NOT_EXPERIMENTAL = new Set([
 // lives here and not in per-bundle meta: the manifest deliberately strips meta config, and
 // an order is a statement about the whole shelf, not about one bundle. Unranked bundles
 // still appear (discovery is never gated by this) -- they sort after the ranked, A-Z.
-// ★ TOP THREE SET BY THE DRIVER (brief 2026-09-28 16:50Z, DRV1650-EXP-ORDER): Prayer Walk Planner,
-// then Gospel × Internet, then UPG Neighbor ("one of our up-and-coming"). The rest keep their order.
+// ★ THE TOP THREE ARE A PRODUCT DECISION (2026-09-28): Prayer Walk Planner, then Gospel × Internet,
+// then UPG Neighbor, a map on its way up. The rest keep their order.
 const EXPERIMENTAL_RANK = {
   'prayer-walk-planner': 1,   // feet on streets: zones -> printed one-page walking maps
   'gospel-internet': 2,       // the unified dashboard: language tree, bounded/centered sets, map
   'upg-neighbor': 3,          // near reached neighbors, both directions ("who goes, to whom")
   'key-cities': 4,            // where the unreached physically live
   'all-people-groups': 5,     // the census view that feeds everything else
-  'country-posters': 6,       // mobilization print artifacts
-  'doxa-vision-card': 7,      // vision framing
+  'doxa-vision-card': 7,      // vision framing (6 was country-posters, now a Prayer Mobilization row)
 }
 
 // The tab manifest. Each entry CURATES one tab: which bundle+profile it shows, in what order, under
@@ -357,7 +412,7 @@ const EXPERIMENTAL_RANK = {
 //   is the one artifact that is correct in BOTH trees: it hands "/plugin-designs/<b>/index.js" under
 //   the dev server and "./<b>/<b>.js" under the built tree.
 //
-// ★ THE 404 CLASS THIS REPLACED (measured 2026-09-22, hit by the Driver in his own browser). Every
+// ★ THE 404 CLASS THIS REPLACED (measured 2026-09-22 in a real browser). Every
 //   entry used to carry a hardcoded `leaf:` — a BUILT-tree page path, e.g.
 //       leaf: 'dashboard-plus-grid/dashboard-plus-grid/index.html'
 //       leaf: 'my-upg-100-list/upg-100-mfe/index.html'
@@ -367,7 +422,7 @@ const EXPERIMENTAL_RANK = {
 //       GET /__plugin-gallery/my-upg-100-list/upg-100-mfe/index.html?locale=en              404
 //   The dev MANIFEST was clean the whole time (zero profiles carry a leaf-style iframeUrl); the 404s
 //   came only from this hardcoded list. A path is a deployment detail; an identity is not. Naming
-//   identities is what makes ONE dev server show every plugin — the Driver's actual ask.
+//   identities is what makes ONE dev server show every plugin, which was the actual goal.
 //
 //   A second, sharper symptom proved the paths were built-tree fossils rather than merely stale:
 //   `prayer-map` pointed at 'doxa-simple-map/doxa-simple-map/prayer/index.html', and the dev
@@ -379,7 +434,7 @@ const EXPERIMENTAL_RANK = {
 // tag alone cannot say which view to paint. profile-config.profile is what selects it.
 const TAB_DEFS = [
   {
-    // THE ONE DASHBOARD (the Driver's "Big Picture"): research-dashboard + people-groups-grid compiled
+    // THE ONE DASHBOARD ("Big Picture"): research-dashboard + people-groups-grid compiled
     // into ONE element on a single scroll-page — scroll down past the dashboard to the grid. Replaces the
     // former separate `big-picture` and `research-dashboard` tabs (removed as redundant).
     id: 'dashboard-plus-grid', label: 'Big Picture', sub: 'dashboard + people-groups grid, stacked', emoji: '🌍',
@@ -391,9 +446,9 @@ const TAB_DEFS = [
   },
   {
     // RENAMED (spec): "Research Map" → "Simple Research", and RECATEGORISED as a Dashboards row (the
-    // mobile-default dashboard). Driver 2026-09-22, having reversed an earlier idea: "We made the
-    // wrong choice of saying that we should swap elements based on mobile and desktop... It'd be
-    // easier just to have two separate capability-4 plugins." So there are two cap-4 composites,
+    // mobile-default dashboard). An earlier design swapped elements by mobile vs desktop inside one
+    // plugin; it was reversed, because two separate capability-4 plugins are simpler. So there are
+    // two cap-4 composites,
     // neither aware of the other — this one and 'dashboard-plus-grid' above — and the shell decides
     // which is AUTO-SELECTED by width (see firstVisibleIndex/isDesktopOnly), never which is
     // SHOWN: per the device rule both rows are always in the rail. Both composites stay independently
@@ -409,9 +464,9 @@ const TAB_DEFS = [
     bundle: 'research-map-plus-grid', profile: 'research-map-plus-grid'
   },
   {
-    // RENAMED (Driver): "Prayer Map" → "Prayer Progress". His words: "the prayer maps can be renamed
-    // Prayer Progress Map, or just Prayer Progress, and it can sit UNDERNEATH UPG-100 List." The
-    // shorter form won — the rail is narrow and "Progress" already implies the map. NOTE the `id`
+    // RENAMED: "Prayer Map" → "Prayer Progress", and it sits UNDERNEATH UPG-100 List. Of the two
+    // candidate names ("Prayer Progress Map" / "Prayer Progress") the shorter won — the rail is
+    // narrow and "Progress" already implies the map. NOTE the `id`
     // stays 'prayer-map': the id is the stable join key between NAV_MODEL and TAB_DEFS, so only the
     // human-facing LABEL changes. Renaming the id would break the nav lookup for no user-visible gain.
     //
@@ -436,9 +491,8 @@ const TAB_DEFS = [
     // The third Dashboards row. `profile` names the ONE profile this bundle currently builds;
     // when the region-detail profile lands it becomes tab 2 INSIDE this element, so this entry
     // still does not change — the shell resolves the profile from the manifest either way.
-    // ★ MOUNT THE COMPOSITE, NOT THE LEAF (Driver 2026-09-23: "the Regions tab is supposed to be a
-    // capability-4 plugin, but right now it looks like it's only a capability-1").
-    // He was right, and the cause was here rather than in the regions bundle: regions-mfe (the cap-4
+    // ★ MOUNT THE COMPOSITE, NOT THE LEAF. The Regions tab is a capability-4 plugin but rendered
+    // like a capability-1 one, and the cause was here rather than in the regions bundle: regions-mfe (the cap-4
     // nested-elements-mfe composing regions-list + region-dashboards, with the shared Select View
     // strip) HAD shipped, but this entry still named the bare `regions-list` leaf — the cap-1 half.
     // So the shell rendered one flat list with no tab strip while the composite sat unused.
@@ -450,8 +504,21 @@ const TAB_DEFS = [
     bundle: 'regions-dashboard', profile: 'regions-mfe'
   },
   {
-    id: 'upg-100', label: 'UPG-100 List', sub: 'my unreached list + posters', emoji: '📋',
+    id: 'upg-100', label: 'UPG100 Posters', sub: 'my unreached list + posters', emoji: '📋',
     bundle: 'my-upg-100-list', profile: 'upg-100-mfe'
+  },
+  {
+    // The capability-4 composite, as with Regions and UPG-100 above: country-posters also ships the
+    // single views countries-map and country-poster-wall, and naming one of those would mount a
+    // part without the view strip that joins them.
+    id: 'country-posters', label: 'Country Posters', sub: 'a poster for every country', emoji: '🗺️',
+    bundle: 'country-posters', profile: 'country-posters-mfe'
+  },
+  {
+    // The capability-4 composite again (Styles + Sizes under one view strip); poster-styles and poster-sizes
+    // are its single views. It draws posters, not a map, so it holds no WebGL context and is not HEAVY.
+    id: 'poster-design', label: 'Poster Design', sub: 'every poster style and size', emoji: '🎨',
+    bundle: 'poster-design', profile: 'poster-design-mfe'
   },
   // ── NOTE: there are deliberately NO hardcoded Experimental entries here. Every built bundle not
   //    named above is discovered from manifest.json at runtime and appended as an Experimental tab
@@ -491,7 +558,7 @@ const HEAVY_ELEMENTS = new Set([
 ])
 
 // SCROLL-STACK ELEMENTS — the rows this shell mounts WITHOUT the fixed-viewport inline style
-// (BUG-CANNOT-SCROLL-DOWN-TO-THE-GRID, Driver-reported). Every mounted tab used to get
+// (the grid under a composite could not be scrolled to). Every mounted tab used to get
 // `position:absolute;inset:0;height:100%` unconditionally, which is correct for a single
 // FIXED-VIEWPORT map (it fills the pane exactly, scrollHeight===clientHeight, no scrollbar) but
 // traps a SCROLL-STACK composite: `dashboard-plus-grid` and `research-map-plus-grid` are built on
@@ -504,7 +571,9 @@ const HEAVY_ELEMENTS = new Set([
 // The two composites here are exactly the two bundle ids that use StackLayout as their OWN root —
 // same identification method as HEAVY_ELEMENTS (measured against the tree, not guessed), and it is
 // not a coincidence that both entries already appear in that set too (they also nest a map).
-const SCROLL_ELEMENTS = new Set(['dashboard-plus-grid', 'research-map-plus-grid'])
+// bless-india-posters is a natural-height page of poster cards (its owner's mount note): pinned, the grid
+// would be trapped in one viewport, so it scrolls in the pane like the two composites.
+const SCROLL_ELEMENTS = new Set(['dashboard-plus-grid', 'research-map-plus-grid', 'bless-india-posters'])
 
 // The set of bundle ids the CURATED sections above already place, derived from NAV_MODEL + TAB_DEFS
 // rather than hand-written. Deriving it means the "is this already placed?" answer can never drift
@@ -593,6 +662,26 @@ function assertNoDuplicateTabKeys(navModel) {
   }
   return dupes
 }
+
+// ★ FRESH BUNDLES AFTER A DEPLOY, AT THE SAME URLs (2026-10-02). A host that serves the tree with Last-Modified and no
+// Cache-Control (the DX Life landing does) lets a browser run its cached copies for hours: measured, a typed-URL revisit
+// after a deploy requested NONE of the gallery, the manifest or the bundles, so a returning reader ran the old files, or
+// an old manifest against a new bundle. A version query cannot fix it here: loadScriptOnce keys its registry by the full
+// href, so X.js?v= beside a composite's plain X.js would run the bundle twice. So the manifest is always revalidated, and
+// when its fingerprint (every bundle's integrity) differs from this reader's last visit to this tree, every listed bundle
+// gets ONE conditional request before any tab mounts: a 304 refreshes the cached copy, and a 200 is cancelled at its
+// headers, which drops the stale entry. The plain <script> that follows (ours, or a composite's for its children) then
+// runs the new file. An ordinary visit costs nothing extra.
+const TREE_FP_KEY = 'dxm.treeFingerprint@'
+function treeFingerprint(manifest) {
+  const bundles = (manifest && Array.isArray(manifest.bundles)) ? manifest.bundles : []
+  const s = bundles.map(b => (b && b.bundle) + ':' + ((b && b.integrity) || '')).join('|')
+  let h = 2166136261                                     // FNV-1a: a short, stable key, not a security hash
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) }
+  return (h >>> 0).toString(36) + '.' + s.length
+}
+function readTreeFp(root) { try { return localStorage.getItem(TREE_FP_KEY + root) } catch { return null } }
+function writeTreeFp(root, fp) { try { localStorage.setItem(TREE_FP_KEY + root, fp) } catch { /* private mode: revalidate next time */ } }
 
 // Turn a bundle id into a human label: "all-people-groups" → "All People Groups". Small, local and
 // dependency-free; a bundle may override it by shipping a profile `title` in the manifest.
@@ -727,7 +816,7 @@ export default defineComponent({
   // (measured 2026-09-25). .vtl survives today only because it declares display:grid !important.
   // Everything the layout needs (dir, lang, labels, …) is passed explicitly below.
   inheritAttrs: false,
-  components: { VerticalTabsLayout },
+  components: { VerticalTabsLayout, BackToTopButton, MapInfo, ShellLanguageMenu },
   // profile-config props the standalone leaf page + gallery hand every element. treeBase lets a
   // host pin the tree root explicitly; the rest are accepted so the element is a well-behaved
   // member of the bundler (profile/instanceId/assetsBase/tk/shareUrl/qa are ignored here — the
@@ -740,7 +829,9 @@ export default defineComponent({
     // mount that it will overwrite the native one. Both capability-5 shells had the same
     // declaration, which is the same duplicate-implementation pattern that turned one resolver
     // assumption into two separate outages — when one shell is fixed, grep for its twin.
-    heading: { type: String, default: 'DX-Maps' },
+    // DX Life publishes this gallery as "Deep Research" (a hidden page on its site), so that is the
+    // default name. A host may still pass its own, as this prop or as profile-config.heading.
+    heading: { type: String, default: 'Deep Research' },
     // Optional: pin the Mapbox token / token URL forwarded to each tab's element via profile-config.
     tokenUrl: { type: String, default: '' },
     tk: { type: String, default: '' },
@@ -752,7 +843,7 @@ export default defineComponent({
     // NOTE: no `locale` PROP here on purpose — `locale` is a data() field (the manual switcher's
     // state); a same-named prop+data collides in Vue. The alias lives in profile-config instead.
     language: { type: String, default: '' },
-    // ── THE EMBED CONTRACT (card DELEGATE-NEW-TAB-REGA-RESEARCH-GALLERY-CAP5-EMBEDDABILITY) ──
+    // ── THE EMBED CONTRACT (card DELEGATE-NEW-TAB-RESEARCH-GALLERY-CAP5-EMBEDDABILITY) ──
     // A host that drops <doxa-maps-spa> onto its own page (the DX-life research page) supplies NONE
     // of the page globals a generated leaf page bakes — window.MAP_APP_API_URL, window.MAP_TOKEN, a
     // correct assets path. Measured 2026-09-24 from a second origin: the shell mounted and 8 of 13
@@ -766,7 +857,12 @@ export default defineComponent({
     provider: { type: String, default: '' },
     // Which tab opens first, by tab id (e.g. "upg-100", "gospel-resources"). Lets a host page deep-
     // link into one map of the gallery. Falls back to ?tab= on the page URL, then the device default.
-    tab: { type: String, default: '' }
+    tab: { type: String, default: '' },
+    // The HOST's homepage: a "Back to homepage" link directly above the rail's Collapse button (a phone
+    // shows it at the top of the drawer). Also accepted as profile-config.homeHref / homeLabel. With no URL
+    // from the host, the link goes to the DOXA site in the gallery's language (defaultHomeHref).
+    homeHref: { type: String, default: '' },
+    homeLabel: { type: String, default: '' }
   },
   emits: ['tab-change'],
   setup() {
@@ -777,11 +873,15 @@ export default defineComponent({
   },
   data() {
     return {
+      // The .dms-pane elements, one per tab, keyed by index. The SPA's pane IS the scroller
+      // (overflow-y:auto), so the back-to-top has to follow activeIndex rather than bind one ref.
+      // Not reactive-deep on purpose: these are DOM nodes.
+      paneEls: {},
       activeIndex: 0,
       // The cap-5 DX-Maps SPA is HEADER-OFF by default (sidebar-only, full-page — no stacked headers
       // when embedded under a host that already has one). This ONE flag drives BOTH the shell header
-      // and the standalone locale dropdown, so the Driver's rule ("header-off → no dropdown; the SPA
-      // inherits its language from the parent via the `language` prop") can never drift: see
+      // and the standalone locale dropdown, so the rule (header-off → no dropdown; the SPA
+      // inherits its language from the parent via the `language` prop) can never drift: see
       // showLocaleSwitcher. A future host that wants the SPA's own chrome flips this to true.
       showHeader: false,
       // ★ VIEWPORT WIDTH AS REACTIVE STATE, for the device rule (default row + Big Picture disable).
@@ -790,7 +890,7 @@ export default defineComponent({
       // shell cannot read it and must watch the same query itself. That duplicates a CONSTANT, not
       // logic — but if either side ever moves, move BOTH: a shell that thinks it is on desktop while
       // the rail has become a drawer would leave Big Picture enabled inside a mobile drawer, which is
-      // precisely what the Driver asked to never happen.
+      // precisely what the device rule forbids.
       narrow: false, _mql: null, _onMedia: null,
       // The transient "desktop only" message shown when Big Picture is clicked while disabled (see
       // onSelect's intercept). '' renders nothing; _noticeTimer clears any earlier message's timeout
@@ -798,6 +898,8 @@ export default defineComponent({
       disabledNotice: '', _noticeTimer: null,
       helpOpen: false,
       mobileNoticeDismissed: {},
+      // Phone flags from the manifest (mobileFlagsFromManifest); null until it lands. See select().
+      mobileFlags: null,
       // Set when EVERY manifest candidate failed. The manifest carries each tab's scriptUrl, so
       // without it no src-composed tab can mount; this turns that into a visible pane message
       // instead of an empty grey rectangle. See loadManifest().
@@ -815,6 +917,11 @@ export default defineComponent({
       // The host page's own language (detectHostLocale), kept live by a MutationObserver on <html lang>
       // — a host app that switches language at runtime (Nuxt i18n does) re-drives the whole gallery.
       hostLang: detectHostLocale(),
+      // A language picked in the shell's menu in THIS session that no host took (see pickLocale). It
+      // outranks the `language` prop it was picked over, and a change to that prop clears it. A saved
+      // choice is never a source: loadLocale falls back to the browser's language, which would
+      // override a partner page's own <html lang>.
+      sessionPick: '',
       localeOpen: false,
       switcherLangs: SWITCHER_LANGUAGES,
       // Curated tabs start from TAB_DEFS and are COMPLETED from the manifest (tag + scriptUrl) as
@@ -834,6 +941,20 @@ export default defineComponent({
     }
   },
   computed: {
+    // The pane notice for a larger-screens map: the library's sentence, so the Gallery and the map's
+    // own leaf page say the same thing (SPEC-MOBILE-FLAG).
+    largerScreenText() {
+      return tStatic('messages.largerScreenNotice', this.uiLocale)
+        || 'This experimental map is built for larger screens. It opens here, but parts of it may not fit or work well on a phone.'
+    },
+    // ★ THE SCROLLER IS THIS PANE, MEASURED, NOT VTL'S. At 390x844 on the live build:
+    // section.dms-pane has clientHeight 712 and scrollHeight 12,373 with overflow-y:auto, while
+    // the document does not scroll at all and there is NO .vtl-host element in the tree.
+    // VerticalTabsLayout does render a BackToTopButton, but it binds the active .vtl-host, which
+    // only exists for rows carrying an `element` — and this SPA passes :groups whose rows carry
+    // none, mounting its own panes instead. So that button's target is null here and it renders
+    // nothing: the layout's button is for layouts that host their own element rows, not for us.
+    activePaneEl() { return this.paneEls[this.activeIndex] || null },
     // The active tab's "?" text, or null: only discovered (Experimental) tabs, and only when
     // experimentalHelp.js has an entry for that bundle in this locale (English fallback inside).
     activeHelp() {
@@ -873,18 +994,27 @@ export default defineComponent({
       if (/^https?:\/\//i.test(v) || v.startsWith('/')) return v.replace(/\/+$/, '')
       return this.manifestBase ? this.manifestBase.replace(/\/+$/, '') + '/assets' : ''
     },
-    // The GROUPED rail model the shared VerticalTabsLayout paints, built from NAV_MODEL (the Driver's
+    // The GROUPED rail model the shared VerticalTabsLayout paints, built from NAV_MODEL (the
     // ported sections/folder) projected over the REAL tabs. Each row's `key` = the tab id (stable),
     // which onSelect maps back to the tab index the mount machinery uses — so the sections are pure
     // presentation, the mount path is unchanged. Rows whose tab id has no matching TAB_DEF are
     // dropped, and a group with no surviving rows is omitted (never paint a dead section/row).
     //
-    // ★ THE DEVICE RULE, PER THE SPEC — "it shouldn't change the tab order, it should open you up to
-    //   the 2nd tab by default on mobile and disable the 1st tab." That is why there is NO width
+    // ★ THE DEVICE RULE, PER THE SPEC: the tab order never changes; on mobile the 2nd tab opens by
+    //   default and the 1st is disabled. That is why there is NO width
     //   filter on rows here any more (the old `onlyWhen:'desktop'|'mobile'` hide-a-row mechanism is
     //   gone — every row is in the rail on every width, same order, always). The ONLY width-driven
     //   thing left is which row is DISABLED (Big Picture, on mobile — see isDesktopOnly) and
     //   which row auto-opens (see firstVisibleIndex) — both presentation, neither touches NAV_MODEL.
+    showInfo() { const v = this.cfg.info; return !(v === false || v === 'false' || v === 'off') },
+    headingText() { return String(this.cfg.heading || this.heading || '').trim() || 'Deep Research' },
+    // profile-config `experimental: false` (or "hidden") hides the Experimental folder: no discovery, no
+    // rows, and a tab= request for an experimental map falls back to the first visible tab. OFF only on
+    // request, so every other host keeps the folder exactly as before.
+    showExperimental() {
+      const v = this.cfg.experimental
+      return !(v === false || v === 'false' || v === 'hidden' || v === 'off')
+    },
     navGroups() {
       const byId = Object.fromEntries(this.tabs.map(t => [t.id, t]))
       // ONE `seen` set threaded across ALL groups (not per-group): the rail must hold one node per tab
@@ -906,15 +1036,19 @@ export default defineComponent({
                 // at the layout level and this shell is what turns that click into a message instead
                 // of a mount.
                 const disabled = this.isDesktopOnly(t.id)
+                // A desktop-only map says so on EVERY width, not only once a phone has disabled it:
+                // a desktop reader should know before sharing the link to a phone.
+                const desktopOnly = disabled || this.mobileFlagOf(t.id) === 'desktop-only'
                 return {
                   key: t.id, label: this.tabLabel(t), sub: this.tabSub(t), icon: r.icon,
-                  badge: disabled ? this.tr('desktopOnly') : r.badge, disabled
+                  badge: desktopOnly ? this.tr('desktopOnly') : r.badge, disabled
                 }
               }),
             seen)
           // The Experimental folder is not authored — it is FILLED with every discovered tab (any
           // built bundle no curated section placed). This is the one group whose rows come from the
           // manifest rather than NAV_MODEL, which is what makes a new plugin appear by itself.
+          if (g.key === 'experimental' && !this.showExperimental) return { key: g.key, rows: [] }
           if (g.key === 'experimental') {
             // Discovered rows go through the SAME de-dup gate as curated ones. Belt-and-braces: a
             // discovered bundle should already be excluded by curatedBundles()/NOT_EXPERIMENTAL, but
@@ -922,35 +1056,41 @@ export default defineComponent({
             rows = rows.concat(dedupeRows(
               this.tabs.filter(t => t.discovered)
                 .map(t => ({ key: t.id, label: this.tabLabel(t), sub: this.tabSub(t), icon: 'flask',
-                  badge: MOBILE_NOTICE.has(t.id) && this.narrow ? this.tr('mobileNotBuilt') : this.tr('lab') })),
+                  badge: this.narrow && this.mobileFlagOf(t.id) === 'larger-screens' ? this.tr('mobileNotBuilt') : this.tr('lab') })),
               seen))
           }
           return { key: g.key, label: g.i18n ? this.tr(g.i18n) : g.label, icon: g.icon, folder: !!g.folder, open: g.open, rows }
         })
         .filter(g => g.rows.length)
     },
-    // Whether the standalone #toolbar locale dropdown renders. The Driver's rule: the cap-5 SPA has
+    // Whether the standalone #toolbar locale dropdown renders. The rule: the cap-5 SPA has
     // NO standalone dropdown by default — it INHERITS its language from the parent via the `language`
     // prop (effectiveLocale). The dropdown is only offered when the header is ON (a host opting the
     // SPA into its own chrome). Keyed to the SAME flag as the shell header so the two never diverge.
     showLocaleSwitcher() { return this.showHeader },
     // The active language's flag/native name for the toolbar toggle button.
     activeLang() { return getLanguage(this.locale) || { code: this.locale, flag: '🌐', nativeName: this.locale } },
-    // The EFFECTIVE preview language pushed down to every tab. Precedence, most-authoritative first:
-    //   1. `language` prop / profile-config.language|locale|lang — the parent-page (inherited) value.
-    //   2. the manual switcher's data.locale (only meaningful when a header dropdown is present).
-    // Every tab's element receives THIS via profile-config.locale, so the SPA honors one language prop.
-    //   1. `language` prop / profile-config.language|locale|lang — what the host SAYS.
-    //   2. the gallery's own switcher choice — only while that switcher is actually offered.
-    //   3. the host page's language (?lang= / <html lang>, see detectHostLocale).
-    //   4. English.
+    // The language the HOST says: the `language` prop, or profile-config.language|locale|lang.
+    propLocale() {
+      return (this.language || this.cfg.language || this.cfg.locale || this.cfg.lang || '').trim()
+    },
+    // The EFFECTIVE preview language pushed down to every tab (each tab's element receives it via
+    // profile-config.locale). Precedence, most-authoritative first:
+    //   1. a pick from the shell's language menu in THIS session that no host took (sessionPick), which
+    //      the watcher below clears as soon as the host's `language` changes;
+    //   2. `language` prop / profile-config.language|locale|lang: what the host SAYS;
+    //   3. the header-on switcher's choice, only while that switcher is actually offered;
+    //   4. the host page's language (?lang= / <html lang>, see detectHostLocale);
+    //   5. English.
     effectiveLocale() {
-      const fromProp = (this.language || this.cfg.language || this.cfg.locale || this.cfg.lang || '').trim()
       const fromSwitcher = this.showLocaleSwitcher ? this.locale : ''
-      return (fromProp || fromSwitcher || this.hostLang || 'en').split('-')[0].toLowerCase()
+      return (this.sessionPick || this.propLocale || fromSwitcher || this.hostLang || 'en').split('-')[0].toLowerCase()
     },
     // The locale the gallery's OWN words render in: the effective one when it ships, else English.
     uiLocale() { return LOCALES.includes(this.effectiveLocale) ? this.effectiveLocale : 'en' },
+    // "Back to homepage" with no host to name one (a standalone page, the published tree): the DOXA site, in the
+    // gallery's language. A host's home-href, or profile-config.homeHref, always wins.
+    defaultHomeHref() { return 'https://doxa.life' + (this.uiLocale && this.uiLocale !== 'en' ? '/' + this.uiLocale : '') },
     // Direction FOLLOWS THE GALLERY'S LANGUAGE, set explicitly on the layout root (a fallthrough attr
     // on VerticalTabsLayout's .vtl): Arabic lays the shell out right-to-left (the layout mirrors its
     // rail under :dir(rtl)), every other shipped locale left-to-right — including an English gallery
@@ -960,7 +1100,7 @@ export default defineComponent({
     // defaults inside VerticalTabsLayout, translated here through its `labels` contract.
     layoutLabels() {
       const out = {}
-      for (const k of ['toggleList', 'openViews', 'expandList', 'collapseList', 'collapse']) out[k] = this.tr(k)
+      for (const k of ['toggleList', 'openViews', 'expandList', 'collapseList', 'collapse', 'home']) out[k] = this.tr(k)
       return out
     },
     // The engine a HOST asked for ('' = none; each map keeps its own ladder).
@@ -988,12 +1128,26 @@ export default defineComponent({
     // paint instantly. select() defers the actual mount until scriptUrl exists, and applyManifest
     // re-drives it, so the first tab mounts the moment the manifest lands.
     this.loadManifest()
+    // A map's own "?" asks for its help with a composed doxa:help event (library HelpButton).
+    this._onHostedHelp = (e) => this.onHostedHelp(e)
+    this.$el.addEventListener('doxa:help', this._onHostedHelp)
+    // Back / Forward re-open the tab the address names (useViewAddress), and never write. Only where a page OWNS
+    // its address: on a partner's page a popstate is the partner's own navigation, and re-reading the URL there
+    // would snap a host's fixed `tab` attribute back to the default. The owner is read per event: a host may set
+    // profile-config after mount.
+    this._offAddress = onAddressChange(({ tab }) => { if (urlOwnerOf(this.cfg)) this.openFromAddress(tab) })
+    // A nested composite's choice (its open pane, a selected place) reaches the address through this shell, the
+    // page's one writer, while the page owns its address; a nested element can never switch this shell's tab.
+    this._offOwn = ownAddress(this.$el, () => urlOwnerOf(this.cfg))
   },
   // Release the media-query listener. This element is a custom element a host can add and REMOVE at
   // will (a cap-5 SPA is mounted and unmounted by shells, tabs and the studio), and a live listener
   // holding a reference to a detached component leaks it for the page's lifetime.
   beforeUnmount() {
     if (this._langObs) { this._langObs.disconnect(); this._langObs = null }
+    if (this._onHostedHelp) { this.$el.removeEventListener('doxa:help', this._onHostedHelp); this._onHostedHelp = null }
+    if (this._offAddress) { this._offAddress(); this._offAddress = null }
+    if (this._offOwn) { this._offOwn(); this._offOwn = null }
     if (!this._mql || !this._onMedia) return
     if (this._mql.removeEventListener) this._mql.removeEventListener('change', this._onMedia)
     else if (this._mql.removeListener) this._mql.removeListener(this._onMedia)
@@ -1001,28 +1155,77 @@ export default defineComponent({
   },
   watch: {
     activeIndex() { this.helpOpen = false },
-    // When the parent page changes the inherited `language` prop at runtime, re-drive the CURRENTLY
-    // visible tab into the new language by re-setting its element's profile-config.locale (which is
-    // languages.js's contract). Other tabs pick it up lazily on their next open, since mountElement
-    // reads effectiveLocale fresh. ONE path now — every tab is a real element, so the old
-    // iframe-src-repoint branch is gone along with the iframes.
-    effectiveLocale(loc) {
-      const t = this.tabs[this.activeIndex]
+    // The host changed its language: that is the newest word, so it replaces a menu pick made earlier.
+    propLocale() { this.sessionPick = '' },
+    // ★ A LANGUAGE SWITCH REMOUNTS, IT DOES NOT RE-SET THE ATTRIBUTE. Re-setting the visible tab's
+    // profile-config was the old path, and it relied on every nested map re-reading its whole config
+    // live. Two production maps do not: Big Picture's tStatic strings are resolved once (2/352 changed,
+    // measured), and Simple Research's composite copies its config into its panes once (0/43, 0/105).
+    // A fresh element reads effectiveLocale at mount, so the visible tab is rebuilt in the new language
+    // whatever each map does internally, the same way a provider change rebuilds. View state (filters,
+    // zoom) is lost on a language switch, which is acceptable.
+    // Hidden tabs that are still MOUNTED (a non-heavy tab stays mounted when hidden, and select() does
+    // not remount a mounted tab) are released, so their next open mounts fresh in the new language.
+    effectiveLocale() {
+      // Reset IN PLACE, not with releaseTab: releaseTab deletes the slot ref, and a light (v-show) pane
+      // is rendered once, so its slot ref would never be set again and the next mount would find none.
+      // Emptying the slot runs the old element's disconnected lifecycle, which frees its map.
+      const reset = (i, t) => {
+        try { const slot = this._slots && this._slots[i]; if (slot) slot.innerHTML = '' } catch { /* reset anyway */ }
+        t.mounted = false; t.state = 'idle'; t.error = ''
+      }
+      this.tabs.forEach((t, i) => { if (t.mounted && i !== this.activeIndex) reset(i, t) })
+      const i = this.activeIndex
+      const t = this.tabs[i]
       if (!t || !t.mounted) return
-      try {
-        const slot = this._slots && this._slots[this.activeIndex]
-        const el = slot && slot.firstElementChild
-        // Rebuild the SAME config the mount used (childConfig), so a language switch cannot silently
-        // drop the profile/instance/token and re-render a different view in the new language.
-        if (el && el.setAttribute) el.setAttribute('profile-config', JSON.stringify(this.childConfig(t)))
-      } catch { /* non-fatal: the tab keeps its previous language */ }
+      reset(i, t)
+      this.mountElement(i)
     },
     // A host re-pointing the `tab` attribute after mount (e.g. from its own nav) switches the gallery.
     tab(id) { if (id) this.onSelect(id) }
   },
   methods: {
     openHelp() { this.helpOpen = true; this.$nextTick(() => this.$refs.helpClose && this.$refs.helpClose.focus()) },
-    closeHelp() { this.helpOpen = false; this.$nextTick(() => this.$refs.helpBtn && this.$refs.helpBtn.focus()) },
+    closeHelp() {
+      this.helpOpen = false
+      const back = this._helpReturn; this._helpReturn = null
+      this.$nextTick(() => back && back.focus && back.focus())
+    },
+    // Does this tab have what/how text? Marks its pane, so a map's hosted "?" knows to show.
+    // A tab's button shows only when its lead text is in the bundled catalogue: a key that has not
+    // landed would otherwise open a popup of raw key names. English is the check because every
+    // locale falls back to it.
+    // The entry minus `pos`, which is placement for the button, not a MapInfo prop.
+    infoProps(t) { const { pos, ...props } = this.infoFor(t) || {}; return props },
+    // pos -> MapInfo's own offset variables, inherited by its button and pointer.
+    // The tab's placement at this width: pos, with pos.narrow laid over it on a phone.
+    infoPos(t) {
+      const pos = (this.infoFor(t) || {}).pos || {}
+      const { narrow, ...wide } = pos
+      return this.narrow && narrow ? { ...wide, ...narrow } : wide
+    },
+    infoStyle(t) {
+      const pos = this.infoPos(t)
+      const s = {}
+      if (pos.top) s['--map-info-top'] = pos.top
+      if (pos.side) s['--map-info-side'] = pos.side
+      return s
+    },
+    infoFor(t) {
+      const e = this.showInfo && t && TAB_INFO[t.id]
+      return e && (!e.leadKey || tStatic(e.leadKey, 'en')) ? e : null
+    },
+    tabHasHelp(t) { return !!(t && t.discovered && helpFor(t.id, this.uiLocale)) },
+    // A map's "?" (library HelpButton) asked for help. Answer only for the active tab, and only when
+    // it has text; remember the exact button (composedPath reaches into the map's shadow root) so
+    // closing returns focus to it.
+    onHostedHelp(e) {
+      if (!this.activeHelp) return
+      e.stopPropagation()
+      const path = e.composedPath ? e.composedPath() : []
+      this._helpReturn = path.find((n) => n && n.tagName === 'BUTTON') || null
+      this.openHelp()
+    },
     setSlot(i, el) { if (el) this._slots = Object.assign(this._slots || {}, { [i]: el }) },
     // The gallery's own words in uiLocale (src/strings.js). `t` in the template is shadowed by the
     // v-for tab variable inside the panes, so those use `tr`; both are the same function.
@@ -1072,17 +1275,20 @@ export default defineComponent({
       if (this._mql.addEventListener) this._mql.addEventListener('change', this._onMedia)
       else if (this._mql.addListener) this._mql.addListener(this._onMedia)
     },
-    // THE ONE ROW THE DEVICE RULE DISABLES. Driver, verbatim: "it shouldn't change the tab order, it
-    // should open you up to the 2nd tab by default on mobile and disable the 1st tab." Named as a
-    // predicate (not a hardcoded width filter in navGroups) so the ONE place that knows "Big Picture"
-    // means 'dashboard-plus-grid' is this method — navGroups, onSelect and watchWidth all call it
-    // rather than each re-encoding the id + the width test.
-    isDesktopOnly(id) {
-      return DESKTOP_ONLY.has(id) && this.narrow
+    // The phone flag of a tab's own bundle/profile, as the manifest states it (null until it lands).
+    mobileFlagOf(id) {
+      const t = this.tabs.find(x => x.id === id)
+      return (t && this.mobileFlags) ? (this.mobileFlags[t.bundle + '/' + t.profile] || null) : null
     },
-    // An experimental map that opens on a phone but warns first (MOBILE_NOTICE), until dismissed.
+    // THE ROWS THE DEVICE RULE DISABLES. The tab order does not change on a phone: the default opens
+    // the next usable row and the disabled one stays in place. Named as a predicate (not a width filter
+    // in navGroups) so navGroups, onSelect and watchWidth all ask the same question.
+    isDesktopOnly(id) {
+      return this.narrow && this.mobileFlagOf(id) === 'desktop-only'
+    },
+    // A map that opens on a phone but warns first, until dismissed.
     showsMobileNotice(id) {
-      return MOBILE_NOTICE.has(id) && this.narrow && !this.mobileNoticeDismissed[id]
+      return this.narrow && this.mobileFlagOf(id) === 'larger-screens' && !this.mobileNoticeDismissed[id]
     },
     dismissMobileNotice(id) {
       this.mobileNoticeDismissed = { ...this.mobileNoticeDismissed, [id]: true }
@@ -1111,7 +1317,7 @@ export default defineComponent({
     // Fail-soft by design: any error (no manifest shipped, a file:// drop where fetch is blocked,
     // malformed JSON) leaves the curated tabs unresolved and Experimental empty rather than throwing.
     //
-    // ★ FAIL-SOFT IS NOT FAIL-SILENT (BUG-SIMPLE-RESEARCH-GREY-PANE, Driver reported 4x).
+    // ★ FAIL-SOFT IS NOT FAIL-SILENT (the Simple Research grey pane, seen four times).
     // Every `src`-composed tab — Simple Research, Regions, every map — gets its `scriptUrl` from
     // this manifest and from nowhere else. Only tab 1 (Big Picture) is BAKED, so only tab 1 can
     // paint without it. When this fetch 404'd the old code swallowed it, mountTab() hit
@@ -1148,20 +1354,32 @@ export default defineComponent({
       const candidates = crossOrigin ? [copy, root] : [root, copy]
       // The tree's name comes from the build config (vite define), never a literal here: this was the
       // one tree path compiled into any bundle, so a renamed tree would have needed a gallery edit.
-      const devFallback = '/public/' + __DOXA_TREE_NAME__ + '/manifest.json'
-      if (!candidates.some(c => c.url === devFallback)) candidates.push({ url: devFallback, root: dirOf(devFallback) })
+      // ★ THE DEV SERVER SERVES public/ AT THE ROOT. Reached as /public/<tree>/…, Vite treats a built bundle as SOURCE
+      // and injects an import into its IIFE, so a child loaded as a classic script throws "Cannot use import statement
+      // outside a module" (measured on the staging page, 2026-10-03). So the root path comes first, served as the raw
+      // build; /public/<tree>/ stays last, for a plain static server of the repository, which transforms nothing.
+      for (const devFallback of ['/' + __DOXA_TREE_NAME__ + '/manifest.json', '/public/' + __DOXA_TREE_NAME__ + '/manifest.json']) {
+        if (!candidates.some(c => c.url === devFallback)) candidates.push({ url: devFallback, root: dirOf(devFallback) })
+      }
       const tried = []
+      // Every mount waits for this gate (see FRESH BUNDLES above): it opens once the manifest's bundles are known
+      // to be current, when no manifest can be read (fail-soft, as before), or after 8 s whatever happens.
+      let open
+      this._freshGate = new Promise(res => { open = res })
+      setTimeout(open, 8000)
       const attempt = (i) => {
         if (i >= candidates.length) {
           // Every candidate failed. Record it on the tabs so the PANE says so — see mountTab().
           this.manifestError = 'manifest.json not found (tried ' + tried.join(', ') + ')'
           console.error('[doxa-maps-spa] ' + this.manifestError +
             ' — every tab except Big Picture is composed from it, so their panes cannot mount.')
+          open()
           return
         }
         const { url, root: treeRoot } = candidates[i]
         tried.push(url)
-        return fetch(url, { credentials: 'same-origin' })
+        // no-cache: always revalidated (a 304 when unchanged), so the manifest is never a stale copy.
+        return fetch(url, { credentials: 'same-origin', cache: 'no-cache' })
           .then(r => { if (!r || !r.ok) throw new Error(url + ' → HTTP ' + (r ? r.status : '?')); return r.json() })
           .then(m => {
             if (!m) throw new Error(url + ' → empty')
@@ -1171,11 +1389,32 @@ export default defineComponent({
             // resolves '../' and rooted forms alike, so a caller-supplied treeBase, a built-tree
             // path and the dev fallback all normalise here.
             this.manifestBase = treeRoot || ''
+            this.revalidateBundles(m, treeRoot || '').then(open, open)
             this.applyManifest(m)
           })
           .catch(() => attempt(i + 1))
       }
-      try { attempt(0) } catch { /* fetch unavailable (non-browser): same fail-soft path */ }
+      try { attempt(0) } catch { open() /* fetch unavailable (non-browser): same fail-soft path */ }
+    },
+    // After a deploy (the manifest's fingerprint changed since this reader's last visit to this tree), ONE conditional
+    // request per listed bundle, so no stale cached copy is run (see FRESH BUNDLES). Never rejects.
+    revalidateBundles(m, root) {
+      const fp = treeFingerprint(m)
+      const prev = readTreeFp(root)
+      if (prev === fp) return Promise.resolve()
+      const urls = [...new Set(((m && m.bundles) || []).map(b => (b && b.scriptUrl) ? this.resolve(b.scriptUrl) : '').filter(Boolean))]
+      // Only a copy this browser already HOLDS can be stale, so the cache is asked first (only-if-cached never touches
+      // the network) and only those get the conditional request: a first visit with an empty cache costs nothing.
+      // only-if-cached needs a same-origin request; across origins, only a reader who has been here before is checked.
+      const sameOrigin = (u) => { try { return new URL(u, location.href).origin === location.origin } catch { return false } }
+      const held = (u) => (sameOrigin(u)
+        ? fetch(u, { mode: 'same-origin', credentials: 'same-origin', cache: 'only-if-cached' })
+          .then(r => { if (r && r.body && r.body.cancel) r.body.cancel(); return !!(r && r.ok) }, () => false)
+        : Promise.resolve(prev !== null))
+      const revalidate = (u) => fetch(u, { credentials: 'same-origin', cache: 'no-cache' })
+        .then(r => { if (r && r.status === 200 && r.body && r.body.cancel) return r.body.cancel() })
+      const one = (u) => held(u).then(h => (h ? revalidate(u) : null)).catch(() => {})
+      return Promise.all(urls.map(one)).then(() => writeTreeFp(root, fp))
     },
     // Complete the curated tabs from the manifest, drop any whose bundle this tree does not ship,
     // then append the discovered Experimental tabs — and finally (re)drive the active tab's mount,
@@ -1184,6 +1423,7 @@ export default defineComponent({
       // The build's published defaults for a foreign-page embed (apiBaseUrl + public token). Set the
       // page globals BEFORE select() below mounts anything — a nested map reads them at init/fetch.
       this.runtime = (m && m.runtime && typeof m.runtime === 'object') ? m.runtime : {}
+      this.mobileFlags = mobileFlagsFromManifest(m)
       this.applyPageGlobals()
       const patch = resolveTabsFromManifest(m, TAB_DEFS)
       const activeId = this.activeKey
@@ -1199,7 +1439,7 @@ export default defineComponent({
         kept.push(t)
       }
       const have = new Set(kept.map(t => t.id))
-      for (const d of experimentalTabsFromManifest(m)) {
+      if (this.showExperimental) for (const d of experimentalTabsFromManifest(m)) {
         if (have.has(d.id)) continue
         kept.push({ ...d, resolved: true, mounted: false, state: 'idle', error: '' })
       }
@@ -1212,14 +1452,15 @@ export default defineComponent({
       const w = want ? this.tabs.findIndex(t => t.id === want) : -1
       const i = this.tabs.findIndex(t => t.id === activeId)
       if (w >= 0 && !this.isDesktopOnly(want) && !this._honouredTab) this.select(w)
-      else this.select(i >= 0 ? i : this.firstVisibleIndex())
+      else this.select(i >= 0 && !this.isDesktopOnly(activeId) ? i : this.firstVisibleIndex())
       this._honouredTab = true
     },
     // The tab a HOST asked to open first: the `tab` attribute, then profile-config.tab, then ?tab= on
-    // the page URL (so an iframe src or a shared link can deep-link). '' when nobody asked.
+    // the page URL (so an iframe src or a shared link can deep-link). '' when nobody asked. The URL is read
+    // through useViewAddress: the first ?tab= wins, and a value that is not a plain id reads as absent.
     requestedTab() {
       let q = ''
-      try { q = new URLSearchParams(location.search).get('tab') || '' } catch { /* non-browser */ }
+      try { q = readViewKeys(location.search).tab } catch { /* non-browser */ }
       return String(this.tab || this.cfg.tab || q || '').trim()
     },
     // The index to open on mount: the requested tab when it exists and is enabled at this width,
@@ -1244,6 +1485,12 @@ export default defineComponent({
       this.localeOpen = false
       saveLocale(code)
     },
+    // The language menu's 'switch': it fires only when no host cancelled doxa-language-request, so the
+    // gallery switches itself, and the pick holds over a `language` prop the host never updates.
+    pickLocale(code) {
+      this.setLocale(code)
+      this.sessionPick = code
+    },
     // The shared rail emits the selected tab's `key` (its id); map it back to the index the
     // pane-mount machinery below is keyed on.
     //
@@ -1257,13 +1504,34 @@ export default defineComponent({
     onSelect(key) {
       if (this.isDesktopOnly(key)) {
         const t = this.tabs.find(x => x.id === key)
-        this.disabledNotice = this.tr('desktopNotice', { label: t ? this.tabLabel(t) : key })
+        this.disabledNotice = (tStatic('messages.desktopOnlyNotice', this.uiLocale) || '{label} only supports desktop — open this page on a desktop to use it.')
+          .replace('{label}', t ? this.tabLabel(t) : key)
         clearTimeout(this._noticeTimer)
         this._noticeTimer = setTimeout(() => { this.disabledNotice = '' }, 4000)
         return
       }
       const i = this.tabs.findIndex(t => t.id === key)
       if (i !== -1) this.select(i)
+    },
+    // ★ THE PAGE ADDRESS (shareable pages, useViewAddress). A READER's pick in the rail is the one switch that
+    // writes ?tab=, as a push, so a reload keeps the tab, a sent link opens it, and Back returns to the previous one.
+    // Who writes is the page's urlOwner: 'app' (our own leaf page) writes history, 'host' (DX Life) gets a
+    // dxm-address event and its router writes, and a partner's page is never written. Every other switch is not a
+    // choice and writes nothing: the manifest's re-select, the device fallback, a host's `tab` attribute, Back and
+    // Forward. Nor is there a first-paint write: a bare URL means the device's default tab, and pinning a phone's
+    // default into the address would send a desktop reader to it.
+    onRailSelect(key) {
+      const before = this.activeKey
+      this.onSelect(key)
+      if (this.activeKey !== before) writeViewKeys({ tab: this.activeKey }, { owner: urlOwnerOf(this.cfg), push: true, el: this.$el })
+    },
+    // Back / Forward: the tab the address names, else the page's configured first tab (profile-config.tab), else the
+    // device default. Not the `tab` attribute: a host with a router re-points it from this same popstate, and until
+    // it does, it still names the tab being left.
+    openFromAddress(tab) {
+      const want = tab || String(this.cfg.tab || '').trim()
+      const i = want ? this.tabs.findIndex(t => t.id === want) : -1
+      this.select(i >= 0 && !this.isDesktopOnly(want) ? i : this.firstVisibleIndex())
     },
     // Resolve a tree-relative ref ("./x" / "x") against the tree base. If base is '' we keep it
     // relative to THIS document — but this bundle's own folder is <base>/doxa-maps-spa/, so a
@@ -1313,6 +1581,12 @@ export default defineComponent({
       if (prevIndex !== i || !this._announced) { this._announced = true; this.$emit('tab-change', { id: t.id, label: t.label }) }
       // Not yet completed by the manifest — applyManifest calls select() again once it lands.
       if (!t.scriptUrl) return
+      // ★ ON A PHONE, NOTHING MOUNTS BEFORE THE FLAGS ARE KNOWN. They come with the manifest, and the
+      // baked first tab (Big Picture) has its scriptUrl before that: mounting it here would put the
+      // heaviest, desktop-only map on a phone for the length of one request. Fail closed; applyManifest
+      // re-selects once the flags are in. On a desktop this changes nothing.
+      if (this.narrow && this.mobileFlags === null) return
+      if (this.isDesktopOnly(t.id)) return
       // A heavy tab's slot only exists after its v-if subtree renders, so wait a tick before mounting
       // into it: on the first activation the ref is still null at this point.
       if (!t.mounted) this.$nextTick(() => { if (this.activeIndex === i) this.mountElement(i) })
@@ -1335,8 +1609,8 @@ export default defineComponent({
     // MAP_TOKEN does not cross one). Mounting elements directly, all three ride in profile-config on
     // the element itself — see mountElement — so there is nothing left to encode into a URL. It is
     // deleted rather than kept "just in case": an unreachable second token path is one more thing to
-    // keep in sync, and the ?locale= it emitted is precisely what produced the 404 URLs the Driver
-    // saw (".../index.html?locale=en").
+    // keep in sync, and the ?locale= it emitted is precisely what produced the 404 URLs seen in the
+    // console (".../index.html?locale=en").
     // THE ONE profile-config every nested element receives — built here and nowhere else, so the mount
     // and the language watcher can never disagree about what a tab was told.
     childConfig(t) {
@@ -1367,6 +1641,9 @@ export default defineComponent({
       // #anchor and retitled the host's browser tab "Regions". A child that syncs its state into the
       // URL standalone should read this and stand down; children that never write the URL ignore it.
       pc.urlSync = false
+      // The MAP's own name for its print header (mapPrintTemplate.js): this tab's localized label. A plugin that
+      // does not print ignores it.
+      pc.mapTitle = this.tabLabel(t)
       return pc
     },
     // The PAGE GLOBALS a generated leaf page bakes and a foreign host page does not — set here, and
@@ -1402,7 +1679,8 @@ export default defineComponent({
       // Gate the mount on the TAG being registered, NOT on the script's onload — onload fires even
       // when a dev ES module then fails to execute (see loadScriptOnce), which would hand us an inert
       // HTMLUnknownElement and an empty pane cheerfully reporting 'ready'.
-      loadScriptOnce(jsUrl).then(() => whenTagDefined(t.tag)).then(() => {
+      // …and on the freshness gate first, so a deploy's new bundle is the copy that runs (see FRESH BUNDLES).
+      Promise.resolve(this._freshGate).then(() => loadScriptOnce(jsUrl)).then(() => whenTagDefined(t.tag)).then(() => {
         // Everything below is per-nested-plugin machinery; a throw here (a nested element that blows
         // up in its connectedCallback, a serialise failure) must NOT crash the SPA — it lands in THIS
         // tab's error pane. Hence the try/catch on top of the .catch() that handles a failed load.
@@ -1444,7 +1722,7 @@ export default defineComponent({
           // pane it was supposed to fill. .dms-slot then grew with it and .dms-pane's overflow-y:auto
           // (below) turned into a real scroll container — one that contains the WHOLE plugin, tab strip
           // and all, so scrolling it scrolled the tab header out of view. That is the second scrollbar
-          // the Driver has been looking at: not the plugin's content scroller, the PANE scrolling the
+          // that was reported: not the plugin's content scroller, the PANE scrolling the
           // plugin bodily. The invariant two comments below ("fills the pane exactly, so
           // scrollHeight===clientHeight") was written as a description and was only ever a hope.
           // An inline style outranks the child's own :host rule, so this one property restores the
@@ -1504,7 +1782,7 @@ export default defineComponent({
    styles for this SPA's own tab content remain here — panes fill the shell's content slot, and the
    element slot / loading hint each fill their pane.
    (.dms-frame went with the iframes: there is no framed pane left to style.)
-   ★ THE PANE OWNS THE SCROLL (BUG-CANNOT-SCROLL-DOWN-TO-THE-GRID, this shell). .dms-pane was
+   ★ THE PANE OWNS THE SCROLL (the grid under a composite could not be scrolled to). .dms-pane was
    `position:absolute; inset:0` with no overflow, and .dms-slot the same — so a tall composite
    (dashboard-plus-grid, the Big Picture tab) grew the SLOT's scrollHeight past the PANE's
    clientHeight with nothing to scroll it: an absolutely-positioned child cannot grow its own
@@ -1528,7 +1806,7 @@ export default defineComponent({
    That floor measures against the VIEWPORT while this pane measures against its HOST, so on any page
    with chrome above the gallery the profile is taller than the pane by exactly the height of that
    chrome -- and .dms-pane's overflow-y:auto then scrolls the whole plugin, tab strip included.
-   MEASURED by rega on DX Life: 1440x900 viewport, 794px pane, content exactly 900 (106px over, the
+   MEASURED on DX Life: 1440x900 viewport, 794px pane, content exactly 900 (106px over, the
    header); 390x844, 712px pane, content exactly 844 (132px). On 12 of 16 tabs, INCLUDING plugins with
    no min-height of their own -- which is what proves the floor is ProfileLoader's, not theirs.
    It cannot be fixed from outside: the floor is in the element's SHADOW ROOT where no host-page
@@ -1536,6 +1814,11 @@ export default defineComponent({
    documents this opt-out for exactly this case, and .vtl-host and plugin-studio's .ps-pane both set
    it. This pane was ported from .vtl-host and took two of its three lines. */
 .dms-pane { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; --profile-min-h: 0; }
+/* A tab whose free corner lies over a positioned bar of the map's own (Big Picture's filter bar, z-index 55)
+   raises the info BUTTON above that bar (src/tabInfo.js pos.raise). Only the button: the one-time pointer
+   stays under the bar, so it covers no filter even visually. Measured: nothing interactive under the button,
+   the button topmost at its centre, and a click opens the popup, at 1440, 1024 and 800, en and ar. */
+.mi.dms-info-raise .mi-btn { z-index: 60; }
 .dms-slot { position: relative; min-height: 100%; }
 .dms-hint {
   position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
@@ -1544,18 +1827,8 @@ export default defineComponent({
 .dms-hint.err { color: #f87171; }
 .dms-hint small { color: var(--dx-muted, #6d766e); }
 
-/* THE DEVICE-RULE NOTICE — the transient "desktop only" toast for the disabled Big Picture row on
-   mobile. Material light only (surface/border/text/muted tokens), matching the rest of this file. */
-.dms-help-btn {
-  /* Top-centre: map plugins use the corners (zoom top-right, logo bottom-left, attribution
-     bottom-right, the mobile legend sheet along the bottom), so the one free edge is the top middle.
-     ABSOLUTE, not fixed: it anchors to the layout's .vtl-content (position:relative), i.e. the map pane.
-     Fixed would sit at the HOST page's viewport top when the SPA is embedded lower down. */
-  position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 40; width: 36px; height: 36px; border-radius: 50%;
-  font: 700 17px/1 Georgia, serif; color: #3b463d; background: #fff; border: 1px solid #d1d4cd;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12); cursor: pointer;
-}
-.dms-help-btn:focus-visible, .dms-help-close:focus-visible { outline: 2px solid #3f8f5a; outline-offset: 2px; }
+/* THE HELP DIALOG — opened by a map's own "?" (doxa:help); see the template comment. */
+.dms-help-close:focus-visible { outline: 2px solid #3f8f5a; outline-offset: 2px; }
 .dms-help-scrim { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); padding: 16px; }
 .dms-help {
   max-width: 420px; width: 100%; color: #3b463d; background: #fff; border-radius: 12px;
@@ -1564,6 +1837,8 @@ export default defineComponent({
 .dms-help-title { margin: 0 0 8px; font-size: 16px; }
 .dms-help-what, .dms-help-how { margin: 0 0 10px; }
 .dms-help-close { float: right; font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid #d1d4cd; background: #f3f3f1; cursor: pointer; }
+/* THE DEVICE-RULE NOTICE — the transient "desktop only" toast for the disabled Big Picture row on
+   mobile. Material light only (surface/border/text/muted tokens), matching the rest of this file. */
 .dms-notice {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40;
   max-width: 320px; text-align: center; font-size: 13px; line-height: 1.4;
@@ -1571,7 +1846,7 @@ export default defineComponent({
   padding: 10px 16px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
 }
 
-/* "Not built for mobile" (MOBILE_NOTICE): sticky at the top of the pane's own scroller, so it stays in
+/* "Not built for mobile" (a "larger-screens" map): sticky at the top of the pane's own scroller, so it stays in
    view over the map and never covers the rail. Dismissible per map for the session. */
 .dms-mobile-notice {
   position: sticky; top: 0; z-index: 30; display: flex; align-items: flex-start; gap: 8px;

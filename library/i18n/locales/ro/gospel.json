@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file; prose.english is the one translated line that says so.",
   "prose": {
     "english": "Notele explicative de mai jos sunt în limba engleză."
   },
@@ -12,7 +11,8 @@
     "clear": "Șterge căutarea",
     "none": "Nimic nu se potrivește cu acel nume, limbă sau cod.",
     "placeholderShort": "Popor, limbă sau cod ISO",
-    "showingOf": "Se afișează {shown} din {total} rezultate — continuați să tastați pentru a restrânge."
+    "showingOf": "Se afișează {shown} din {total} rezultate — continuați să tastați pentru a restrânge.",
+    "aria": "Caută un grup etnic, o limbă sau un cod ISO"
   },
   "legend": {
     "title": "Popoare neatinse, fără nicio resursă a Evangheliei",
@@ -78,7 +78,17 @@
     "everyResource": "Toate resursele în",
     "alsoSpeak": "Vorbesc și",
     "share": "Distribuie",
-    "linkCopied": "Link copiat"
+    "linkCopied": "Link copiat",
+    "seeLargest": "Vezi cele mai mari {n} →",
+    "alreadyPraying": "{n} deja în rugăciune",
+    "everyIn": "Fiecare resursă folosită în {country}",
+    "found": "Resurse ale Evangheliei găsite ({n})",
+    "none": "Nicio resursă găsită ({n})",
+    "showingOf": "Se afișează {shown} din {total}.",
+    "popSuffix": "· {pop} persoane",
+    "hasResources": "înrudită: {lang} are resurse",
+    "loadingTable": "Se încarcă {table}…",
+    "popCountries": "{pop} persoane · {countries}"
   },
   "res": {
     "scripture": "Scripturi",
@@ -166,7 +176,9 @@
     "allLanguages": "Toate limbile",
     "peopleGroup": "popor",
     "peopleGroups": "popoare",
-    "scriptureHere": "Scripturi în această limbă"
+    "scriptureHere": "Scripturi în această limbă",
+    "noTextMeans": "Ce înseamnă „fără text”.",
+    "pageLists": "Această pagină listează"
   },
   "columns": {
     "People group": "Popor",
@@ -334,7 +346,9 @@
     "c2Unit": "persoane din grupurile a căror limbă PRINCIPALĂ este aceasta — nu vorbitorii limbii",
     "c3Title": "Țări cu cele mai multe limbi neservite",
     "c3Sub": "Cele {n} țări cu cele mai multe limbi pentru care nu s-a găsit nimic. Lungimea barei este fiecare limbă prezentă în acea țară.",
-    "c3Unit": "limbi prezente în țară (o limbă transfrontalieră se numără în fiecare)"
+    "c3Unit": "limbi prezente în țară (o limbă transfrontalieră se numără în fiecare)",
+    "noneHero": "{nNone} din {nLang} limbi au {noScripture} — limbile a {popNone} de oameni.",
+    "noneHeroFound": "nicio Scriptură și niciun film în colecțiile verificate"
   },
   "filter": {
     "showingOnly": "Se afișează doar {what}.",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "SUN este deja predat în {countries} de {organisation}."
+  },
+  "gap": {
+    "popLine": "{pop} persoane · {iso3}",
+    "wayIn": "cale de acces: {via}",
+    "hasNoText": "are {what} — niciun text găsit",
+    "showingOnly": "Se afișează doar {what}.",
+    "seeLargest": "Vezi cele mai mari {n} →",
+    "kind": {
+      "none": "grupuri fără nimic găsit",
+      "some": "grupuri cu unele resurse",
+      "hnr": "grupuri care pot auzi Evanghelia dar nu au Scriptură scrisă în colecțiile verificate",
+      "all": "grupuri cu Scriptură și film"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "Scriptură, {medium} · {source}",
+    "bibleVideoOf": "Video biblic · {source}",
+    "loading": "Se încarcă resursele…",
+    "peopleWord": "persoane",
+    "alreadyPraying": "deja în rugăciune",
+    "exhausted": "epuizat",
+    "together": "împreună cu"
+  },
+  "gapHero": {
+    "hero": "{groups} grupuri etnice sunt în {growing} {noFound} {pop} persoane, aproximativ {deaths} decese pe zi.",
+    "growing": "creștere",
+    "found": "fără Scriptură și fără film în colecțiile verificate —"
+  },
+  "ui": {
+    "noCode": "fără cod",
+    "unnamed": "limbă fără nume",
+    "hideKey": "Restrânge legenda",
+    "showKey": "Extinde legenda",
+    "largest": "Cele mai mari grupuri fără nimic găsit",
+    "nobodyPraying": "Nimic găsit și nimeni nu se roagă",
+    "concentrates": "Unde se concentrează golul",
+    "linkUnchecked": "Acest link nu a fost verificat."
+  },
+  "rows": {
+    "scriptureHere": "Scriptura în această limbă",
+    "audio": "Scriptură",
+    "bibleVideo": "Video biblic",
+    "gospelPresentation": "Prezentarea Evangheliei",
+    "studyNotes": "note de studiu",
+    "readOnline": "citește online",
+    "audioScripture": "Scriptură audio",
+    "listenBrowser": "Ascultă în browser",
+    "inBrowser": "În browser — {media}",
+    "readHere": "Citește în această limbă",
+    "listenHere": "Ascultă în această limbă",
+    "wordsOfLife": "Cuvintele Vieții — {name}",
+    "gospelAudio": "Audio al Evangheliei",
+    "discipleship": "instruire de ucenicizare {brand}"
   }
 }

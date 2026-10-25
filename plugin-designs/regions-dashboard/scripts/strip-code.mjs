@@ -36,7 +36,7 @@
 //     including a commented-out hit makes a check STRICTER (a false red, cheap). Under-including a real
 //     hit makes it claim completeness it does not have (a false green, expensive). Only use this stripper
 //     when a comment mentioning the pattern would be a FALSE POSITIVE you cannot tolerate.
-// gospel-plugin's generalisation, worth keeping: "any <!-- --> in a template that quotes an identifier
+// A generalisation worth keeping: "any <!-- --> in a template that quotes an identifier
 // will keep doing that to you". THE RULE: the stripper must match the LANGUAGE of the text being read.
 // For a .vue file, strip HTML comments first, then call this for the script block.
 

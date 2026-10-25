@@ -7,9 +7,9 @@ A change here does not affect one map. It ripples to **all** of them. So:
 - **Prototyping or experimenting? Don't edit these.** Put your custom, one-off, not-yet-proven component
   inside your own map's folder (`plugin-designs/<your-map>/`), where it can be as messy as you need and
   breaks nothing else.
-- **Only proven, parameterized, reusable components graduate into this library.** If a component has hard-coded
-  values, assumptions about one specific map, or hasn't been used by more than one map yet — it is **not**
-  ready to live here.
+- **Reusable by default.** If a component could serve more than one map, build it here once, driven by props,
+  and land it through the build owner, so other maps adopt it instead of copying it. If it has hard-coded
+  values or assumptions about one specific map, it is **not** ready to live here: parameterize it first.
 - **A reusable component takes props, not assumptions.** Before you move something in, make it parameterized:
   the map, the legend, the controls, the search bar all take configuration — yours should too.
 - **If you must change a shared component, check every map that uses it.** Run `bun run dev` and click through

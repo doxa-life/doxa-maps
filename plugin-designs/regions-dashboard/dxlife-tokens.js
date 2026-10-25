@@ -57,7 +57,7 @@ export const DXLIFE_TOKENS =
     // tokens/semantic/_typography.scss:37 is `$line-height-normal: 1.5`. We declared every spacing
     // and font token above and no line-height at all, so every text element in the clone inherited
     // whatever the EMBEDDING PAGE happened to set, while theirs is deterministically 1.5.
-    // MEASURED CONSEQUENCE, via rega: our goal cards came out 24px shorter than theirs (571 vs 595),
+    // MEASURED CONSEQUENCE, in a browser: our goal cards came out 24px shorter than theirs (571 vs 595),
     // their big number sitting ~12px lower and its label ~24px lower. .rd-big carried
     // line-height:1.1 to compensate for this missing base; at --font-size-4xl (59.6046px) that is a
     // 65.6px line box against their 89.4px -- a 23.8px difference that accounts for the 24px almost

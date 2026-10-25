@@ -1,10 +1,9 @@
 // export-public.mjs — mirror the rendered posters into doxa-maps' public tree,
 // filed into REGION FOLDERS so they can be browsed in a file manager.
 //
-// Brief: "export all the images into the public folder for doxa-maps within a
-// sub folder called upg-100-posters with folders for the various divisions like
-// India, etc, so I can go into a folder and view the images easier than
-// downloading them one at a time."
+// It exports every image into a upg-100-posters folder, with a sub-folder per
+// division (India, etc.), so the images can be browsed in a folder rather than
+// downloaded one at a time.
 //
 //   node export-public.mjs
 //     -> <doxa-maps>/public/upg-100-posters/<Region>/<Title>.png   (3000x3000)
@@ -15,10 +14,9 @@
 // directory WHOLESALE — there is no per-path exclude. So anything in public/
 // ships inside the Android APK.
 //
-// Brief: "we're not wanting to publish any of those posters inside of the
-// Android application… we don't want to publish that much static content into a
-// bundle into an app when we could just serve those from a CDN later, or create
-// poster generation software inside the app."
+// The posters must NOT ship inside the Android application: that much static
+// content does not belong in an app bundle when it can be served from a CDN
+// later, or generated inside the app.
 //
 // Measured: the export is 52 MB of an 88 MB public/ — 59% of the APK would have
 // been print-resolution posters. It also re-duplicated 11x per build (631 MB)
@@ -77,6 +75,8 @@ const body = sections.map(({ name, list, total }) => `
       ${list.map((p) => {
         const rel = `${encodeURIComponent(safe(name))}/${encodeURIComponent(safe(p.title))}.png`;
         const f = join(DEST, safe(name), `${safe(p.title)}.png`);
+        // href-escaped-ok: rel is built two lines up entirely from encodeURIComponent(), which
+        // percent-encodes a quote, so it cannot break out of the attribute. (check:popup-href-escaped)
         return `<li><a href="${rel}">${esc(p.title)}</a>
           <span class="m">${p.count} UPG · ${existsSync(f) ? kb(f) : 0} KB</span></li>`;
       }).join('')}

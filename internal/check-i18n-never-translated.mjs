@@ -65,7 +65,7 @@ const ALLOWED = new Map([
     'file-format name — "JSON" names the format the button downloads; the file extension is the same in every locale'],
   ['poster.json:dpi',
     'unit symbol — "DPI" is how print resolution is labelled in every one of these locales\' print dialogs; kept as-is by project decision (the poster-strings landing)'],
-  // ── DRIVER-GATED, NOT RESOLVED ──────────────────────────────────────────────
+  // ── DECISION-PENDING, NOT RESOLVED ───────────────────────────────────────────
   // ⚠ THESE ARE ALLOWED SO THE GATE CAN GO GREEN ON THE THINGS IT HAS ACTUALLY SETTLED, NOT
   // because the defect is fixed. "UUPGs" really is an English acronym wedged into an otherwise
   // localized row, in Arabic and Chinese included, while `population` beside it translates
@@ -76,11 +76,11 @@ const ALLOWED = new Map([
   // an acronym produced invented initialisms (PNA, UEVG, ННГ, GNA) with no source, and a wrong
   // term looks AUTHORITATIVE to a reader who cannot check it.
   // See DECIDE-UUPGS-COLUMN-HEADER-IS-ENGLISH-IN-ALL-ELEVEN-LOCALES, which carries the priced
-  // options. REMOVE THESE TWO LINES when the Driver rules — they are a bookmark, not a verdict.
+  // options. REMOVE THESE TWO LINES when the decision lands — they are a bookmark, not a verdict.
   ['legend.json:columns.upgs',
-    'DRIVER-GATED: needs the field\'s term per locale, not an invented acronym — see DECIDE-UUPGS-COLUMN-HEADER'],
+    'DECISION-PENDING: needs the field\'s term per locale, not an invented acronym — see DECIDE-UUPGS-COLUMN-HEADER'],
   ['prayerLaps.json:upgs',
-    'DRIVER-GATED: same term as legend.json:columns.upgs — see DECIDE-UUPGS-COLUMN-HEADER'],
+    'DECISION-PENDING: same term as legend.json:columns.upgs — see DECIDE-UUPGS-COLUMN-HEADER'],
   // ⚠ SETTLED, NOT A BOOKMARK — unlike the two above, this one is not waiting on a ruling; it IS
   // the ruling. "UPG 100" is the product's chosen NAME for the prayer list, so it is a brand
   // designation and correctly identical in every locale, exactly like a version number. The
@@ -171,10 +171,10 @@ if (findings.length) {
   process.exit(1)
 }
 // ★ "ALLOWED" IS NOT ONE THING, and collapsing the two would make this gate lie. A proper noun
-// is SETTLED — it is correct English forever. A DRIVER-GATED key is an OPEN DEFECT parked so the
+// is SETTLED — it is correct English forever. A DECISION-PENDING key is an OPEN DEFECT parked so the
 // gate can still catch the next regression; calling it "identical on purpose" would turn a
 // deferral into a verdict, which is exactly how an open item stops being visible.
-const deferred = allowedHits.filter((a) => /DRIVER-GATED/.test(a.why))
+const deferred = allowedHits.filter((a) => /DECISION-PENDING/.test(a.why))
 if (deferred.length) {
   console.log(`\n  ⚠ ${deferred.length} DEFERRED, NOT SETTLED — these ARE untranslated and are waiting on a ruling:`)
   for (const a of deferred) console.log(`      ${a.id} = "${a.value.slice(0, 40)}"`)

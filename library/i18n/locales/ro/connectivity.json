@@ -64,5 +64,10 @@
     "rural": "Rural",
     "source": "NFHS-5 (2019–21), persoane de 15–49 de ani: ponderea celor care au folosit vreodată internetul. Un sondaj despre oameni, nu o numărătoare de abonamente.",
     "missing": "Încă nu există limită de stat pentru {names}: cifrele lor sunt în date, nu pe hartă."
+  },
+  "loading": "Se desenează harta…",
+  "ui": {
+    "showKey": "Extinde legenda",
+    "hideKey": "Restrânge legenda"
   }
 }

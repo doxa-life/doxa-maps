@@ -21,10 +21,14 @@
  */
 import { computed, inject, ref, watch } from 'vue'
 import { useOptionalT } from '@map/composables/useOptionalT.js'
+import { sentenceParts, strong, ltr, keep } from '@map/composables/useSentence.js'
+import { h } from 'vue'
 import { EN_MESSAGES } from '@map/i18n/index.js'
 import DataTable from '@map/components/tables/DataTable.vue'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
+import { commitUrl, urlOwnerOf } from '@map/composables/useViewAddress.js'
+import { searchWithout, FILTER_KEYS } from './filter-url.js'
 
 
 const profileConfig = inject('profileConfig', ref(null))
@@ -37,14 +41,29 @@ const assetsBase = computed(() => resolveAssetsBase(profileConfig.value))
    every other useI18n() call in this bundle: the host may never have installed i18n. */
 // C4: the guard is library/composables/useOptionalT.js now. enLookup STAYS as the fallback, passed
 // in, so a bare host renders the same ENGLISH it always did -- routing this to the catalogue default
-// would make a bare host honour ?lang=ar, which is gospel-plugin's call and not this migration's.
-// C4 wave 3a, gospel-plugin's call (2026-09-26): take the LOCALE-HONOURING fallback rather than
+// would make a bare host honour ?lang=ar, which is the plugin owner's call and not this migration's.
+// C4 wave 3a, the plugin owner's call (2026-09-26): take the LOCALE-HONOURING fallback rather than
 // enLookup's English. A partner host that never installed vue-i18n now gets the reader's language,
 // with English as the last resort. tStatic resolves 'gospel.<key>' against the same catalogue.
 const tr = useOptionalT('gospel')
 
+// ★ ONE KEY for the gap hero. keep() makes the lookup return the placeholders rather than blanking
+// them; each count arrives already formatted, and the quoted phrase goes in as an ltr() VALUE so a
+// translator never reproduces the markup.
+const gapHero = computed(() => {
+  if (!gap.value) return null
+  const msg = tr('gospel.gapHero.hero', keep('groups', 'growing', 'noFound', 'pop', 'deaths'))
+  return h('span', sentenceParts(msg, {
+    groups: strong(fmt(gap.value.groups)),
+    growing: strong(tr('gospel.gapHero.growing')),
+    noFound: ltr(tr('gospel.gapHero.found')),
+    pop: strong(fmt(gap.value.population)),
+    deaths: strong(fmt(gap.value.deathsDay)),
+  }))
+})
+
 const TABS = [
-  // ★ THE DOXA TABLE LEADS, because it is the question the Driver actually asked: which of
+  // ★ THE DOXA TABLE LEADS, because it is the question actually asked: which of
   // THEIR people groups have gospel resources and which do not. Every other tab here is
   // scoped to the research corpus — 12,379 groups, 4,231 languages — which is the right
   // scope for finding what exists and the wrong one for working a list of 2,107. A
@@ -131,9 +150,12 @@ const fLabel = ref((params.get('label') || '').trim())
 const fProvince = ref((params.get('province') || '').trim())
 const fold = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 const hasFilter = computed(() => !!(fIso.value || fCountry.value || fProvince.value))
+// "Show all" drops only the filter's own keys (filter-url.js) through the one history writer, and only on a page
+// this element owns (urlOwner 'app'); a partner's or a host's address is never written. The tab, every other key,
+// the hash and the history state stay.
 function clearFilter() {
   fIso.value = ''; fCountry.value = ''; fLabel.value = ''; fProvince.value = ''
-  try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
+  if (urlOwnerOf(profileConfig.value) === 'app') commitUrl({ search: searchWithout(window.location.search, FILTER_KEYS) })
 }
 
 const active = ref(TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'links')
@@ -317,7 +339,7 @@ const gap = computed(() => {
     deathsDay: Math.round(g.reduce((n, x) => n + (x.est_deaths_per_day || 0), 0)),
   }
 })
-/* ═══ NUMBER FORMAT IS HELD FOR THE DRIVER ════════════════════════════════════════════════
+/* ═══ NUMBER FORMAT IS HELD FLEET-WIDE ════════════════════════════════════════════════
  * This briefly formatted with the locale i18n resolved, which is almost certainly the right
  * answer — but it decides number format for THIS map alone, and the decision belongs to every
  * map at once or none. Reverted on that ground, not because the finding was wrong.
@@ -333,6 +355,21 @@ const gap = computed(() => {
 const fmt = (n) => (Number(n) || 0).toLocaleString()
 
 useShadowStyles(
+  // ★ STANDALONE THIS NEEDS A HOST; COMPOSED IT MUST NOT BE CLAMPED. Two facts make one rule safe:
+  //  1. STANDALONE (data-tables.meta.json) this mounts as its own custom element, so :host applies and
+  //     .gt — position:absolute;inset:0 — resolves against it. Without a :host rule the element is
+  //     inline with no height and .gt escapes to whatever the PARTNER page has positioned, the same
+  //     defect measured in cities-internet (16,355px below a 420px box) and connectivity-map.
+  //  2. COMPOSED, gospel-dashboard renders <DataTables/> as an INLINE Vue component, not a custom
+  //     element. It has no shadow host of its own there, so :host matches NOTHING and cannot reach it;
+  //     gospel-dashboard.vue:81 keeps its '.gd-tables .gt{position:static;…}' override, which is what
+  //     lets the stacked section take its natural height and the PAGE scroll. That override recorded a
+  //     measured failure (docScrollHeight 900 = clientHeight 900, a wheel gesture moving 0px) and must
+  //     keep working.
+  // min-height, NOT height: with no height at all, .gt's absolute inset:0 gives the table 0px in an
+  // AUTO-height box — it would stop escaping and become invisible instead, which is not a fix. A floor
+  // gives an auto host something to grow from; a definite-height slot still decides via height:100%.
+  ':host{display:block;position:relative;width:100%;height:100%;min-height:320px}' +
   '.gt{position:absolute;inset:0;overflow-y:auto;padding:18px;background:#f6f7f9;color:#0f1419;' +
   "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}" +
   '.gt.is-dark{background:#0a1410;color:#e5e7eb}' +
@@ -342,7 +379,7 @@ useShadowStyles(
   'background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.18)}' +
   '.is-dark .gt-hero{background:rgba(220,38,38,.12);border-color:rgba(248,113,113,.25)}' +
   '.gt-hero b{font-weight:800;font-variant-numeric:tabular-nums}' +
-  '.gt-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;border:1px solid #d1d4cd;border-left:3px solid #92b195;border-radius:8px;background:#f3f3f1;color:#3b463d;font-size:13px}' +
+  '.gt-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;border:1px solid #d1d4cd;border-inline-start:3px solid #92b195;border-radius:8px;background:#f3f3f1;color:#3b463d;font-size:13px}' +
   '.gt-clear{border:1px solid #d1d4cd;background:#fff;color:#3b463d;font:600 12px inherit;padding:5px 11px;border-radius:7px;cursor:pointer;min-height:32px}' +
   '.gt-clear:hover{background:#f3f3f1}' +
   '.gt-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}' +
@@ -388,10 +425,10 @@ useShadowStyles(
       — and whether that access is keeping pace with population growth.
     </p>
 
-    <div v-if="gap" class="gt-hero">
-      <b>{{ fmt(gap.groups) }}</b> people groups are <b>growing</b> <bdi dir="ltr">with no scripture and no film
-      found in the pools checked —</bdi> <b>{{ fmt(gap.population) }}</b> people,
-      an estimated <b>{{ fmt(gap.deathsDay) }}</b> deaths per day.
+      <div v-if="gap" class="gt-hero">
+        <!-- ONE KEY, NAMED SLOTS: four fragments around three counts, two bold words and a bdi
+             island became one message a translator can reorder. See gapHero in the script. -->
+        <component :is="gapHero" />
       <br><bdi dir="ltr">The estimate applies a national death rate to a sub-population; it is
       order-of-magnitude, not a count.</bdi>
     </div>
@@ -421,7 +458,7 @@ useShadowStyles(
     </div>
 
     <div v-if="loadErr" class="gt-err">{{ loadErr }}</div>
-    <div v-else-if="!table" class="gt-load">Loading {{ current.label }}…</div>
+    <div v-else-if="!table" class="gt-load">{{ tr('gospel.sheet.loadingTable', { table: tabLabel(current) }) }}</div>
     <DataTable
       v-else
       :key="current.id + ':' + fIso + ':' + fCountry + ':' + fProvince"

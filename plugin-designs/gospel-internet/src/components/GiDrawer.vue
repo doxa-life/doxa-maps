@@ -1,6 +1,6 @@
 <script setup>
 /**
- * GiDrawer.vue — one people group, in four sourced sections (SPEC-GOSPEL-INTERNET-DASHBOARD section 8):
+ * GiDrawer.vue — one people group, in four sourced sections (see ../../README.md, "Honesty"):
  * what exists in their own language; the way in; the country's (and Indian state's) connectivity; pray.
  *
  * ★ GLUE to the kit's detail drawer (landing 5) with the `detail.sections` shape the kit spec names as a
@@ -157,7 +157,7 @@ useShadowStyles(
     </div>
     <div class="gid-body">
       <p class="gid-notice" data-notice="approximate-pin">
-        {{ T('gospelInternet.notice.pin', 'The dot marks where this people is found in {country}, not a town.', { country: r.country }) }}
+        {{ T('gospelInternet.notice.pin', 'The dot marks this people group, not a town.') }}
         <template v-if="r.shares_point"> {{ T('gospelInternet.notice.shares', 'It shares its point with {n} other group(s).', { n: r.shares_point }) }}</template>
       </p>
       <section v-for="s in sections" :key="s.id" class="gid-sec" :data-section="s.id">

@@ -143,7 +143,7 @@ export function readSourceFeatures(map, sourceId) {
     //     this._data = typeof options.data === 'string' ? { url: options.data } : { geojson: options.data }
     // — so `data.features` is undefined there and every caller silently got an empty list. Mapbox stores
     // the GeoJSON directly, which is the engine this was written against, so it worked where it was
-    // tested and failed where it was not. Measured: rega's packet probe on MapLibre logged "0 pin(s)
+    // tested and failed where it was not. Measured: a packet probe on MapLibre logged "0 pin(s)
     // selected" for both a language-family and a prayer selection, with the pins plainly on screen.
     if (data && typeof data === 'object' && !Array.isArray(data)) {
         if (data.geojson !== undefined) data = data.geojson;

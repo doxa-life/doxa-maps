@@ -122,7 +122,7 @@ const browser = await launch(BROWSER, { label: TOOL })
  *
  * So without WebGL the map never initialises, the MapToolbar that HOSTS the Share button is never
  * rendered, and the suite blames the product for an engine limitation. Rather than silently
- * defaulting away from the Driver's house rule ("never Google Chrome"), this ABORTS with the
+ * defaulting away from the house rule (never Google Chrome), this ABORTS with the
  * measurement and the exact command that works. A suite that cannot render a map must not report
  * on map sharing at all — that is the difference between a failure and a false failure.
  */
@@ -197,7 +197,7 @@ async function pollCanvas(page, wait) {
  * ★ THE SHARE ROUND TRIP REMAINS HONESTLY UNTESTABLE WHILE THE ENDPOINT IS DOWN. The share URL
  * deliberately strips query params — a share link must be pasteable — so the reopened page has no
  * ?tk= and cannot mount. That is not something a test harness may paper over: the only real fix is
- * the token endpoint the Driver is gated on. Documented rather than worked around.
+ * the token endpoint, which is provisional, pending a product decision. Documented rather than worked around.
  *
  * Unset, behaviour is unchanged — a real token-plumbing break still shows up.
  *   MAPBOX_TOKEN=$(curl -s <endpoint> | jq -r .token) node internal/share-roundtrip-smoke.mjs …

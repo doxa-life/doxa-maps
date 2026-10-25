@@ -73,6 +73,7 @@
   "The map could not start. This is a map-token or connection problem, not a filter — the figures above are unaffected.": "O mapa não pôde iniciar. É um problema do token do mapa ou de conexão, não um filtro — os números acima não são afetados.",
   "Countries: %count%": "Países: %count%",
   "Regions: %count%": "Regiões: %count%",
-  "countryCount": "{n} países | {n} país | {n} países",
-  "regionCount": "{n} regiões | {n} região | {n} regiões"
+  "countryCount": "{n} país | {n} de países | {n} países",
+  "regionCount": "{n} região | {n} de regiões | {n} regiões",
+  "Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it.": "Em breve — será gerada uma lista de oração para cada país, nomeando cada grupo étnico não alcançado nele."
 }

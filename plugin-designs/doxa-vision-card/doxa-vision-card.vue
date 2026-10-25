@@ -9,8 +9,8 @@
  * @bundle      doxa-vision-card
  * @element     doxa-vision-card
  *
- * ★ WHY IT WAS REBUILT (2026-09-25). The Driver: "the data doesn't make sense … super false
- *   information." The old card rotated four TYPED-IN figures (7,398 / 3,240 / 42% / 1,910) with no
+ * ★ WHY IT WAS REBUILT (2026-09-25). Its figures were reported as making no sense, and they could
+ *   not be traced: the old card rotated four TYPED-IN figures (7,398 / 3,240 / 42% / 1,910) with no
  *   source. Now NO number is written here. They come from data/people-groups/vision-funnel.json,
  *   which library/scripts/people-groups/build-vision-funnel.mjs computes from the IMB people-group
  *   CSV in the repo and a saved snapshot of the live DOXA list, and which is compiled in at build
@@ -25,6 +25,7 @@
  * reads `profile-config` for optional overrides: title, tagline, accent, locale.
  */
 import { computed } from 'vue'
+import { useHostedHelp } from '@map/composables/useHostedHelp.js'
 import FUNNEL from '../../data/people-groups/vision-funnel.json'
 
 // Every locale's strings, compiled in (library/i18n/locales/<lc>/vision.json, held to key parity by
@@ -67,6 +68,8 @@ const people = (n) => new Intl.NumberFormat(locale.value, { notation: 'compact',
 const date = (iso) => { try { return new Intl.DateTimeFormat(locale.value, { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(iso + 'T00:00:00Z')) } catch { return iso } }
 
 const accent = computed(() => config.value.accent || '#92b195')
+// The card's "?" asks its HOST for this map's help (doxa:help); it shows only where a host answers.
+const { hosted: helpHosted, askForHelp } = useHostedHelp()
 const heading = computed(() => config.value.title || t('title'))
 const tagline = computed(() => config.value.tagline || t('tagline'))
 
@@ -89,6 +92,8 @@ const sources = computed(() => t('sources', {
 <template>
   <div class="vc-root" :dir="dir" :lang="locale" :style="{ '--accent': accent }">
     <article class="vc-card">
+      <button v-if="helpHosted" type="button" class="vc-help" :aria-label="t('about')" :title="t('about')"
+              @click="askForHelp($event.currentTarget)">?</button>
       <div class="vc-kicker"><span class="vc-mark" aria-hidden="true"></span>{{ t('kicker') }}</div>
       <h1 class="vc-title">{{ heading }}</h1>
       <p class="vc-tagline">{{ tagline }}</p>
@@ -130,6 +135,7 @@ const sources = computed(() => t('sources', {
   -webkit-font-smoothing: antialiased;
 }
 .vc-card {
+  position: relative;
   width: 100%; max-width: 640px; box-sizing: border-box;
   background: #fff; border: 1px solid #d1d4cd; border-radius: 16px;
   box-shadow: 0 1px 2px rgba(59,70,61,.06), 0 8px 24px -12px rgba(59,70,61,.18);
@@ -140,6 +146,12 @@ const sources = computed(() => t('sources', {
   font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6d766e;
 }
 .vc-mark { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+/* The card's "?": top corner at the END of the reading direction, so Arabic mirrors it. */
+.vc-help {
+  position: absolute; top: 14px; inset-inline-end: 14px; width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid #d1d4cd; background: #fff; color: #3b463d; font: 700 15px/1 Georgia, serif; cursor: pointer;
+}
+.vc-help:focus-visible { outline: 2px solid #3f8f5a; outline-offset: 2px; }
 .vc-title { margin: 10px 0 6px; font-size: clamp(22px, 4.2vw, 30px); line-height: 1.15; font-weight: 800; color: #3b463d; }
 .vc-tagline { margin: 0 0 22px; font-size: 15px; line-height: 1.5; color: #6d766e; }
 

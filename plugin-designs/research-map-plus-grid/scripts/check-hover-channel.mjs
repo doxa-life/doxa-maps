@@ -12,7 +12,7 @@
  * is bad and none of them are obvious at the call site:
  *   - selectionSet is a plain Set with a version counter, and useSelectionCamera watches that
  *     counter. A hover that bumped it would fly the camera at every mousemove — the resize-strobe
- *     bug wearing a new hat, on a Driver who is photosensitive.
+ *     bug wearing a new hat, on a reader who is photosensitive.
  *   - the CSV exporter reads selection > filter > all, so a hover would silently change what an
  *     export contains.
  *   - the table's selection pill and the shell's live region both report selection counts, and

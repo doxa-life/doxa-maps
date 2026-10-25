@@ -21,6 +21,7 @@
 import { ref, computed } from 'vue'
 import { useInstance } from '@map/composables/usePplrInstance.js'
 import { usePplrT } from '../composables/usePplrT.js'
+import { tStatic } from '@map/i18n/index.js'
 
 const props = defineProps({
   items:    { type: Array,  default: () => [] },
@@ -72,7 +73,8 @@ function clearSel() {
 <template>
   <div class="fl-panel" :class="{ collapsed }" :data-theme="theme" v-show="!collapsed">
     <div class="fl-titlebar">
-      <button class="fl-collapse-btn" :title="collapsed ? 'Expand legend' : 'Collapse legend'"
+      <!-- The shared aria keys (11 locales); a shared key, so tStatic (t() would prefix it with pplr.). -->
+      <button type="button" class="fl-collapse-btn" :title="tStatic('aria.collapseLegend')" :aria-label="tStatic('aria.collapseLegend')"
               @click="collapsed = true">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
           <polyline points="14,18 8,12 14,6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -138,6 +140,7 @@ function clearSel() {
   background: transparent; border: none; cursor: pointer;
   color: #8b949e; padding: 2px 4px; border-radius: 4px;
   display: flex; align-items: center; justify-content: center;
+  min-width: 24px; min-height: 24px;   /* a 24 px target (WCAG 2.5.8); it measured 19×15 */
 }
 .fl-collapse-btn:hover { color: #c9d1d9; background: rgba(115,161,127,0.12); }
 .fl-panel[data-theme="light"] .fl-collapse-btn { color: #57606a; }

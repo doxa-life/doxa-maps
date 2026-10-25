@@ -1,10 +1,7 @@
 # needs-eyes — partner-embed fixtures
 
-Under the Playwright policy (Driver, 2026-09-25) only **rega** runs a browser on the VPS, and the
-Driver's laptop is the other pair of eyes. So a check that can only be seen has to be *openable by
-someone else* — not a construct that lives inside one agent's gate process.
-
-These pages are generated, not hand-written:
+A check that can only be seen has to be *openable by someone else*, not a construct that lives inside
+one gate's process. These pages are generated on demand and are not committed; write them with:
 
 ```
 node internal/check-embedded-rtl.mjs --emit

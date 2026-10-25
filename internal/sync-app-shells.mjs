@@ -2,7 +2,7 @@
 /**
  * sync-app-shells.mjs — point the native app shells at the OUTPUT FOLDER, from the tree's name.
  *
- * public/ holds only the output folder (Driver decision, card BUILD-OUTPUT-IS-ONE-FOLDER), so the app
+ * public/ holds only the output folder (decision, card BUILD-OUTPUT-IS-ONE-FOLDER), so the app
  * shells load THAT folder as their web root:
  *   capacitor.config.json                  "webDir": "public/<tree>"
  *       `cap copy` hard-fails unless webDir holds an index.html; the tree's front page is its

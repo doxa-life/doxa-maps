@@ -90,8 +90,8 @@ function rowsExcluding(exclude) {
 }
 
 // ── SECTION COLLAPSE STATE (BUG-DASHBOARD-BAND-GROWS-ENORMOUS-WITH-LIVE-DATA) ────────────────
-// Driver: "once the data fills all the sidebars, it causes the dashboard to become really tall...
-// you have to like collapse all of the data." MEASURED live at 1440x900 in page-scroll mode
+// Once live data filled the sidebars, the dashboard grew very tall and every section had to be
+// collapsed by hand. MEASURED live at 1440x900 in page-scroll mode
 // (dashboard-plus-grid): all five sections open by default rendered 69 rows total (16 People / 7
 // Place / 31 Language / 10 Religion / 5 Gospel Access), and the rail's OWN scroller never engaged
 // — frBody clientHeight === scrollHeight === 2117px — because a fully-open rail is simply that
@@ -103,12 +103,9 @@ function rowsExcluding(exclude) {
 // header, same interaction as before.
 // ★ OPEN BY DEFAULT — and that is NOT a revert to the bug, it is the correct reading of it.
 //
-// The previous pass set every section CLOSED, because the Driver said the rail "shouldn't be fully
-// expanded". That was a literal reading of a symptom report. His correction, verbatim: "when I told
-// you they shouldn't be fully expanded, I didn't mean collapse all the sidebars. I want people,
-// place, language, religion EXPANDED. But when I say expanded I just mean OPEN — that doesn't mean
-// fully expanded without a scroll bar. They should be open, but still have a scroll bar so they
-// don't fully expand and cause the height of the dashboard to be super tall."
+// The previous pass set every section CLOSED, a literal reading of "the rail should not be fully
+// expanded". The intent was different: People, Place, Language and Religion stay OPEN, but open
+// inside a bounded scroller, so they never grow the dashboard's height.
 //
 // So the defect was never "the sections are open". It was that opening them grew the PAGE instead of
 // filling a bounded scroller — 69 rows of content pushing the band to 2325px against a 900px
@@ -170,7 +167,7 @@ function toRows(agg, facet, level) {
 }
 
 // ── THE ROWS THAT WENT TO ZERO (card BUG-TREE-LEGEND-BUTTONS-GO-DEAD-AFTER-TOGGLING) ────────
-// THE DRIVER'S REPORT: "after clicking around, the buttons started being unresponsive." The
+// THE REPORT: after some clicking around, the buttons stopped responding. The
 // buttons did not break — THEY LEFT. aggregate() only ever returns keys that survive the current
 // filterSet, so a filtered-out sibling is simply ABSENT from the row list and is REMOVED FROM THE
 // DOM. Measured on the live composite (2026-09-22): selecting Place > Oceania took the rail from
@@ -192,10 +189,10 @@ function toRows(agg, facet, level) {
 // unexpanded branch), which would ADD rows on filtering — the opposite surprise. The snapshot is
 // keyed per section id and only ever taken while the dashboard is unfiltered.
 // ── WHICH LIST OWNS THE ORDER (card BUG-TREE-EXPANDS-AT-THE-BOTTOM-NOT-UNDER-THE-SELECTED-NODE) ──
-// THE DRIVER'S REPORT: "it expands the affinity block not underneath the selected affinity but
-// underneath the very final affinity group at the very bottom of the semantic tree legend." He
-// also isolated the trigger exactly: expanding with the caret ALONE is correct; SELECTING a row
-// and THEN expanding it is broken.
+// THE REPORT: the affinity block expanded not underneath the selected affinity but underneath
+// the very last affinity group at the bottom of the semantic tree legend. The trigger was
+// isolated exactly: expanding with the caret ALONE is correct; SELECTING a row and THEN expanding
+// it is broken.
 //
 // ROOT CAUSE — this function used to let the BASELINE own the row order. It emitted every baseline
 // row first (survivor or zero), and only then appended whatever the live list had that the baseline
@@ -301,8 +298,8 @@ function buildDrillRows(drill, topN) {
 }
 
 // ── TREE TRUNKS (card BUILD-TREE-LEGEND-SEMANTIC-INDENTED) ────────────────────────────────
-// Driver: "it is very hard for me to read the content because I cannot see that it is INDENTED
-// like semantic trees. I want the semantic tree legend on the left just like on the research maps."
+// The content was hard to read because nothing showed it is INDENTED like a tree; the rail uses the
+// same nested legend as the research maps.
 //
 // Root cause: the rail conveyed depth with padding-left ALONE (.l0/.l1/.l2). Whitespace does not
 // read as hierarchy — nothing visually ties a child row to its parent, so People > bloc > cluster
@@ -361,7 +358,7 @@ function addTrunks(rows) {
 // the research palette remains free to change its own neutral without reaching in here.
 const KIT_NEUTRAL_SWATCH = '#c4c8c0'
 // A dashboard that supplies no `legend` gets an honest degraded rail — uncoloured swatches and raw
-// values — rather than a crash. That is the state go-int sees before it wires its own palette, and
+// values — rather than a crash. That is the state a new dashboard sees before it wires its own palette, and
 // a half-configured dashboard should look plain, not broken.
 const legend = computed(() => (cfg && cfg.legend) || null)
 const colorFor = (...a) => (legend.value?.colorFor ? legend.value.colorFor(...a) : KIT_NEUTRAL_SWATCH)
@@ -453,15 +450,15 @@ const scopeCount = computed(() => {
 // expand work above rewrites `value`; the People axis's label swap writes `label` only, and the
 // 'Other' bucket renders a null data-facet so it can never be filtered on.
 // ── AFFORDANCE (card BUG-SEMANTIC-TREE-SIDEBAR-NOT-INTEROPERABLE-WITH-GRID) ─────────────────
-// DRIVER: "when I click on any of the people place language or religion semantic tree drop downs
-// nothing happens." Measured, that report was TRUE-AS-EXPERIENCED and the wiring was FINE: the
+// THE REPORT: clicking any of the people, place, language or religion semantic tree dropdowns
+// did nothing. Measured, that report was TRUE-AS-EXPERIENCED and the wiring was FINE: the
 // rail split its hit targets so that the caret NAVIGATED and only the row body FILTERED. Clicking
 // a caret grew the row count 66 -> 73 and correctly did not filter. Correct by design — and
 // completely undiscoverable, because nothing on screen said the two halves of one row did two
 // different things. A user must never click something that silently does nothing.
 //
 // SO THE HIT TARGETS ARE NOW EXPLICIT, not positional:
-//   the WHOLE ROW filters   — the Driver's mental model ("I clicked the row, select it")
+//   the WHOLE ROW filters   — the reader's mental model: clicking a row selects it
 //   an explicit CHEVRON BUTTON expands — a real <button> with its own hit area, focus ring and
 //                             aria-label/aria-expanded, so "open this branch" is a thing you can
 //                             SEE and tab to rather than a 12px strip you must know about.
@@ -530,9 +527,8 @@ useShadowStyles(`
   .rd-facets .fr-body::-webkit-scrollbar-thumb{ background:var(--dx-scroll-thumb, #c4c8c0); border-radius:8px; }
   .rd-facets .fr-body::-webkit-scrollbar-thumb:hover{ background:#9aa197; }
   .fr-sec{ border-bottom:1px solid var(--rd-line, #d1d4cd); }
-  /* ★ STICKY SECTION HEADERS, GITHUB-MARKDOWN STYLE (Driver 2026-09-23: "when I am scrolling
-     down it needs to keep the section headers visible until you scroll into the next section --
-     like markdown files"). The conventional mechanism does all of it natively: position:sticky
+  /* ★ STICKY SECTION HEADERS, GITHUB-MARKDOWN STYLE: while scrolling, each section's header stays
+     visible until the next section scrolls in, as in a rendered markdown file. The conventional mechanism does all of it natively: position:sticky
      top:0 inside the scrolling .fr-body pins the current header, and the NEXT header pushes the
      previous one away as it arrives, because two sticky siblings at the same top contend for the
      slot. The opaque background is required -- rows scroll UNDER the pinned header, and sticky
@@ -549,12 +545,11 @@ useShadowStyles(`
      spacing that the gap used to provide is restored by margin-left on .fr-lbl below. */
   /* min-height replaces an implicit one-line height so a WRAPPED label (see .fr-lbl) grows the
      row instead of overflowing it; single-line rows keep their previous rhythm. */
-  /* ★ TIGHTENED 2026-09-23 (Driver: "the spacing between the rows is too thick, they take up way
-     too much height -- the padding should be decreased per row"). Vertical padding 3px -> 1px and
+  /* ★ TIGHTENED: the rows were too tall, so the per-row padding came down. Vertical padding 3px -> 1px and
      min-height 22px -> 18px, which at 4px saved per row is ~276px across the 69 rows the rail
      renders with its four sections open -- most of a viewport.
-     ★ FONT-SIZE IS NOT A LEVER HERE and must not become one: the Driver explicitly rejected
-     shrinking it ("super tiny text that cannot be read"), and the note below at .fr-lbl records
+     ★ FONT-SIZE IS NOT A LEVER HERE and must not become one: text too small to read is not an
+     option, and the note below at .fr-lbl records
      that the width for the count came from the BAR and the gutters for the same reason. 12px
      stays; only the whitespace around it moves.
      min-height 18px still clears a 12px glyph at line-height 1.3 (15.6px), so this tightens the
@@ -582,7 +577,7 @@ useShadowStyles(`
   .fr-row.on .fr-trunk-elbow::before,
   .fr-row.on .fr-trunk-elbow::after{ background:var(--rd-primary,#92b195); }
   /* ── SELECTION EASES IN, IT DOES NOT SNAP (card BUG-TREE-SELECTION-SNAPS-NO-TRANSITION) ────
-     DRIVER: the tree selection "snaps" — it arrives in one frame with no sense of movement.
+     THE REPORT: the tree selection snaps — it arrives in one frame with no sense of movement.
      MEASURED CAUSE, and it was NOT the one the card guessed. The card's lead was that
      keepZeroRows rebuilds the row array and Vue recreates the nodes, leaving a CSS transition
      with nothing to animate from. That is not what happens: the template keys each row on
@@ -662,8 +657,8 @@ useShadowStyles(`
     box-shadow:inset 0 0 0 1px rgba(59,70,61,.18); }
   /* re-introduce the inter-column spacing the row's gap used to supply (trunks stay flush) */
   /* WRAP, DON'T ELLIPSISE — the COUNT is the information, and nowrap was hiding it.
-     Driver-reported 2026-09-22: "North America and non-Spanish Caribbean is way too long... I
-     can't even scroll right to see the numbers", same for "Chinese folk religion". The old rule
+     Reported: long labels such as "North America and non-Spanish Caribbean" and "Chinese folk
+     religion" pushed the numbers out of reach, with no way to scroll right to them. The old rule
      was white-space:nowrap + overflow:hidden + text-overflow:ellipsis, which let a long label
      eat the row; because .fr-body is overflow-x:hidden (vertical scroll only, by design), there
      was NO way to scroll right and recover the number. An ellipsis hid the label AND cost the count.
@@ -672,11 +667,11 @@ useShadowStyles(`
      ordinary labels still break at spaces. The trunk glyphs stay aligned because .fr-trunk is
      align-self:stretch — it grows with the row instead of assuming one text line. */
   /* ── ONE LINE PER ROW (card BUILD-TREE-LEGEND-ONE-LINE-ROWS-NARROWER-PROGRESS-BARS) ────────
-     DRIVER: the tree legend rows should each be ONE line, with narrower progress bars.
-     THIS CARD AND THE WRAP NOTE ABOVE PULL IN OPPOSITE DIRECTIONS, and both Driver reports are
-     real, so the resolution has to satisfy BOTH rather than simply reverting the earlier one:
-       - the wrap rule exists because nowrap+ellipsis ATE THE COUNT ("I can't even scroll right
-         to see the numbers"). Any return to a plain ellipsis re-breaks that, because .fr-body is
+     The tree legend rows should each be ONE line, with narrower progress bars.
+     THIS CARD AND THE WRAP NOTE ABOVE PULL IN OPPOSITE DIRECTIONS, and both reports are real, so
+     the resolution has to satisfy BOTH rather than simply reverting the earlier one:
+       - the wrap rule exists because nowrap+ellipsis ATE THE COUNT (no way to scroll right to
+         the numbers). Any return to a plain ellipsis re-breaks that, because .fr-body is
          overflow-x:hidden by design and there is no way to scroll the number back into view.
        - this card wants the scannable one-line rhythm back.
      SO: clamp to ONE LINE, but buy the width for it instead of taking it out of the label.
@@ -686,8 +681,7 @@ useShadowStyles(`
      the count can never be pushed out of the row. That is the specific failure being avoided:
      the count stays on screen at every width, which was the whole point of the wrap fix.
      The width to afford it comes from the BAR (34px -> 18px below) and the tightened gutters —
-     NOT from the font, which the Driver explicitly rejected shrinking ("super tiny text that
-     cannot be read"). overflow-wrap:anywhere is kept so a single unbreakable token still yields
+     NOT from the font, because text too small to read is not an option. overflow-wrap:anywhere is kept so a single unbreakable token still yields
      rather than overflowing the rail.
      min-height on .fr-row stays: it is now an exact one-line height rather than a floor. */
   .fr-lbl{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
@@ -697,20 +691,19 @@ useShadowStyles(`
      were flex:1 1 auto and the bar's 24px floor competed with the text for the same row; with a
      wrapping label the bar must be the element that gives way, so it is capped and allowed to
      shrink to zero-ish on a narrow rail. The COUNT (.fr-cnt, flex:0 0 auto) never shrinks — it is
-     the number the Driver could not previously see.
+     the number that could not previously be seen.
      ── 56px -> 34px (card BUILD-REBALANCE-THE-TWO-SIDEBARS) ──────────────────────────────────
-     Driver: "the little progress bars need to be less wide... I am fine with smaller progress
-     bars." Measured on the live composite before this change: the MEDIAN tree label had 85px
+     The little progress bars needed to be narrower. Measured on the live composite before this change: the MEDIAN tree label had 85px
      while the bar next to it had 56px — the bar was taking 40% of the label's budget to convey
      a magnitude that .fr-cnt already states EXACTLY, in numbers, on the same row. The bar is
      redundant precision; the label is the information. Combined with the wider rail this is
      ~50px handed back to every row's text, which is what drives the wrap count down.
      The bar is kept (not deleted) because the at-a-glance MAGNITUDE ranking is genuinely useful
      when scanning; 34px still resolves ~10 distinguishable steps, which is enough to rank rows.
-     Do NOT solve a future width squeeze by shrinking the FONT — the Driver explicitly rejected
-     "super tiny text that cannot be read". Shrink this bar further first.
+     Do NOT solve a future width squeeze by shrinking the FONT: text too small to read is not an
+     option. Shrink this bar further first.
      ── 34px -> 18px, AND THE NOTE ABOVE IS THE REASON ────────────────────────────────────────
-     Driver, again, on this card: "narrower progress bars". The previous author left the exact
+     The same card asked again for narrower progress bars. The previous author left the exact
      instruction for this situation one line up — when the rail needs width, the BAR yields
      before the type does — so this takes it, rather than touching the font size.
      Those 16px per row are what pay for the one-line clamp on .fr-lbl: the label's budget goes
@@ -738,9 +731,8 @@ useShadowStyles(`
 <template>
   <aside class="rd-facets" data-region="facets">
     <div class="fr-head">
-      <!-- "Vertical Legend" — the Driver's naming ruling (2026-09-23): "it shouldn't say tree
-           legend... rename the component to be called Vertical... use the term nesting or
-           folders". The visible title says VERTICAL; the drill-down vocabulary in code and
+      <!-- "Vertical Legend" — the naming rule: not "tree legend"; the component is Vertical, and
+           the vocabulary is nesting or folders. The visible title says VERTICAL; the drill-down vocabulary in code and
            comments is NESTING/FOLDERS, not tree/semantic. Earlier ruling, kept: -->
       <!-- (prior note) the word "semantic" is dropped from the
            user-facing label (the component/docs still describe the semantic-tree MODEL).
@@ -769,8 +761,8 @@ useShadowStyles(`
                  research-map's SemanticTreeLegend so the hierarchy is DRAWN, not just padded. -->
             <span v-for="(seg, i) in r.trunks" :key="'tr' + i" class="fr-trunk" :class="'fr-trunk-' + seg"></span>
             <!-- CHEVRON = EXPAND, a real <button> with its own hit area, focus ring and label.
-                 Previously a 12px <span> that merely LOOKED like part of the row — the Driver
-                 clicked it expecting a selection and got navigation with no visible feedback.
+                 Previously a 12px <span> that merely LOOKED like part of the row — clicking it
+                 expected a selection and got navigation with no visible feedback.
                  Leaf rows render an empty slot so every label in a tree stays left-aligned. -->
             <button v-if="r.hasChildren" type="button" class="fr-caret-btn" :class="{ open: r.expanded }"
                     :data-expand="r.facet" :data-expand-value="r.value"

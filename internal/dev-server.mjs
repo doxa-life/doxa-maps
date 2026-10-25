@@ -1,11 +1,11 @@
 /**
  * dev-server.mjs — the SHARED DEV SERVER every agent can check against (headless: curl-style fetches).
  *
- * One `bun run dev` on this machine follows origin/main (fast-forward, ~30 s) from a checkout that is
- * nobody's worktree, so it shows what a developer running the dev server on main sees. It answers
+ * One `bun run dev` on this machine follows origin/development (fast-forward, ~30 s) from a checkout that is
+ * nobody's worktree, so it shows what a developer running the dev server on development sees. It answers
  * /__dev-sha with the commit it is serving.
  *
- * USE IT FOR: "does main work under the dev server", dev-parity checks, and waiting for a landing
+ * USE IT FOR: "does development work under the dev server", dev-parity checks, and waiting for a landing
  * to appear. DO NOT use it for an UNLANDED change (it does not have it): start a short-lived dev
  * server in your own worktree, or BUNDLE=<name> bun x vite build. Release/embed checks (SRI, manifest,
  * iframe/script cells) stay on the BUILT tree.

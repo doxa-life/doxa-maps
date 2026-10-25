@@ -59,7 +59,7 @@ for (const t of declared) {
 // missing; it cannot see a table that EXISTS but was never declared. That is not
 // pedantry: gaps-and-opportunities.json (2,106 rows, referenced by other tables'
 // caveats) shipped for this whole flight while absent from index.json — so it was
-// outside every completeness claim, and my own "12 tables / 18,795 rows" headline was
+// outside every completeness claim, and the earlier "12 tables / 18,795 rows" headline was
 // wrong in every summary and record. An undeclared artifact is unverified by
 // construction: nothing knows it should be there, so nothing notices if it breaks.
 const declaredNames = new Set(declared.map((t) => t.name));

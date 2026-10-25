@@ -12,23 +12,24 @@ import { tStatic, getRuntimeLocale } from '@map/i18n/index.js'
  */
 import { inject, computed, ref } from 'vue'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
-import { aggregate, buildDonut, buildBars, lbl, buildCountryRegionColors, OTHER_KEY, otherLabel } from '../../composables/useDashboardAggregations.js'
+import { buildDonut, buildBars, buildCountryRegionColors } from '../../composables/useDashboardAggregations.js'
+import { aggregate, lbl, OTHER_KEY, otherLabel } from '@map/composables/useFacetAggregation.js'
 import { buildSearchAccessors, makeSearchMatcher, filterRowsBySearch } from '@map/composables/useDashboardSearch.js'
 
 /**
  * ── THE RAIL'S TAB STRIP ──────────────────────────────────────────────────────────────────────
- * Charts is selected by default, which is the Driver's wording: "Charts will be a SELECTED TAB
+ * Charts is selected by default, which is the wording: "Charts will be a SELECTED TAB
  * that will show the charts."
  *
  * ★ GOSPEL RESOURCES SHIPS DISABLED, NOT HIDDEN, and that is a deliberate choice rather than a
- * placeholder. Its content is not a separate dataset panel — the Driver described it as the SAME
+ * placeholder. Its content is not a separate dataset panel — it is the SAME
  * facet breakdown re-measured on a different axis ("people groups by their gospel resources
  * availability"), and three decisions about that data are still open: the official lostness number,
  * whether to stay key-less or register a Joshua Project key, and the UI shape. Guessing any of them
  * would ship a wrong picture that looks right, which is this codebase's most expensive failure mode.
  *
  * A HIDDEN tab is indistinguishable from an unbuilt one. A disabled tab carrying its reason in the
- * title attribute tells the Driver exactly what it is waiting on, every time he looks at the rail —
+ * title attribute tells the reader exactly what it is waiting on, every time he looks at the rail —
  * which is worth more than the tab being invisible until it is perfect.
  *
  * `tabs` is a plain array rather than config-driven on purpose: there are two of them and one is a
@@ -40,7 +41,7 @@ const tabs = [
     id: 'gospel',
     get label() { return tStatic('dashboard.gospel_resources') || 'Gospel Resources' },
     disabled: true,
-    why: 'Waiting on three decisions: the official lostness number, key-less vs a registered Joshua Project key, and the UI shape. See IDEA-GOSPEL-RESOURCES-INTEGRATION-STRATEGY.',
+    get why() { return tStatic('dashboard.gospel_pending') || 'Not ready yet: the lostness figure, the data-source key and the layout are still being decided.' },
   },
 ]
 const activeTab = ref('charts')
@@ -63,7 +64,7 @@ function rowsExcluding(exclude) {
   return filterRowsBySearch(faceted, matchSearch)
 }
 
-// COUNTRY -> REGION hue (the Driver's "countries should match the colour of their regions").
+// COUNTRY -> REGION hue ("countries should match the colour of their regions").
 // A country has no palette of its own, so the Top-countries bar inherits the hue of its
 // MAJORITY region — the same hex the Region donut and the map legend use for that region.
 // Computed off the FULL row store (not the cross-filtered set) so a country keeps one stable
@@ -100,7 +101,7 @@ const isActive = (facet, key) => bus.isFilterActive(facet, key)
 // Two projections, one function, and both follow the same rule: the key crosses, the label is read.
 // OTHER_KEY is the rollup sentinel aggregate() produces; it must stay English on the wire (this
 // component refuses to filter on it by testing `key === 'Other'`) and be localized for a reader.
-// ★ TWO MORE FACETS CARRY ENGLISH DATA LABELS, and rega read both on ?lang=ar (KA3, 3d64bcad).
+// ★ TWO MORE FACETS CARRY ENGLISH DATA LABELS, and both were read on ?lang=ar (KA3, 3d64bcad).
 // They are not chrome: no catalogue held them, so every i18n gate passed while the chart spoke English.
 //   · wagf_region — the prayer API's seven region names. A closed set, so they are CATALOGUED, five of
 //     them from vendored CLDR (internal/generate-wagf-region-names.mjs); middle_east and
@@ -127,7 +128,7 @@ const regionLabel = (key) => {
   const k = slug && REGION_KEY[slug]
   return (k && tStatic(k)) || key
 }
-// ★ THE CODE COMES FROM THE ROW, NOT FROM THE NAME (rega, ?lang=ar after the first fix: "People's
+// ★ THE CODE COMES FROM THE ROW, NOT FROM THE NAME (?lang=ar after the first fix: "People's
 // Republic of China" and "Lao People's Democratic Republic" were still English). The API labels some
 // countries with their FORMAL name, which countries.json does not carry — it says "China" and "Laos" —
 // so reversing the English name missed exactly the countries whose names are longest. Every row already
@@ -184,7 +185,7 @@ useShadowStyles(`
 
      A clamp truncates VERTICALLY, so horizontal metrics stay clean while line 4 is being cut.
      Measured on the live composite 2026-09-22: that test reported 0 of 16 legend labels clipped
-     while 4 were actually truncated, including the two the Driver had just complained about.
+     while 4 were actually truncated, including the two just complained about.
      A green result from it is not evidence.
 
      USE A STRUCTURALLY DIFFERENT MEASUREMENT — clone the label, strip the clamp, let it lay out
@@ -247,7 +248,7 @@ useShadowStyles(`
   .rd-donut.has-sel .rd-slice{ opacity:.42; }
   .rd-slice.on, .rd-donut.has-sel .rd-slice.on{ opacity:1; stroke:var(--rd-ink, #3b463d); stroke-width:2.5;
     transform:scale(1.08); filter:drop-shadow(0 1px 2px rgba(31,39,51,.35)); }
-  /* The donut legend is the WORST offender the Driver reported: a short, always-scrolling list
+  /* The donut legend is the WORST offender reported: a short, always-scrolling list
      whose default scrollbar ate a large share of an already narrow column. Thin overlay bar,
      transparent track, and no right padding so it hugs the card edge. */
   /* ── MAX-HEIGHT 108px -> 168px (card BUILD-REBALANCE-THE-TWO-SIDEBARS) ───────────────────
@@ -255,15 +256,14 @@ useShadowStyles(`
      The 108px cap existed to match the donut's height, so the legend never made the card
      taller than the chart beside it. That cap is what forced .rd-lt to ELLIPSISE rather than
      wrap — a wrapping row is ~2x tall, and in a 108px box that pushes items out of view.
-     The Driver has now ruled READABILITY OVER COMPACTNESS (2026-09-22): "on the religion and
-     region charts I cannot scroll right to read the rest of the text." He is right that there
-     was nothing to scroll to — .rd-legend is overflow-x:hidden by design, so an ellipsised
+     READABILITY NOW WINS OVER COMPACTNESS: on the religion and region charts a reader could not
+     scroll right to read the rest of a label, and there was indeed nothing to scroll to — .rd-legend is overflow-x:hidden by design, so an ellipsised
      label was simply unrecoverable text.
      So the legend is allowed to grow PAST the donut (176px, vs the donut's 84px) and .rd-lt
      wraps to at most 3 lines. The card gets taller; that is the accepted cost. If you need to
      reclaim vertical space, lower -webkit-line-clamp or trim the LABEL TEXT upstream — do NOT
      restore white-space:nowrap + ellipsis here, and do not re-cap this to the donut's height:
-     that cap is precisely what forced the unreadable ellipsis the Driver rejected. */
+     that cap is precisely what forced the unreadable ellipsis that was rejected. */
   .rd-legend{ display:flex; flex-direction:column; gap:2px; font-size:10.5px; color:var(--dx-text, #3b463d); max-height:120px;
     overflow-y:auto; overflow-x:hidden; flex:1 1 auto; min-width:0;
     scrollbar-width:thin; scrollbar-color:var(--dx-scroll-thumb, #c4c8c0) transparent; }
@@ -275,10 +275,9 @@ useShadowStyles(`
      now two lines tall, and centring would float the swatch and the count in the middle of that
      block, detached from the first line of text they label. The count is top-aligned with a 1px
      nudge (.rd-li b) so it reads as belonging to the row's first line. */
-  /* ★ THE CONVENTIONAL LEGEND ROW, on the Driver's final ruling (2026-09-23): "I am not
-     impressed with that design -- use conventional designs only", after rejecting both the
-     scroll-to-read variant ("I cannot scroll right") and the frozen column's painted backing
-     ("super white background, it looks odd; it was to be invisible"). This is the pattern every
+  /* ★ THE CONVENTIONAL LEGEND ROW. Two earlier variants were replaced: scroll-to-read (a reader
+     could not scroll right) and a frozen count column on a painted backing (an opaque white block
+     where the backing was meant to be invisible). This is the pattern every
      chart library ships: swatch, label that ELLIPSIZES at the available width, count right-
      aligned in a fixed-width slot. No horizontal scroll, no sticky, no background -- the number
      needs no backing because nothing can ever slide beneath it. The full label lives in the
@@ -291,9 +290,8 @@ useShadowStyles(`
   /* margin-top nudges keep the swatch and the count optically on the label's FIRST line now that
      a row can be two lines tall. */
   .rd-li i{ width:9px; height:9px; border-radius:2px; flex:0 0 auto; margin-top:3px; }
-  /* ★ THE COUNT IS A FROZEN COLUMN (Driver 2026-09-23): "the number column was supposed to be
-     FROZEN with the z-index topped with a WHITE BACKGROUND so that the text doesn't underlap it, so
-     that whenever you scroll to the right you can read the text but the numbers stay visible."
+  /* ★ THE COUNT IS A FROZEN COLUMN: pinned, on an opaque background, so the label never slides under
+     it and the numbers stay visible while the label scrolls.
      This is the other half of the horizontal-scroll change and shipping without it was incomplete:
      nowrap + overflow-x:auto made the long label reachable, but the label then slides UNDER the
      count and the two overlap mid-scroll. A scrollable row needs a pinned column, or the thing you
@@ -304,9 +302,8 @@ useShadowStyles(`
      Background is --rd-panel (the card's own surface) so the pin matches its host rather than
      assuming white; the card is #fff today but a host that re-skins the panel should not get a
      white rectangle floating on a tinted card. */
-  /* ★ THE COUNT COLUMN IS UNIFORM, RIGHT-JUSTIFIED AND IMMOVABLE (Driver 2026-09-23: "set the
-     number column to be justified right, same width, uniform, immovable... so it is easier to
-     use -- and the same goes for the region chart"). One fixed width for every row means the
+  /* ★ THE COUNT COLUMN IS UNIFORM, RIGHT-JUSTIFIED AND IMMOVABLE, in this chart and the region chart
+     alike, so it is easier to read. One fixed width for every row means the
      digits align into a scannable column instead of each number sitting wherever its label ended;
      right-justified plus the existing tabular-nums makes magnitudes comparable at a glance (541
      visibly longer than 72). 3.4em clears the widest live value (1,309 in the region chart) with
@@ -323,8 +320,8 @@ useShadowStyles(`
      ── WRAP, NOT ELLIPSIS (card BUILD-REBALANCE-THE-TWO-SIDEBARS) ───────────────────────────
      This previously read overflow:hidden + text-overflow:ellipsis + white-space:nowrap, a
      DELIBERATE earlier choice to protect the 108px scroller (see the .rd-legend note above).
-     It is reversed on the Driver's explicit ruling: measured before this change, 4 of 16 legend
-     labels were ellipsised, including the two he named — "Ethnoreligion - Chinese Folk Religion"
+     It is reversed for readability: measured before this change, 4 of 16 legend
+     labels were ellipsised, including these two — "Ethnoreligion - Chinese Folk Religion"
      (191px of text in a 130px box) and "North America & Non-Spanish Caribbean" (214px in 130px).
      Because the scroller is overflow-x:hidden, that hidden text could not be scrolled to; it was
      simply GONE. Two lines at this rail width fit both in full.
@@ -339,16 +336,15 @@ useShadowStyles(`
      overflow-wrap:anywhere breaks only words that genuinely cannot fit, so ordinary labels still
      break at spaces. Keep .rd-li's count at flex:0 0 auto — the number must never be the thing
      that yields. */
-  /* ★ THIRD AND RESOLVING PASS ON THIS TRADE (2026-09-23) — read the block above first.
-     History: (1) capped at 108px to match the donut, which forced ELLIPSIS; (2) the Driver rejected
-     that on 2026-09-22 — "I cannot SCROLL RIGHT to read the rest of the text" — so wrapping was
-     enabled, the cap raised to 176px, and a taller card was accepted as the cost.
-     (3) He has now asked for the thing that was missing from BOTH: "add horizontal scrolling to the
-     charts, we can remove line wrapping and save a lot of space in terms of height... we are trying
-     to RECLAIM HEIGHT."
+  /* ★ THIRD AND RESOLVING PASS ON THIS TRADE — read the block above first.
+     History: (1) capped at 108px to match the donut, which forced ELLIPSIS; (2) that was rejected
+     because a truncated label could not be scrolled to and read, so wrapping was enabled, the cap
+     raised to 176px, and a taller card was accepted as the cost.
+     (3) The thing missing from BOTH: horizontal scrolling on the charts, so line wrapping can go and
+     the height it cost is reclaimed.
      ★ THIS IS NOT A FLIP-FLOP BACK TO PASS 1, and the difference is the whole point. Pass 1 was
      nowrap + ellipsis + overflow-x:HIDDEN — the label was truncated and UNRECOVERABLE, which is the
-     defect he rejected. This is nowrap + overflow-x:AUTO on the scroller: the full label still
+     defect that was rejected. This is nowrap + overflow-x:AUTO on the scroller: the full label still
      exists and is reachable by scrolling right. The old warning said "do NOT restore nowrap", and it
      was right given hidden overflow; with a real horizontal scrollbar its precondition is gone.
      The vertical saving is the reason: a 3-line clamp makes every long row ~2.5x tall. */
@@ -356,7 +352,7 @@ useShadowStyles(`
   .rd-bars{ display:flex; flex-direction:column; gap:3px; }
   .rd-bar{ display:flex; align-items:center; gap:6px; cursor:pointer; font-size:10.5px; padding:1px 2px; border-radius:3px; }
   .rd-bar:hover{ background:var(--dx-surface, #f3f3f1); } .rd-bar.on{ background:#fff4ea; font-weight:700; color:var(--rd-ink, #3b463d); }
-  /* Same wrap ruling as .rd-lt, applied to the bar chart's country labels: measured before this
+  /* Same wrap rule as .rd-lt, applied to the bar chart's country labels: measured before this
      change, 2 of 13 clipped — "People's Republic of China" (138px of text in 84px) and "Lao
      People's Democratic Republic" (177px in 84px) — and like the donut legend there was no way
      to scroll to the hidden half. Clamped at 3 lines — same measured reason as .rd-lt above, and
@@ -374,12 +370,11 @@ useShadowStyles(`
 <template>
   <aside class="rd-charts" data-region="charts-rail" @click="onChartClick">
     <!--
-      ★ THE RAIL IS A TAB STRIP, NOT A HEADING (Driver: "I asked a long time ago that the chart
-      becomes a tab, so that there are tabs, so that you can have the Gospel Resources tab next to
-      Charts. Charts will be a selected tab that will show the charts.")
+      ★ THE RAIL IS A TAB STRIP, NOT A HEADING: Charts is one tab (selected by default, showing the
+      charts), so a Gospel Resources tab can sit next to it.
 
       THIS IS HALF THE CARD, DELIBERATELY. The container is buildable now; what the Gospel Resources
-      tab ENCODES is not, because it waits on three open Driver decisions (the official lostness
+      tab ENCODES is not, because it waits on three open product decisions (the official lostness
       number, key-less vs a registered Joshua Project key, and the UI shape). Building the strip now
       means the tab exists the moment those land, instead of the whole feature waiting on them.
 
@@ -410,7 +405,7 @@ useShadowStyles(`
             </path>
           </svg>
           <div class="rd-legend">
-            <!-- ★ THE LABEL IS PROJECTED; THE KEY IS NOT (rega's Arabic survey: 70 of 85 letters in
+            <!-- ★ THE LABEL IS PROJECTED; THE KEY IS NOT (the Arabic survey: 70 of 85 letters in
                  this legend were Latin). `s.key` is a facet VALUE, and for the religion donut it is a
                  DERIVED English family name — "Islam", "Hinduism" — that library/colors/religion.js
                  produces from a religion code. It is English in every locale because it is not a

@@ -83,7 +83,8 @@ check('an unknown list -> empty, not a crash', L.listLabel('project-9999', tFrom
   }
   check('the English catalogue matches the registry, word for word', bad, []) }
 { const missing = []
-  for (const lc of readdirSync(join(ROOT, 'library/i18n/locales'))) {
+  // Locale FOLDERS only: the folder also holds a README.md, which is not a locale.
+  for (const lc of readdirSync(join(ROOT, 'library/i18n/locales'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)) {
     const c = cat(lc)
     for (const l of L.peopleGroupLists()) for (const f of ['label', 'definition']) if (!c[l.id]?.[f]) missing.push(`${lc}:${l.id}.${f}`)
   }

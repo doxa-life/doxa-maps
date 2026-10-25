@@ -2,11 +2,11 @@
 /**
  * check-studio-rail — the Plugin Studio's rail is laid out like plugin-designs/. Headless.
  *
- * The Driver's ask (2026-09-26): one FOLDER per BUNDLE with its ELEMENTS inside, bundles sorted by
+ * The ask (2026-09-26): one FOLDER per BUNDLE with its ELEMENTS inside, bundles sorted by
  * capability, highest first. Runs the studio's REAL treeSections / compositionTrees / rowsFromManifest
  * (loaded through Vite, no browser) against the BUILT manifest and asserts:
  *   - EVERY bundle sits in a capability section (they run CAP 5 → 1), in the section of its HIGHEST
- *     capability, once; there is no Experimental section: every plugin is capability 1-5 (the Driver,
+ *     capability, once; there is no Experimental section: every plugin is capability 1-5 (since
  *     2026-09-27), and a non-production bundle says so on its own rows;
  *   - bundles within a section are in name order;
  *   - a bundle with several elements is ONE folder holding all of them; a single-element bundle is its element;
@@ -31,7 +31,7 @@ function undeclaredLabels(manifest) {
       // b.stage drags every experimental sibling in with it. Measured: cities-internet is a
       // production bundle whose connectivity-list and data-tables are EXPERIMENTAL, and
       // gospel-resources likewise for charts / data-tables / resources-list. That was 5 false
-      // violations out of 7 (regions-plugin caught it, 2026-09-28).
+      // violations out of 7 (caught 2026-09-28).
       // I had already moved off stageOf (bundle-keyed) once; moving to b.stage was the SAME
       // mistake wearing a different field name. The profile's own stage is the only one that
       // answers "is this row production".
@@ -129,7 +129,7 @@ try {
     }
   }
   for (const b of byBundle.keys()) if (!seen.has(b)) fail(`bundle ${b} is missing from the rail`)
-  // A row is NAMED, never shown as a bare id (the Driver: Gospel x Internet read just "board").
+  // A row is NAMED, never shown as a bare id (Gospel x Internet read just "board").
   for (const r of ctx.rows) if (r.label === r.profile || r.label === r.bundle) fail(`${r.key} shows a bare id ("${r.label}") — give its <profile>.meta.json a "label"`)
   // ★ AND A PRODUCTION PROFILE MUST DECLARE ITS NAME, not inherit one.
   //

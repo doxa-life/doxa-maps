@@ -629,7 +629,7 @@ export function useEntitySearch(opts = {}) {
     // tab. groupOrder() returns the category sequence for the active context
     // (or the default order when no context is set). This replaces the fixed
     // semantic-tree-first order; the same context drives the "All DOXA Data"
-    // section below so both halves of the dropdown agree. qa: 2026-05-02.
+    // section below so both halves of the dropdown agree.
     const order   = groupOrder(activeContext)
     // Context-aware FILTERING (not just ordering): each tab's search should only
     // surface result types relevant to that tab's legend domain — e.g. the

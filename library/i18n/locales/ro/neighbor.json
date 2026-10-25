@@ -8,7 +8,7 @@
     "langCluster": "Grupuri lingvistice",
     "flowers": "Flori",
     "mobilize": "Mobilizare",
-    "campaigns": "Campanii"
+    "campaigns": "Mișcări"
   },
   "hints": {
     "cockpit": "centru de filtrare încrucișată",
@@ -180,6 +180,8 @@
     "title": "Mobilizarea vecinilor apropiați",
     "close": "Închide",
     "why": "Credincioșii cei mai potriviți să ajungă la un popor neatins sunt de obicei cei mai apropiați de el prin limbă și cultură. Acest instrument îi găsește pentru fiecare grup neatins, folosind scala E și scala P ale lui Ralph D. Winter, ca să puteți planifica pe cine să mobilizați, în ce limbă și unde.",
+    "greenTitle": "Pentru biserici: porniți de la un punct verde",
+    "green": "Alegeți un grup atins (verde), din lista Grupuri atinse sau printr-un punct verde, pentru a vedea popoarele neatinse pe care credincioșii lui sunt cel mai bine plasați să le atingă, câte un nivel E, cele mai apropiate întâi. Apoi exportați lista (CSV), scrieți o scrisoare credincioșilor lui sau tipăriți un pachet de rugăciune, pentru acea biserică sau partenerii ei misionari.",
     "eTitle": "Scala E: distanța pe care trebuie să o traverseze un martor",
     "pTitle": "Scala P: distanța dintre un popor și o biserică",
     "dataTitle": "Date și limite",
@@ -193,7 +195,7 @@
     "title1": "E-1 · Vorbesc aceeași limbă",
     "title2": "E-2 · O cultură apropiată",
     "title3": "E-3 · Aproape, o altă cultură",
-    "long1": "Credincioși care vorbesc limba acestui grup. Pot împărtăși Evanghelia fără o barieră de limbă, iar o campanie în această limbă îi poate mobiliza.",
+    "long1": "Credincioși care vorbesc limba acestui grup. Pot împărtăși Evanghelia fără o barieră de limbă, iar o mișcare în această limbă îi poate mobiliza.",
     "long2": "Credincioși dintr-un popor înrudit: același grup de popoare sau aceeași familie de limbi în același bloc de afinitate. Un pas cultural mai scurt decât a începe de la zero.",
     "long3": "Credincioși care locuiesc aproape (sub 600 km sau în aceeași țară), dar de altă cultură. Împart regiunea, nu limba.",
     "rlong1": "Grupuri neatinse care vorbesc limba acestui grup. Credincioșii lui le pot atinge fără a trece o barieră de limbă.",
@@ -220,6 +222,11 @@
     "legend": "Legenda hărții",
     "legendUnreached": "Grup neatins",
     "searchPlaceholder": "Căutați un grup neatins, o țară sau o limbă",
+    "kind": "Ce grupuri să se afișeze",
+    "listUnreached": "Grupuri neatinse",
+    "listReached": "Grupuri atinse",
+    "searchReached": "Căutați un grup atins, o țară sau o limbă",
+    "introReached": "Alegeți un grup atins (cele cu cei mai mulți credincioși întâi) sau faceți clic pe un punct verde de pe hartă pentru a vedea grupurile neatinse cele mai apropiate de credincioșii lui.",
     "pFilter": "Filtrați după nivelul P",
     "pAll": "Toate",
     "loading": "Se încarcă popoarele…",
@@ -230,7 +237,7 @@
     "believersNear": "Aproximativ {n} credincioși printre vecinii de mai jos.",
     "resources": "Resurse în limba sa",
     "export": "Exportați segmentele de public (CSV)",
-    "openBridge": "Planificați o campanie în {lang}",
+    "openBridge": "Planificați o mișcare de mobilizare în {lang}",
     "samePeople": "același popor",
     "cardStats": "~{b} credincioși · la {km} km",
     "noNeighbors": "Niciun vecin atins în aceste date.",
@@ -245,10 +252,12 @@
     "showNeighbors": "Arată vecinii săi",
     "noUnreachedNeighbors": "Niciun grup neatins nu numără acest grup printre cei mai apropiați vecini atinși.",
     "showAll": "Arată toate cele {n}",
-    "eFilter": "Arată vecinii după nivelul E"
+    "eFilter": "Arată vecinii după nivelul E",
+    "sheetHide": "Ascundeți lista",
+    "sheetShow": "Afișați lista"
   },
   "camp": {
-    "intro": "Limbi-punte: limbi vorbite atât de credincioși, cât și de popoare neatinse. O campanie în acea limbă, difuzată acolo unde trăiesc credincioșii, îi poate mobiliza să ajungă la cei neatinși în propria limbă.",
+    "intro": "Limbi-punte: limbi vorbite atât de credincioși, cât și de popoare neatinse. O mișcare în acea limbă, pornită acolo unde trăiesc credincioșii, îi poate mobiliza să ajungă la cei neatinși în propria limbă.",
     "searchPlaceholder": "Căutați o limbă sau o țară",
     "minBelievers": "Cel puțin",
     "exportAll": "Exportați lista (CSV)",
@@ -258,9 +267,27 @@
     "back": "Toate limbile",
     "bigBelievers": "credincioși de mobilizat ({g} grupuri, {c} țări)",
     "bigUnreached": "neatinși de atins ({g} grupuri, {c} țări)",
-    "export": "Exportați această campanie (CSV)",
+    "export": "Exportați această mișcare (CSV)",
     "whereToRun": "Unde s-o derulați: credincioși pe țări",
     "believersInGroups": "~{n} în {g} grupuri",
     "whoTheyReach": "Pe cine pot atinge"
+  },
+  "letter": {
+    "button": "Scrieți o scrisoare",
+    "title": "O scrisoare către credincioșii din {group}",
+    "greeting": "Dragi prieteni dintre credincioșii din {group} ({country}),",
+    "intro": "Aceste {n} popoare neatinse vă numără printre cei mai apropiați credincioși ai lor ({level}). Printre ei trăiesc încă puțini credincioși.",
+    "item": "{name}, {country}: populație {pop}, limba {language}, la {km} km.",
+    "pray": "Rugați-vă pentru ei: {url}",
+    "more": "…și încă {n}. Lista completă este în exportul CSV.",
+    "close": "Vă veți ruga pentru ei și Îl veți întreba pe Dumnezeu cum i-ar putea binecuvânta biserica voastră? Fiecare dintre aceste popoare este iubit de Dumnezeu.",
+    "sign": "În Numele lui Isus,",
+    "copy": "Copiați scrisoarea",
+    "download": "Descărcați (.txt)"
+  },
+  "packet": {
+    "button": "Pachet de rugăciune",
+    "label": "{group}: vecinii săi neatinși ({level})",
+    "labelCapped": "{group}: cei mai apropiați {n} dintre cei {total} vecini neatinși ai săi ({level})"
   }
 }

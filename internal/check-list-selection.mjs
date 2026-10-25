@@ -22,8 +22,8 @@ import { leavesOf, zoneIdsIn, withUnassigned, selectedId, UNASSIGNED_ID } from '
 // groupings.json now live in data/tables/ — the shared asset pool the tree copies into
 // public/dx-maps/assets/tables/ — because gospel's legend renders IN THE BROWSER and needs them at
 // runtime; a build-time import path would not reach the bundle. admin-to-list.json stays in the
-// plugin until the Driver rules row 87 (the "zones fold" regeneration), so it is read from the old
-// root. Collapsing these to one constant silently breaks whichever file is not where you pointed.
+// plugin, provisional, pending a product decision on the "zones fold" regeneration, so it is read
+// from the old root. Collapsing these to one constant silently breaks whichever file is not where you pointed.
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 const TABLES = join(REPO, 'data', 'tables')
 const PLUGIN_DATA = join(REPO, 'plugin-designs', 'my-upg-100-list', 'data')
@@ -44,11 +44,11 @@ const MISSING = [
   'asia-china-xinjiang-uyghur-autonomous-region',
   'asia-india-bihar',
 ]
-// asia-india-madhya-pradesh WAS here and is now FILED. upg100 hit this arm while filing it, and
-// did the right thing with it: they reported the red instead of editing my expectation to make
-// their change green — "editing someone else's pinned expectation to make my own change green is
-// precisely the move that hollows out a guard". dx-shepherd then ruled that their data and this
-// fixture land TOGETHER, which is the only ordering where neither of us is red in between.
+// asia-india-madhya-pradesh WAS here and is now FILED. The filing change hit this arm, and the
+// red was reported instead of the pinned expectation being edited to turn the change green: editing
+// another owner's pinned expectation to make one's own change green is precisely the move that hollows
+// out a guard. The data and this fixture landed TOGETHER, the only ordering where neither side is red
+// in between.
 
 
 ok(leavesOf(TREE[0]).map((l) => l.id).join(',') === 'z1,z2,z3', 'leavesOf walks NESTED children, not one level')
@@ -85,7 +85,7 @@ const naive = TREE   // what a region-grouped tree gives you, unaugmented
 ok(!zoneIdsIn(naive).has('asia-china-xinjiang-uyghur-autonomous-region'),
   'NEG CONTROL: the unaugmented tree really does omit xinjiang, so the bucket is not decoration')
 
-// ── a region sweep is NOT a zone sweep (gospel, END-GOS-VLG2) ───────────────────────────────────
+// ── a region sweep is NOT a zone sweep (gospel-resources) ───────────────────────────────────
 // ★ The consequence of the bucket that neither of us should leave implicit: ticking every REGION
 // still does not select every ZONE, because the unfiled zones have no region BY DEFINITION.
 // Nothing on screen would say so — the reader just gets a smaller total, which is the exact
@@ -113,7 +113,7 @@ ok(selectedId(leavesOf(EMPTYZONE[0])[0]) === 'z9', 'and it still emits its own i
 ok(withUnassigned(EMPTYZONE, ['z9']).length === EMPTYZONE.length,
   'presence is by ID, not by member count, so an unresolvable zone is not ALSO dumped in the bucket')
 
-// ── the gap is REAL TODAY, not just real in my fixture (gospel, END-GOS-VLG3) ───────────────────
+// ── the gap is REAL TODAY, not just real in a fixture (gospel-resources) ───────────────────
 // ★ EVERY ASSERTION ABOVE RUNS AGAINST A FIXTURE. That proves the MODULE behaves, and it proves the
 // fixture models a gap — it does not prove the gap still exists in the data we ship. So the negative
 // control above could stay green forever while the bucket quietly became dead code, or while a FIFTH
@@ -122,9 +122,9 @@ ok(withUnassigned(EMPTYZONE, ['z9']).length === EMPTYZONE.length,
 // evidence lives — after catching the identical shape in their own work.
 //
 // This does NOT resolve the three disagreeing lists (33 in zone-regions, 12 reachable via
-// admin-to-list, 14 in groupings, disagreeing in BOTH directions). That is a data-ownership ruling
-// for upg100 and the Driver, and picking a winner here would be exactly the silent join we have both
-// refused. It only compares the region tree's own source against the joinable set and RECORDS the
+// admin-to-list, 14 in groupings, disagreeing in BOTH directions). That is a data-ownership question,
+// provisional, pending a product decision, and picking a winner here would be exactly the silent join
+// this repo refuses. It only compares the region tree's own source against the joinable set and RECORDS the
 // difference, so the disagreement cannot drift without someone being told.
 const regionOf = readJson('zone-regions.json')          // the region tree's source: zone id -> region
 const adminToList = readJson('admin-to-list.json')      // admin name -> zone id; its VALUES are joinable
@@ -148,7 +148,7 @@ ok(realGap.join(',') === MISSING.join(','),
   realGap.join(',') === MISSING.join(',')
     ? 'and it is exactly the four this check names, so the fixture above models the shipped data rather than a story about it'
     : `THE GAP MOVED — re-derive. shipped now: [${realGap.join(', ')}] but this check asserts: [${MISSING.join(', ')}]. A zone ADDED here is groups that just became unreachable; a zone REMOVED got filed and the fixture is stale. Either way the numbers in the commit body are no longer true.`)
-// ── the zones that got FILED stay filed (dx-shepherd RG12) ─────────────────────────────────────
+// ── the zones that got FILED stay filed (RG12) ─────────────────────────────────────
 // The gap arms watch the BAD direction. Filing is the good one, and it is exactly as revertible:
 // drop a key from zone-regions and those groups leave the region tree again, silently, with the
 // bucket the only thing still carrying them. Two of these three were never visible to the gap arms
@@ -163,7 +163,7 @@ for (const z of FILED) {
 ok(joinable.has('asia-china-xinjiang-uyghur-autonomous-region') && !filed.has('asia-china-xinjiang-uyghur-autonomous-region'),
   'xinjiang specifically: joinable in admin-to-list, absent from zone-regions — its 100 groups are reachable ONLY through the bucket')
 
-// ── the id ambiguity that is masked by a data coincidence (gospel, END-GOS-VLGC) ────────────────
+// ── the id ambiguity that is masked by a data coincidence (gospel-resources) ────────────────
 // ★ REGION IDS AND ZONE IDS SHARE ONE NAMESPACE. selectedId emits one bare string with no kind, and
 // the two sets OVERLAP in the shipped data. gospel found it while wiring and I re-measured it here
 // rather than taking the report: 33 zone ids, 7 region ids, intersection exactly {europe}, whose

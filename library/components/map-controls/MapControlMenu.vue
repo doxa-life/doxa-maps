@@ -14,6 +14,11 @@
       RIGHT of left-hand controls. The side is measured, so a right-to-left page that
       mirrors the toolbar mirrors the menu as well.
     • Width: as wide as fits between the toolbar and the opposite edge, capped at `width`.
+    • A STANDALONE anchor (ShareButton in a page header, no map toolbar: `standalone` on the
+      provided anchor) opens BELOW its button instead, toward the side with room, inside the
+      VIEWPORT, at `width` (the maps' readable 340) or the viewport minus its edges, whichever is
+      less. Where it lives and where it goes are resolved when it OPENS, and its coordinates are
+      converted into the block that really contains it (see placeBeside).
     • One z tier for menus (--z-menu, default 3000); only one menu is open per map at a
       time; closes on Escape or on a tap on the bare map canvas (never on legend/search).
 
@@ -51,6 +56,14 @@ useShadowStyles(`
 .mcm.light .mcm-close{background:rgba(208,215,222,0.4);border-color:#d0d7de;color:#57606a;}
 .mcm.light .mcm-close:hover{color:#3b463d;background:rgba(59,70,61,0.12);border-color:#3b463d;}
 .mcm-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .mcm-menu, .mcm-item { transition: none !important; animation: none !important; }
+}
 `, 'map-control-menu')
 
 const props = defineProps({
@@ -80,30 +93,24 @@ const style = ref({})
 // That is the identical failure the 2026-09-22 dashboard fix describes below, returning through a
 // different door: not "a wrong side was chosen" but "nothing chose anything".
 // MEASURED 2026-09-28: cities-internet, gospel-resources, key-cities and upg-neighbor carry NO map-area
-// class and no data-map-area, so all four were unanchored. The Driver reported two of them; the list is
+// class and no data-map-area, so all four were unanchored. Two of them were reported; the list is
 // what made it four.
 const AREA = '.dsm-map-area, .rm-map-area, .dm-map-area, [data-map-area]'
 
 function place() {
   const tb = toolbar?.el?.value, area = host.value
   if (!tb || !area) { style.value = {}; return }
+  if (toolbar.standalone) return placeBeside(tb)
   const ar = area.getBoundingClientRect(), tr = tb.getBoundingClientRect()
   const onRight = (tr.left + tr.right) / 2 > (ar.left + ar.right) / 2
   const gap = 8, edge = 12
   const offset = onRight ? (ar.right - tr.left + gap) : (tr.right - ar.left + gap)
   const width = Math.max(200, Math.min(props.width, ar.width - offset - edge))
   const top = Math.max(0, tr.top - ar.top)
-  // "Fit inside the map" is the rule ONLY for a real map area. When ShareButton mounted in a
-  // page HEADER, its fallback self-tagged that header band as the area (data-map-area=
-  // "share-fallback", see ShareButton.bindAnchor) -- and this line then dutifully clamped the
-  // menu INSIDE a ~56px band: measured on upg-100-mfe, a 291px share menu rendered with a 69px
-  // scrolling body (BUG-SHARE-MENU-HAS-A-SCROLLBAR-SHOULD-BE-FULLY-EXPANDED). A menu must never
-  // outgrow a MAP's walls, but a header band is not a wall -- nothing clips below it -- so the
-  // fallback area bounds against the VIEWPORT instead and the menu opens at natural height.
-  const isFallbackArea = area.getAttribute && area.getAttribute('data-map-area') === 'share-fallback'
-  let maxHeight = isFallbackArea
-    ? Math.max(120, (window.innerHeight || 900) - tr.top - edge)   // header host: the page below is available
-    : Math.max(120, ar.height - top - edge)                        // map host: fit inside the map
+  // A menu never outgrows the MAP's walls. (A header button is not placed here: placeBeside bounds it by the
+  // viewport, so it opens at natural height; measured on upg-100-mfe, a header band as the wall gave a 291px
+  // menu a 69px scrolling body, BUG-SHARE-MENU-HAS-A-SCROLLBAR-SHOULD-BE-FULLY-EXPANDED.)
+  let maxHeight = Math.max(120, ar.height - top - edge)
   if (props.matchToolbar) maxHeight = Math.max(120, Math.min(maxHeight, tr.height))
   if (props.maxHeight) maxHeight = Math.min(maxHeight, props.maxHeight)
   style.value = {
@@ -115,15 +122,66 @@ function place() {
   }
 }
 
+// ★ BESIDE ITS BUTTON, INSIDE THE VIEWPORT (a standalone anchor: a Share button in a page header). Below the
+// button, toward the side with room (a button right of centre opens leftward, its end edges aligned; RTL headers
+// mirror with no special case, because the side is measured), at the readable width the maps use, clamped inside
+// the viewport, as tall as its content up to the viewport's bottom edge.
+// ★ THE BLOCK THAT CONTAINS IT IS MEASURED, NOT ASSUMED. The menu is position:absolute, so its coordinates are
+// relative to its containing block, which the HOST's markup decides: an unpositioned wrapper hands it to the
+// header above. Measuring against one element and positioning against another is what sent the header menu far
+// to the left (the UPG-100 list page, 2026-10-03). So the target point is computed in viewport coordinates and converted into
+// the containing block's own (its padding edge, scrolled), whatever element that turns out to be.
+function placeBeside(tb) {
+  const vw = document.documentElement.clientWidth || window.innerWidth || 1024
+  const vh = window.innerHeight || 800
+  const r = tb.getBoundingClientRect(), gap = 8, edge = 12
+  const width = Math.min(props.width, Math.max(160, vw - 2 * edge))
+  const onRight = (r.left + r.right) / 2 > vw / 2
+  const x = Math.max(edge, Math.min(onRight ? r.right - width : r.left, vw - edge - width))
+  const y = r.bottom + gap
+  let maxHeight = Math.max(120, vh - y - edge)
+  if (props.maxHeight) maxHeight = Math.min(maxHeight, props.maxHeight)
+  const o = blockOrigin(el.value)
+  style.value = {
+    top: `${Math.round(y - o.y)}px`,
+    left: `${Math.round(x - o.x)}px`,
+    width: `${Math.round(width)}px`,
+    maxHeight: `${Math.round(maxHeight)}px`,
+    ...(props.height ? { height: `${Math.round(Math.min(props.height, maxHeight))}px` } : {}),
+  }
+}
+// The viewport position of the origin an absolutely positioned element is placed from: its offsetParent's padding
+// edge, scrolled. A static body (or none) means the initial containing block: the document origin.
+function blockOrigin(m) {
+  const cb = m && m.offsetParent
+  if (!cb || ((cb === document.body || cb === document.documentElement) && getComputedStyle(cb).position === 'static')) {
+    return { x: -(window.scrollX || 0), y: -(window.scrollY || 0) }
+  }
+  const b = cb.getBoundingClientRect()
+  return { x: b.left + cb.clientLeft - cb.scrollLeft, y: b.top + cb.clientTop - cb.scrollTop }
+}
+
 // Only one menu open per map: opening this one closes any other.
 const OPEN_EVENT = 'doxa-map-menu-open'
 function onOtherOpened(e) { if (props.open && e.detail !== el.value) emit('close') }
 
-watch(() => props.open, async (open) => {
-  if (!open) return
+// ★ AN OPEN PANEL ENDS THE ONBOARDING POINTER. MapInfo's "What can this map do?" pointer can be drawn by the HOST
+// (the gallery), outside this map's shadow root, so no z-index in here can lift a panel above it, and on a phone
+// it sat over the Share panel's ✕ (measured 2026-10-02, cities-with-internet). So every panel says it opened, as
+// a composed event that leaves the shadow root, and MapInfo puts its pointer away (library/components/info/MapInfo.vue).
+const PANEL_OPEN_EVENT = 'dxmaps:panel-open'
+// ...and its twin when it closes (✕, an outside tap, Esc, or unmounted while open), so a HOST can hide its own chrome
+// while a panel is up: DX Life's top scroll strip sat over the Share panel's ✕.
+const PANEL_CLOSE_EVENT = 'dxmaps:panel-close'
+const announceClose = () => { try { host.value?.dispatchEvent(new CustomEvent(PANEL_CLOSE_EVENT, { bubbles: true, composed: true })) } catch (_) {} }
+
+watch(() => props.open, async (open, was) => {
+  if (!open) { if (was) announceClose(); return }
+  if (toolbar?.standalone) host.value = resolveHost()   // layout is known now: where the menu lives
   await nextTick()
   place()
   try { host.value?.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: el.value })) } catch (_) {}
+  try { host.value?.dispatchEvent(new CustomEvent(PANEL_OPEN_EVENT, { bubbles: true, composed: true })) } catch (_) {}
 })
 
 function onResize() { if (props.open) place() }
@@ -137,20 +195,33 @@ function onClickOutside(e) {
   if (path.some(n => n?.classList?.contains?.('mapboxgl-canvas') || n?.classList?.contains?.('maplibregl-canvas'))) emit('close')
 }
 
+// Where the menu lives (the Teleport target). A map control: the map area, else the toolbar's offset parent. A
+// standalone button: a named area if its host declares one, else its offset parent, kept in the button's own
+// (shadow) root so the menu keeps this root's styles; else the root's top element.
+function resolveHost() {
+  const tbEl = toolbar?.el?.value || null
+  if (!tbEl) return null
+  if (!toolbar.standalone) return tbEl.closest(AREA) || tbEl.offsetParent || tbEl.parentElement || null
+  const root = tbEl.getRootNode(), mine = (n) => n && n.getRootNode() === root ? n : null
+  let top = tbEl; while (top.parentElement) top = top.parentElement
+  return mine(tbEl.closest(AREA)) || mine(tbEl.offsetParent) || (root === document ? document.body : top)
+}
+// The "one menu at a time" listener follows the host, which a standalone button re-resolves on every open.
+watch(host, (h, was) => { was?.removeEventListener(OPEN_EVENT, onOtherOpened); h?.addEventListener(OPEN_EVENT, onOtherOpened) })
+
 onMounted(() => {
   // ★ NEVER null. A named area is still preferred -- it is the MAP's walls, and a menu must not outgrow
   // them -- but when a plugin has not tagged one, the toolbar's own offsetParent is the containing block
   // this menu is absolutely positioned against, so placing against it is geometrically correct by
   // definition rather than by convention. A plugin that adopts a class or data-map-area later simply
   // gets the better anchor; nothing has to be registered anywhere for the menu to be on screen.
-  const tbEl = toolbar?.el?.value || null
-  host.value = tbEl?.closest(AREA) || tbEl?.offsetParent || tbEl?.parentElement || null
-  host.value?.addEventListener(OPEN_EVENT, onOtherOpened)
+  host.value = resolveHost()
   window.addEventListener('resize', onResize)
   document.addEventListener('click', onClickOutside, true)
   document.addEventListener('keydown', onKeyDown)
 })
 onBeforeUnmount(() => {
+  if (props.open) announceClose()
   host.value?.removeEventListener(OPEN_EVENT, onOtherOpened)
   window.removeEventListener('resize', onResize)
   document.removeEventListener('click', onClickOutside, true)

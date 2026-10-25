@@ -35,7 +35,7 @@
 //               Root cause: a one-element dfrac sweep + leaders still drawn beside
 //               the numbered badges + a DENSE_AT threshold that exists only as a
 //               comment. Fixing it changes the look of 41 posters in the SHARED
-//               template, which is a design note design call.
+//               template, which is a product design call.
 //               ALSO expect ONE "no crossing count" failure for country-chn: it is
 //               the 3x4 tier, built by a SEPARATE run, so the 173-country manifest
 //               does not cover it. That is the guard refusing to call an unmeasured

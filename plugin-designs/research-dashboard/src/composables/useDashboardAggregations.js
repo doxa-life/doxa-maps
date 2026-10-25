@@ -49,17 +49,18 @@ import { PALETTE as RELIGION_PALETTE, RELIGION_FAMILIES, getReligionFamily } fro
  * than re-implemented, so chart and pin can never drift.
  */
 
-// ★ THE GENERIC HALF MOVED OUT (kit landing 4c-1) AND IS RE-EXPORTED HERE FOR ONE CYCLE.
-// lbl() and aggregate() are pure counting and now live in @map/composables/useFacetAggregation.js.
-// Everything still in this file — colorFor and its hardcoded facet branches, the religion palettes,
-// the donut and bar builders — is research-specific and stays. DashboardChartsRail imports those and
-// is untouched by this commit.
-export { lbl, aggregate, OTHER_KEY, otherLabel, NEUTRAL } from '@map/composables/useFacetAggregation.js'
-// NEUTRAL is imported as well as re-exported: colorFor() and buildCountryRegionColors() below read it
-// five times as the "this facet has no palette for that key" colour. Kit landing 4c-1 moved it to the
-// library and updated the re-export line but not this one, so every read threw ReferenceError and
-// Big Picture's Religion and Region charts came up empty on both engines and both languages.
-import { lbl, aggregate, NEUTRAL } from '@map/composables/useFacetAggregation.js'
+// ★ THE GENERIC HALF LIVES IN THE LIBRARY. lbl() and aggregate() are pure counting and moved to
+// @map/composables/useFacetAggregation.js in kit landing 4c-1, re-exported from here for one cycle
+// so callers could migrate. That cycle is over: every caller now imports them from the library
+// directly, so the re-export is gone. What remains in this file — colorFor and its facet branches,
+// the religion palettes, the donut and bar builders — is research-specific and stays.
+//
+// NEUTRAL is still IMPORTED, because colorFor() and buildCountryRegionColors() below read it five
+// times as the "this facet has no palette for that key" colour. When 4c-1 moved it to the library it
+// updated the re-export line and not this import, so every read threw ReferenceError and Big
+// Picture's Religion and Region charts came up empty on both engines and both languages. Deleting a
+// re-export is not the same as deleting the import beside it.
+import { NEUTRAL } from '@map/composables/useFacetAggregation.js'
 
 
 // Place: the facet emits the localized label but the authoritative palette is slug-keyed
@@ -139,7 +140,7 @@ function religionLetterFromLabel(key, families) {
 
 
 /**
- * COUNTRY -> REGION HUE. The Driver's ask: "countries should match the colour of their regions."
+ * COUNTRY -> REGION HUE: each country takes the colour of its region.
  * A country has no palette of its own, so the Top-countries bar inherits its REGION's hue —
  * which makes the bar chart, the Region donut and the map legend agree at a glance.
  *

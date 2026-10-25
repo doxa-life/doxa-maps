@@ -3,9 +3,8 @@
 //   node fetch-social-platforms.mjs  ->  out/social-platforms-by-country.json
 //
 // ═══ WHY THIS IS PART OF A GOSPEL-ACCESS DATASET ════════════════════════════
-// design note 2026-08-01: "we want to know what are the social media platforms in those
-// countries… so we can track ISPs, gospel resources, their language, and what
-// social media platforms they use."
+// For each country: the social platforms in use, alongside its ISPs, gospel resources
+// and languages.
 //
 // The chain the app is built to show: a people group has a LANGUAGE, that language
 // may or may not have a RESOURCE, the people have INTERNET or not, and if they do,

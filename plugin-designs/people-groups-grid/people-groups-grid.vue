@@ -23,7 +23,7 @@
  *     …the four dropdown axes (Region / Block / People-Group / Religion) PLUS Country.
  *     Precedence = internal control (when shown) ELSE the incoming prop (local-else-prop).
  *
- *     ★ COUNTRY IS PROP-ONLY, NOT A FIFTH DROPDOWN. The Driver's exclusion of Country was
+ *     ★ COUNTRY IS PROP-ONLY, NOT A FIFTH DROPDOWN. The exclusion of Country was
  *     about this element's OWN CONTROLS — it ships four dropdowns, not five, and that is
  *     unchanged (see extractFilterOptions + the filters__panel template). What is added is a
  *     `countryCode` INPUT so a host that already owns a country control (the cap-4
@@ -59,6 +59,7 @@ import { RELIGION_FAMILIES } from '@map/colors/religion.js'
 import { canonicalFamilyName } from '@map/colors/language-family.js'
 import langFamilyByIso from '@map/data/langFamilyByIso.json'
 import { joinBase } from '@map/composables/joinBase.js'
+import { hostElement } from '@map/utils/hostElement.js'
 
 // ★ THE HOST'S INLINE STYLE MUST NOT LAND ON OUR ROOT.
 // This SFC is mounted AS a custom element, so a style attribute the HOST page puts on the tag falls
@@ -91,7 +92,7 @@ const props = defineProps({
   // element's ONLY row-total and must stay. A HOST that already shows one passes false.
   // MEASURED on the cap-4 composite: the same 2,107 renders FIVE times down one page — KPI (y=117),
   // KPI duplicate (y=176), table bar (y=1228), table footer 'Σ 2,107 groups' (y=1827) and this
-  // 'Total: 2107' (y=1865). The last two sit 38px apart, which is the redundancy the Driver saw.
+  // 'Total: 2107' (y=1865). The last two sit 38px apart, which is the redundancy that was reported.
   showTotal:   { type: [Boolean, String], default: true },
 
   // ── external filter props (used when the matching internal control is hidden) ──
@@ -104,8 +105,8 @@ const props = defineProps({
 
   // ★ COUNTRY — WHY IT WAS DROPPED, AND WHAT MAKES IT SAFE TO MAP NOW.
   //
-  // THE DRIVER'S BUG (reported 2026-09-22): "when I click on India in the top countries nothing
-  // happens and the people groups grid just stays the same." That was accurate and the cause was
+  // THE BUG (reported 2026-09-22): clicking India in the top countries did nothing —
+  // the people groups grid stayed the same. That was accurate and the cause was
   // NOT a wiring fault. The cap-4 composite's FACET_TO_PROP translates dashboard facet keys to
   // grid props, and it mapped only four; `country_code` was one of eight facets deliberately
   // DROPPED, on the standing rule that it is better to not narrow on an axis than to push a value
@@ -141,8 +142,8 @@ const props = defineProps({
 
   // ── LANGUAGE + STATUS — the tree-rail axes, added on the SAME same-field test as country ──
   //
-  // Driver-reported 2026-09-22: the People/Place/Language/Religion tree rail "is not working with
-  // interoperability… with the people groups grid beneath it." Language and Status were two of the
+  // Reported 2026-09-22: the People/Place/Language/Religion tree rail was not interoperating with
+  // the people groups grid beneath it. Language and Status were two of the
   // axes a click could not reach, because there was no prop for the composite's FACET_TO_PROP to
   // land a value in. As with country, the honest fix is to add the real prop HERE first.
   //
@@ -224,8 +225,8 @@ const cfg = computed(() => {
   if (!props.profileConfig) return {}
   try { return JSON.parse(props.profileConfig) || {} } catch { return {} }
 })
-// ── THE WORLD-MAP BACKDROP BEHIND THE FILTERS (Driver, 2026-09-24) ──────────
-// "there is an SVG of a map that shows up under the search bar, where the toggles are."
+// ── THE WORLD-MAP BACKDROP BEHIND THE FILTERS (requested 2026-09-24) ──────────
+// An SVG world map shows under the search bar, where the toggles are.
 // It is DX-life's own treatment, ported rather than reinvented: UupgsList.vue puts
 // `background-image: url(<images>/worldmap.svg); background-size: 60%; background-position: top`
 // on the container that wraps the search box and the toggles — a BACKGROUND, not an icon beside
@@ -256,7 +257,7 @@ const filtersBackdrop = computed(() => {
 })
 const prayBaseUrl  = computed(() => props.prayBaseUrl || cfg.value.prayBaseUrl || 'https://pray.doxa.life')
 // ★ THE URL IS A SOURCE OF TRUTH FOR THE DATA TOO, not just for the chrome.
-// MEASURED by rega at ?lang=ar and ?lang=es: this grid's CHROME translated and its DATA stayed
+// MEASURED at ?lang=ar and ?lang=es: this grid's CHROME translated and its DATA stayed
 // English — country names, affinity names, religion labels — because the `&lang=` on the fetch was
 // built from props and profile-config ONLY. A reader who asked for Arabic got Arabic buttons around
 // English content, which reads as a half-finished translation rather than the wiring bug it is.
@@ -277,22 +278,45 @@ const languageCode = computed(() =>
 // page it owns and useless for an element dropped into someone else's, which is this grid's whole
 // job. Set on the HOST, like both composites: `dir` takes effect through the inherited CSS
 // `direction`, and inheritance crosses shadow boundaries, so one attribute turns the element and
-// everything it renders. Only ever SET, never cleared — a host page that declares its own dir owns
+// everything it renders. Set and CLEARED, but only ever ours — a host page that declares its own dir owns
 // that decision.
 const textDir = computed(() => {
   const l = languageCode.value || getRuntimeLocale() || detectLocale()
   return RTL_LOCALES.has(String(l).split('-')[0].toLowerCase()) ? 'rtl' : 'ltr'
 })
+// ★ WE CLEAR ONLY THE DIRECTION WE SET. The line below used to be a one-way
+// `if (rtl) setAttribute('dir','rtl')` with no else, so a reader who switched from an RTL locale to
+// an LTR one (ar -> zh) kept a right-to-left layout for the rest of the session: Chinese laid out
+// backwards, which reads as a broken page rather than a stale setting.
+// The original reason for never clearing is still honoured, and is why this remembers rather than
+// just removing: a host page that declares its OWN dir owns that decision, so the value found before
+// we first wrote is restored verbatim, and removed only when there was none.
+// ★ CAPTURED AT MOUNT, NOT AT FIRST WRITE. The capture used to sit inside the rtl branch, so it
+// recorded whatever `dir` happened to be on the host the first time WE wrote — and if anything else
+// had already set rtl by then, that value was recorded as "the page's own" and faithfully restored
+// forever after. MEASURED on the Big Picture leaf: ar left rtl, and zh put rtl straight back.
+// Reading it on the FIRST call instead, before any write of ours, is the only moment the attribute
+// is certainly the page's and not ours.
+let _hostDir = null
+let _weSetDir = false
 function reflectDir() {
   try {
     const host = hostEl()
-    if (host && host.setAttribute && textDir.value === 'rtl') host.setAttribute('dir', 'rtl')
+    if (!host || !host.setAttribute) return
+    if (_hostDir === null) _hostDir = host.getAttribute('dir') || ''
+    if (textDir.value === 'rtl') {
+      host.setAttribute('dir', 'rtl')
+      _weSetDir = true
+    } else if (_weSetDir) {
+      if (_hostDir) host.setAttribute('dir', _hostDir); else host.removeAttribute('dir')
+      _weSetDir = false
+    }
   } catch (_) { /* no host (SSR/tests) — nothing to reflect */ }
 }
 watch(textDir, reflectDir)
-// ★ ABSOLUTE CANONICAL DEFAULT (Driver 2026-09-23, pasted from his own browser:
-// http://localhost:5174/research/pitaguari/ -- "when I click view more information it does not
-// send me to the proper doxa.life page"). The old default '/research/' was ROOT-RELATIVE, so it
+// ★ ABSOLUTE CANONICAL DEFAULT. Reported 2026-09-23 from a dev server at
+// /research/pitaguari/: "view more information" did not
+// send a reader to the proper doxa.life page. The old default '/research/' was ROOT-RELATIVE, so it
 // resolved against whatever origin happened to host the element: right on doxa.life, wrong on
 // every other host -- the dev server, an iframe embed, a partner site. Same defect class as the
 // ../../ child-src bug: a relative default encoding an assumption about the host.
@@ -387,9 +411,16 @@ const t = computed(() => {
 })
 
 // ── Cat-2 show/hide (accept the DOM-attribute string 'false') ──────────────────
+// How many cards can sit in the FIRST ROW at any supported width. The grid is
+// repeat(auto-fill, minmax(240px, 1fr)) unless a host overrides cards-per-row, giving 1 column on a
+// phone and 3-5 on a desktop — so five is the upper bound of "already on screen", not a preference.
+// Deliberately a constant rather than a read of perRow: the override is the host's state and this
+// only needs a SAFE CEILING. Being generous by a card or two costs a few KB; being short by one
+// lazy-loads something the reader is looking at, which is the visible failure.
+const EAGER_IMAGES = 5
 const truthy = (v) => !(v === false || v === 'false' || v === '0' || v === 0)
 
-// ★ THE PRESET'S KEYS WERE NEVER REACHING THESE (rega RQ20). The "driven" preset asks for
+// ★ THE PRESET'S KEYS WERE NEVER REACHING THESE (measured, RQ20). The "driven" preset asks for
 // show-search:false and show-filters:false and the page rendered both anyway, with 0 console
 // errors — because nothing was failing. ProfileLoader PROVIDES profile-config; it does not bind
 // its keys as props. So props.showSearch stayed at its default of true and the preset was inert.
@@ -424,8 +455,8 @@ const loading = ref(true)
 const loadFailed = ref(false)
 // OPEN BY DEFAULT. The filters ARE the feature of this grid — the canonical chain asks for
 // "the same search bar + dropdowns as the UPG grid-list", so the dropdowns must be VISIBLE on
-// load. Collapsed-by-default hid all four behind a text link, and the Driver reported exactly
-// that: "they do not let me see the dropdowns to select them". Still collapsible (the toggle
+// load. Collapsed-by-default hid all four behind a text link, which was reported as
+// not letting a reader see the dropdowns to select them. Still collapsible (the toggle
 // remains) — the DEFAULT is what changed.
 const filtersExpanded = ref(true)
 const filterOptions = ref({})
@@ -616,7 +647,7 @@ function toggleExact() {
 
 // TWO VOCABULARIES MEET HERE, AND A STRICT === SILENTLY FILTERED TO ZERO.
 //
-// THE BUG (Driver-reported + measured live 2026-09-22, dashboard-plus-grid leaf). Picking a
+// THE BUG (reported and measured live 2026-09-22, dashboard-plus-grid leaf). Picking a
 // region in the dashboard above showed "1,309" in its own chart while the grid below said
 // "no people groups match this filter" — every host-driven selection produced ZERO cards.
 // Neither half was broken and the event wiring was correct; the two sides simply SPELL the
@@ -720,8 +751,8 @@ function extractFilterOptions() {
   }
   // THE FOUR AXES ONLY — Country is deliberately absent here, and that is not an oversight.
   // filterOptions is what RENDERS the dropdowns (see the filters__panel template), so adding
-  // country_code would grow this element a FIFTH dropdown, which is exactly the control the
-  // Driver excluded. The new `countryCode` prop is an INPUT, not a control: it reaches the rows
+  // country_code would grow this element a FIFTH dropdown, which is exactly the control that was
+  // excluded. The new `countryCode` prop is an INPUT, not a control: it reaches the rows
   // through propFilters → activeFilters → applyDropdownFilters without ever passing through here.
   //
   // The cross-filtering still comes out right. updateFilterOptionCounts() below iterates
@@ -761,7 +792,7 @@ function updateFilterOptionCounts() {
 // helper: apply a specific filter-set (used by the faceted-count cross-filter)
 // Uses the same valueMatches() as applyDropdownFilters: if the two disagreed, the facet COUNTS
 // would contradict the rows actually shown (a chart reading 1,309 above an empty list — exactly
-// the symptom the Driver reported). One matcher, both call sites.
+// the symptom that was reported). One matcher, both call sites.
 function applyWith(filters, list) {
   let filtered = list
   for (const [field, selection] of Object.entries(filters)) {
@@ -851,11 +882,7 @@ function filterUUPGs() {
 
 // ── emit `groups-filtered` (Vue + native composed CustomEvent) ─────────────────
 const inst = getCurrentInstance()
-function hostEl() {
-  const root = inst?.vnode?.el || inst?.proxy?.$el
-  try { const rn = root && root.getRootNode && root.getRootNode(); if (rn && rn.host) return rn.host } catch (_) {}
-  return root
-}
+const hostEl = () => hostElement(inst)
 function emitFiltered() {
   const detail = {
     query: effSearchTerm.value,
@@ -1010,7 +1037,7 @@ onMounted(() => {
           :model-value="localSearchTerm"
           :placeholder="t.search || 'Search people groups…'"
           :aria-label="t.search || 'Search people groups'"
-          max-width="480px"
+          max-width="600px"
           @search="onSearch"
         />
         <button
@@ -1033,7 +1060,7 @@ onMounted(() => {
         </svg>
         {{ filtersExpanded ? (t.hide_filters || 'Hide Filters') : (t.show_filters || 'Show Filters') }}
         <span v-if="activeFilterCount" class="filters__toggle-count">{{ activeFilterCount }}</span>
-        <svg width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+        <svg class="filters__toggle-chevron" width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </button>
@@ -1087,7 +1114,7 @@ onMounted(() => {
 
     <div class="pgg-body">
       <!-- THE COUNT LINE, AND WHY IT HAS THREE STATES RATHER THAN TWO.
-           Two Driver requests point in opposite directions and BOTH are right:
+           Two requests point in opposite directions and BOTH are right:
              (a) earlier — "the same 2,107 renders five times down one page", so the host-embedded
                  grid was given show-total=false and went silent;
              (b) 2026-09-22 — "the people groups grid underneath should tell me how many people
@@ -1124,9 +1151,33 @@ onMounted(() => {
         </label>
       </div>
       <div id="results" class="grid uupgs-list" :style="gridStyle">
-        <template v-for="uupg in displayedUUPGs" :key="uupg.slug">
+        <template v-for="(uupg, ui) in displayedUUPGs" :key="uupg.slug">
           <div class="card uupg__card">
-            <img v-if="uupg.image_url" class="uupg__image" :src="uupg.image_url" :alt="uupg.name">
+            <!-- ★ THE PHOTOS WERE COMPETING WITH THE MAP FOR THE FIRST THREE SECONDS. Measurement showed a
+                 cold load of Simple Research pulling 24 people-group photos, 5.3 MB, DURING BOOT —
+                 alongside the map engine and the API data, on the same connection. Nothing was wrong
+                 with any one image; there was simply no instruction about WHEN to fetch them.
+                 EAGER_IMAGES is a column count, not a taste: the grid is
+                 repeat(auto-fill, minmax(240px, 1fr)) by default, which is 1 column on a phone and
+                 3-5 on a desktop, so the FIRST ROW is never more than five cards at any width. Those
+                 five keep their normal priority — lazy-loading what the reader is already looking at
+                 trades a real flash of empty cards for bytes nobody saves. Everything past them waits
+                 until it approaches the viewport.
+                 The size is declared so the reservation survives BEFORE the stylesheet applies: .uupg__image
+                 already carries aspect-ratio 1/1, which is what actually holds the box, and width/height
+                 repeat it as an intrinsic ratio for the moments that CSS has not reached yet. Same 1:1,
+                 stated twice on purpose rather than a second, different truth. -->
+            <img
+              v-if="uupg.image_url"
+              class="uupg__image"
+              :src="uupg.image_url"
+              :alt="uupg.name"
+              width="240"
+              height="240"
+              decoding="async"
+              :loading="ui < EAGER_IMAGES ? 'eager' : 'lazy'"
+              :fetchpriority="ui < EAGER_IMAGES ? 'auto' : 'low'"
+            >
             <div class="uupg__header">
               <h3 class="uupg__name" v-html="uupg.name" />
               <p v-if="uupg.country_code" class="uupg__country">
@@ -1215,14 +1266,29 @@ onMounted(() => {
    phone so the button drops under the input instead of squeezing it. */
 .pgg-search--repel {
   gap: 10px; align-items: center; flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: center;
   width: 100%; max-width: 600px; margin-inline: auto;
+  /* ★ CLEAR OF THE GALLERY'S ROUND ☰ ONLY WHILE IT RESTS HERE, full width otherwise (as the live DX
+     Life list's field is). On a phone the ☰ is a 44px circle at the bottom-left (bottom-right in ar), and
+     this row sits right where it rests on the first screen. It rides up above the map's legend sheet once
+     the sheet announces itself, so it rests here only until then: while the map loads (measured at 390:
+     still resting 6 s after the grid showed), or for good if the map fails. The layout publishes both
+     facts only while the ☰ shows: --map-fab-beside (its footprint) and --vtl-fab-lift (0 while it rests).
+     The clamp keeps the footprint as padding on BOTH sides (centred) at a lift of 0 and drops it to 0 at
+     any real lift. With no ☰ (desktop, a standalone page) both are unset, and the padding is 0. */
+  padding-inline: clamp(0px, calc(var(--map-fab-beside, 0px) - var(--vtl-fab-lift, 0px) * 100), var(--map-fab-beside, 0px));
+  transition: padding .2s ease;   /* the ☰'s own .2s move */
+  box-sizing: border-box;
 }
+@media (prefers-reduced-motion: reduce) { .pgg-search--repel { transition: none; } }
 .pgg-search--repel > :first-child { flex: 1 1 320px; min-width: 0; }
-.pgg-exact { flex: none; }
+/* Exact is hidden. Readers could not tell what the chip meant, and on a phone it wrapped under the
+   field onto a line of its own. The search stays fuzzy, and the filter code behind the chip is
+   unchanged. With the field alone in the row, the row centres it instead of repelling a pair. */
+.pgg-exact { display: none; }
 /* A CONTROL, not a text link. It was background:none + border:none + text-decoration:underline,
    which reads as a hyperlink — so the four dropdowns it gates were effectively undiscoverable
-   (Driver-reported). Now a bordered, filled affordance in the material-light palette with a
+   (reported). Now a bordered, filled affordance in the material-light palette with a
    filter glyph and an active-count badge, so it looks pressable and says what it is hiding. */
 .filters__toggle {
   background: var(--dx-elevated, #fff); border: 1px solid var(--dx-line, #d1d4cd);
@@ -1238,7 +1304,12 @@ onMounted(() => {
   background: var(--dx-accent, #92b195); color: #fff; border-radius: 999px;
   min-width: 18px; padding: 0 5px; font-size: 0.75rem; line-height: 18px; text-align: center;
 }
-.filters__toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* Only the CHEVRON turns over when the filters are open. The rule used to match every svg in the
+   button, so the filter icon beside the label flipped upside down too (its longest line at the
+   bottom), which read as a broken icon. Measured on a phone, where the grid opens with its filters
+   expanded. */
+.filters__toggle-chevron { flex: none; }
+.filters__toggle[aria-expanded="true"] .filters__toggle-chevron { transform: rotate(180deg); }
 .filters__panel { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: flex-start; }
 .filter-toggle {
   padding: 6px 12px; cursor: pointer; font-size: 0.875rem; color: inherit; background: var(--card);
@@ -1259,7 +1330,7 @@ onMounted(() => {
 .repel { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .font-size-sm { font-size: 0.875rem; color: var(--mut); }
 /* 240px floor (was 220px) so the square image below is genuinely LARGER, not just squarer — the
-   Driver asked for both. auto-fill keeps the column count responsive, so this only widens cards when
+   both were asked for. auto-fill keeps the column count responsive, so this only widens cards when
    there is room; on a narrow viewport the track still collapses to one full-width column rather than
    overflowing. Paired with .uupg__image's aspect-ratio:1/1 this takes the image from a 220x130
    letterbox to a 240x240 square: ~2x the visible area, and the face is no longer cropped to a band. */
@@ -1278,8 +1349,8 @@ onMounted(() => {
   border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 /* SQUARE, NOT A LETTERBOX — the image is the point of the card.
-   Driver-reported 2026-09-22: "the images need to be larger. They need to be more like SQUARES and
-   less like RECTANGLES so that you can see the people image better." The old rule was a fixed
+   The images are larger, and closer to squares than to wide rectangles, so the
+   people image is easier to see. The old rule was a fixed
    height:130px against a column that is at least 220px wide (see .grid.uupgs-list above), i.e. a
    220x130 letterbox — roughly 1.7:1 — which crops a standing person to a band and renders faces small.
 
@@ -1330,4 +1401,43 @@ onMounted(() => {
   color: var(--ink); background: var(--card); border: 1px solid var(--brand); border-radius: 8px;
 }
 .pgg-loadmore:hover { background: var(--dx-accent-soft, rgba(146, 177, 149, .10)); }
+
+/* ★ THE SEARCH AND FILTERS LOOK LIKE THE LIVE DX LIFE LIST (doxa.life/research, the list under the
+   research map). These values are that page's own computed styles, measured at 390 and at 1440:
+     - the pill search field, 51px tall, in the page's grey, with its 20px glass 19px in;
+     - "Show filters" as an uppercase link, not a bordered button;
+     - 37px dropdowns in the same grey, full width on a phone and up to 240px beside each other above one.
+   Every selector starts at .pgg-root. The Big Picture bundle compiles this grid next to its own header,
+   and that header uses the same shared SearchBar and FilterDropdown, which must not change; in Big
+   Picture the grid's search and filters are off, so none of these rules finds an element there.
+   The fonts name the live page's families first (Poppins; Brandon Grotesque for the link). Where the
+   host page loads them, as DX Life does, the grid matches it; elsewhere the system stack after them shows. */
+.pgg-root .filters { gap: 18px; }
+.pgg-root .pgg-search .search-box .search-icon { left: auto; inset-inline-start: 19px; width: 20px; height: 20px; color: rgb(128, 128, 128); }
+.pgg-root .pgg-search .search-box input {
+  height: 51px; padding-block: 10px; padding-inline: 52px 24px;
+  border: 1px solid rgb(128, 128, 128); border-radius: 100px; color: #000;
+  font-family: Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 19.5px;
+}
+.pgg-root .pgg-search .search-box input::placeholder { color: rgb(128, 128, 128); }
+/* A phone keeps the grid's own 15.2px text and insets inside the same pill. There the row pads the round
+   ☰'s footprint on both sides whenever the ☰ rests in its corner (see .pgg-search--repel), which leaves the
+   field about 230px wide at 390, and at the live list's 19.5px the placeholder does not fit in it. */
+@media (max-width: 576px) {
+  .pgg-root .pgg-search .search-box input { font-size: 0.95rem; padding-inline: 38px 12px; }
+  .pgg-root .pgg-search .search-box .search-icon { inset-inline-start: 12px; width: 18px; height: 18px; }
+}
+.pgg-root .filters__toggle {
+  background: none; border-color: transparent; border-radius: 100px; padding: 10px 42px; line-height: 1;
+  font-family: 'Brandon Grotesque', Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 15.6px; font-weight: 400; text-transform: uppercase;
+}
+.pgg-root .filters__toggle-icon { display: none; }
+.pgg-root .filters__panel { gap: 13px; }
+.pgg-root .filters__panel .filter-dropdown { flex: 1 1 160px; min-width: 160px; max-width: 240px; }
+@media (max-width: 576px) { .pgg-root .filters__panel .filter-dropdown { flex: 1 1 100%; max-width: 90vw; } }
+.pgg-root .filters__panel .filter-dropdown__trigger {
+  min-height: 37px; padding: 5px 13px; gap: 7.5px; border: 1px solid rgb(128, 128, 128);
+  font-family: Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 15.6px;
+}
 </style>

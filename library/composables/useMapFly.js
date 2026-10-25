@@ -306,8 +306,8 @@ export function useMapFly(options = {}) {
         // FLY_CONFIG carries `speed` and `curve`, which flyTo understands and fitBounds IGNORES —
         // so this call looked animated and was a hard cut. MEASURED in the cap-4: selecting a row
         // moved the camera 1.45 -> 6 with only TWO distinct zoom values across 14 samples over
-        // ~1.7s, where an eased move shows a curve of intermediates. That is the Driver's
-        // "transitions too snappy, not smooth" report, and it is specific to fitBounds: the flyTo
+        // ~1.7s, where an eased move shows a curve of intermediates. That is why transitions
+        // read as snappy rather than smooth, and it is specific to fitBounds: the flyTo
         // paths in this same file were always eased.
         //
         // 900ms matches the feel of the flyTo paths at speed 0.5 without making a selection feel

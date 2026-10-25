@@ -84,7 +84,9 @@
     "asia": "Asia",
     "europe": "Europa",
     "latin_america_&_caribbean": "America Latina",
-    "oceania": "Oceania"
+    "oceania": "Oceania",
+    "middle_east": "Medio Oriente",
+    "north_america_&_non-spanish_caribbean": "Nord America e Caraibi non ispanici"
   },
   "sort_by_column_hint": "Ordina questa tabella per {column}: Maiusc+clic aggiunge una seconda colonna. L’ordinamento riguarda solo la tabella; le schede mantengono il proprio ordine.",
   "fs_exit_hint": "Esci da schermo intero (Esc) — torna a sette righe",
@@ -92,5 +94,19 @@
   "fs_exit": "Esci da schermo intero",
   "fs_open": "Apri la tabella a schermo intero",
   "export_selected_hint": "Esporta tutti i campi — popoli selezionati: {n}",
-  "export_all_hint": "Esporta tutti i campi — popoli: {n}"
+  "export_all_hint": "Esporta tutti i campi — popoli: {n}",
+  "map_init_failed": "La mappa non è riuscita ad avviarsi. Controlla il token di accesso e il contenitore della mappa.",
+  "show_filters": "Mostra i filtri",
+  "hide_filters": "Nascondi i filtri — ingrandisci la mappa",
+  "show_charts": "Mostra i grafici",
+  "hide_charts": "Nascondi i grafici — ingrandisci la mappa",
+  "export_copied": "copiato negli appunti",
+  "export_done": "esportato",
+  "export_ready": "pronto",
+  "export_toast": "✓ {rows} righe × {fields} campi {how}",
+  "export_failed": "✕ Esportazione non riuscita",
+  "pray_for_group": "Prega per questo popolo",
+  "more_information": "Maggiori informazioni",
+  "title": "Cruscotto di ricerca",
+  "gospel_pending": "Non ancora pronto: il numero dei non raggiunti, la chiave della fonte dati e la forma dell’interfaccia sono ancora da decidere."
 }

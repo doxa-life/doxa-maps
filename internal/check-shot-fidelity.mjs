@@ -24,7 +24,7 @@
  * images before anyone shot the studio.
  *
  * WHY A WARNING AND NOT A HARD FAIL
- * Installing a font needs a network fetch of a binary onto this box — a Driver call, not something
+ * Installing a font needs a network fetch of a binary onto this box — a product decision, not something
  * a screenshot refresh should do quietly. Until that is decided, failing the gate would block work
  * on a condition the operator cannot clear. So this REPORTS loudly and exits 0 by default; pass
  * --strict (or set SHOT_FIDELITY_STRICT=1) to make it blocking once a font is installed.

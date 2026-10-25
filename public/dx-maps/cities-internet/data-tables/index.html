@@ -17,9 +17,15 @@
        which loads its own map peer + token. A peer here would be dead weight + imply a gate. -->
   <style>
     /* BARE full-page map — no chrome. The custom element IS the page, so the
-       browser URL shares the map itself. */
+       browser URL shares the map itself.
+       HEIGHT IN svh, NOT inset:0. A fixed box with inset:0 follows the phone's DYNAMIC viewport, so the map
+       (and a legend sheet sized from it) changes height every time the address bar hides or shows. 100svh is
+       the viewport WITH the bar shown and never changes; when the bar hides, the page background shows below
+       instead of the map resizing. On a desktop svh = the viewport, so nothing moves there. The 100% before it
+       is the fallback for a browser without svh, which would otherwise size the box to its content.
+       --profile-min-h:0 opts out of ProfileLoader's 100dvh floor, which would grow the element again. */
     html, body { height: 100%; margin: 0; background: #0a0e15; }
-    #slot, cities-internet-map { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #slot, cities-internet-map { position: fixed; inset: 0 auto auto 0; width: 100%; height: 100%; height: 100svh; --profile-min-h: 0; display: block; }
     #status { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
       padding: 24px; text-align: center; color: #9aa7b8;
       font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -40,7 +46,7 @@
     @media print {
       html, body { height: auto; background: #fff; }
       #status:not(.err) { display: none; }
-      /* ★ RELEASE THE FIXED HOST, MEASURED (rega, RQ-RGPRINT on a035408e2). The leaf pins both the
+      /* ★ RELEASE THE FIXED HOST, MEASURED (a print check on a035408e2). The leaf pins both the
          slot and the element with position:fixed; inset:0. A fixed element is painted once, on the
          first page, so the printed document was exactly ONE viewport: 900px tall, while the content
          continued to y=1753. Every plugin whose leaf is taller than a screen has been printing its
@@ -61,7 +67,7 @@
 
   <script>window.MAP_APP_API_URL = "https://pray.doxa.life";</script>
   <!-- Bundle IIFE — registers the <cities-internet-map> custom element. -->
-  <script src="../cities-internet.js" integrity="sha384-UGXv+RSDdui7dfemc3AXCCdYk8K3bGmsQ6j1f2JiO2QngsjK2tvQ10Rbbqd8q4rg" crossorigin="anonymous"></script>
+  <script src="../cities-internet.js" integrity="sha384-6c4SlWMUWowE4IG1S5F3WshA66I3aKnK7ilHyHzOncLWeyXFL/I+NGlAYhyjZ1Ql" crossorigin="anonymous"></script>
 
   <script>
     // Mapbox token resolution — the A3 ladder, in precedence order:
@@ -77,7 +83,10 @@
     (function () {
       var slot = document.getElementById('slot');
       var status = document.getElementById('status');
-      var BASE_CONFIG = {"profile":"data-tables","dataSource":"pray-tools","instanceId":"cities-internet-data-tables","assetsBase":"../../assets"};
+      var BASE_CONFIG = {"profile":"data-tables","dataSource":"pray-tools","instanceId":"cities-internet-data-tables","assetsBase":"../../assets","urlOwner":"app"};
+      // Framed (the iframe embed on a partner's page): READ the address, never write it. A push inside a frame adds
+      // entries to the partner page's own Back button (the joint session history).
+      try { if (window.self !== window.top) delete BASE_CONFIG.urlOwner } catch (e) { delete BASE_CONFIG.urlOwner }
       // MapLibre map pages AND shell pages (app-shell / nested-mfe-spa) need NO token:
       // the ladder below is skipped entirely and the element mounts immediately.
       // (A leaf whose engine is MapLibre at RUNTIME joins them — see PROVIDER below.)
@@ -162,10 +171,11 @@
       if (urlTk) { try { localStorage.setItem('MAPS_STAGING_TK', urlTk); } catch (e) {} }
       var directToken = (BASE_CONFIG && BASE_CONFIG.tk) || urlTk || stored || HOST_TOKEN || BAKED_TOKEN;
       // PROVIDER — the same ladder as resolveMapProvider (library/composables/useMapProvider.js):
-      // profile-config.provider → ?provider= → window.MAP_PROVIDER → 'auto'. An explicit engine wins.
-      // 'auto' = Mapbox when a token is available (a rung above, a host-set window.MAP_TOKEN, or a token
-      // endpoint to ask), otherwise MapLibre, keyless: no token prompt, no request to Mapbox. The
-      // element decides the same way from the token this page hands it, so the two cannot disagree.
+      // profile-config.provider → ?provider= → window.MAP_PROVIDER → 'auto'. An explicit engine wins,
+      // and 'auto' draws with MapLibre whether or not a token is available (the element decides that).
+      // This page only decides whether to FIND a token first: when one is on offer (a rung above, a
+      // host-set window.MAP_TOKEN, or a token endpoint) it resolves it, since place search uses it on
+      // either engine; with none, it mounts at once, keyless: no token prompt, no request to Mapbox.
       var ASKED = String((BASE_CONFIG && BASE_CONFIG.provider) || qp('provider') || window.MAP_PROVIDER || '').toLowerCase().trim();
       var EXPLICIT = (ASKED === 'mapbox' || ASKED === 'maplibre') ? ASKED : '';
       var HAS_TOKEN = !!(directToken || (typeof window.MAP_TOKEN === 'string' && window.MAP_TOKEN));

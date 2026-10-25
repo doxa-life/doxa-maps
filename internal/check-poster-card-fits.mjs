@@ -37,8 +37,8 @@ const LEAF = process.argv[2] || DEFAULT_LEAF
 const WIDTHS = (process.env.CARD_FIT_WIDTH || '390,768,1024,1440,1920')
   .split(',').map((n) => Number(n.trim())).filter(Boolean)
 
-// ★ AND SWEEP LOCALES, for exactly the same reason the widths are swept. The Driver's requirement
-// was "full words visible AND support localization"; this gate only ever ran in English, which is
+// ★ AND SWEEP LOCALES, for exactly the same reason the widths are swept. The requirement was full
+// words visible AND localization supported; this gate only ever ran in English, which is
 // the shortest of the eleven. MEASURED 2026-09-24 at 1440px, the three print labels:
 //   en  Prayer List 76px · Card Deck 72px · Poster Map 79px
 //   ro  Listă de rugăciune 122px · Pachet de cartonașe 133px · Harta afișului 92px  (+75%)
@@ -108,9 +108,9 @@ async function measure(width, lang) {
   await page.waitForTimeout(10000)
 
   // ★ HOVER IS INVISIBLE TO A STATIC PROBE, which is exactly how the blue outline stayed
-  // unbuilt for so long. Repeated reports asked to "restore the blue outline around the poster";
+  // unbuilt for so long. A blue outline around the hovered poster was reported missing more than once;
   // measuring the loaded page found `outline:none` on all 136 framed elements and concluded it had
-  // never existed — true, and useless, because the affordance being asked for only exists WHILE
+  // never existed — true, and useless, because the affordance in question only exists WHILE
   // THE POINTER IS OVER THE CARD. The pointer has to actually move.
   //
   // ⚠ AND IT MUST NOT MOVE ANYTHING. The whole rest of this gate asserts where the print row sits.
@@ -208,6 +208,7 @@ async function measure(width, lang) {
     let previewsPainted = 0, previewsBroken = 0, noPreview = 0, unnamedPreview = 0
     let notTaped = 0, worstTape = 0, selectsInRow = 0
     let headNotTaped = 0, worstHead = 0, mapCovered = 0, worstCover = 0
+    let uncontained = 0, worstBelow = 0
     for (const { c, b } of boxes) {
       const row = c.querySelector('.pfs')
       if (!row) continue
@@ -216,14 +217,22 @@ async function measure(width, lang) {
         overflowing++
         worst = Math.max(worst, Math.round(Math.max(rb.right - b.right, b.left - rb.left)))
       }
+      // ★ AND THE CARD CONTAINS ITS ROW (2026-09-30, from a phone at two posters per row). The row
+      // wrapped to three lines and hung about 45px below the card's white box, into the row gap:
+      // horizontally inside, so the check above stayed green. PosterWall now fits each card to its
+      // own row (--pfs-room); this is the assertion that keeps that true in every locale x width.
+      if (rb.bottom > b.bottom + 0.5) {
+        uncontained++
+        worstBelow = Math.max(worstBelow, Math.round(rb.bottom - b.bottom))
+      }
       // ⚠ THE VERTICAL AXIS TOO — this measured only left/right, which is exactly how it passed a
-      // driver-visible regression. Fixing the horizontal overflow with flex-wrap grew the row
+      // visible regression. Fixing the horizontal overflow with flex-wrap grew the row
       // 35px -> 78px, and because it sits at bottom:-14px the extra height pushed its TOP from
       // 216px up to 173px in a 238px card: over the preview image and the card's outline.
       // Horizontal clean, card visibly broken, gate green.
       // COUNT THE PREVIEW, do not merely guard on it. An if-guard protects this loop from a
       // placeholder card — and also means a card with NO preview passes the over-preview assertion
-      // perfectly. The driver reported BOTH a missing-previews symptom AND the overlap;
+      // perfectly. BOTH a missing-previews symptom AND the overlap were reported;
       // measuring only the overlap leaves the first unasserted.
       // NOTE: no backticks in this block — it lives inside a JS template literal.
       const img = c.querySelector('img')
@@ -252,7 +261,7 @@ async function measure(width, lang) {
           worstY = Math.max(worstY, Math.round(ib.bottom - rb.top))
         }
       }
-      // ★ A STICKER STRADDLES THE EDGE IT TAPES (Driver 2026-09-25, the sticker/banner brief).
+      // ★ A STICKER STRADDLES THE EDGE IT TAPES (2026-09-25, the sticker/banner brief).
       // The card is a BANNER displaying a map; each sticker sits centred on a banner edge, part
       // on the banner's own white space and part overhanging. Three things were each true while
       // this gate was green, so all three are now asserted:
@@ -264,8 +273,8 @@ async function measure(width, lang) {
       if (frame) {
         const fb = frame.getBoundingClientRect()
         // STRADDLE: some of the sticker on the banner, some off it. Requiring a near-even split
-        // would encode a ratio the Driver explicitly left open ("probably an equal or more
-        // overlap"); requiring BOTH sides to be non-trivial is the property actually stated.
+        // would encode a ratio the brief explicitly left open (probably an equal or larger
+        // overlap); requiring BOTH sides to be non-trivial is the property actually stated.
         const onBanner = Math.round(fb.bottom - rb.top)
         const offBanner = Math.round(rb.bottom - fb.bottom)
         if (onBanner < 4 || offBanner < 4) {
@@ -274,9 +283,9 @@ async function measure(width, lang) {
           worstTape = Math.abs(d) > Math.abs(worstTape) ? d : worstTape
         }
       }
-      // ★ NO NATIVE DROPDOWN IN THE DEFAULT ROW (same ruling). The Driver's reason is not
-      // cosmetic: "I don't want to add the dropdown for the card because it makes it hard for
-      // others to have dropdowns too" — a <select> here collides with the host page's own
+      // ★ NO NATIVE DROPDOWN IN THE DEFAULT ROW (same ruling). The reason is not cosmetic: a
+      // dropdown on the card makes it hard for others to have dropdowns too — a <select> here
+      // collides with the host page's own
       // selects. The size picker is a disclosure, revealed by the Card Deck button. A <select>
       // reappearing in .pfs is the regression this catches.
       if (row.querySelector('select')) selectsInRow++
@@ -331,14 +340,14 @@ async function measure(width, lang) {
     // the text did not fit its box.
     const clipped = ctrls.filter((e) => e.scrollWidth > e.clientWidth + 1)
     // ★ DENSITY: how many posters share a row, and how wide each is.
-    // The Driver asked for "around 4 per row on desktop, like Instagram". The grid is ONE rule for
+    // The ask: around 4 per row on desktop, like Instagram. The grid is ONE rule for
     // every width — repeat(auto-fill, minmax(210px,1fr)) — so the count falls out of the viewport
     // rather than being chosen, and NOTHING measured it. The card's own verify says it: "perRow is
     // currently printed nowhere and asserted nowhere. A number printed but not asserted on is
     // decoration."
     // ⚠ REPORTED, NOT YET ASSERTED, and that is deliberate. The desktop target is settled (~4) but
     // the MOBILE one is not: 3 per row at 390px is a ~120px card, which cannot hold the wrapped
-    // print footer this same gate asserts is readable. Asserting a number the Driver has not
+    // print footer this same gate asserts is readable. Asserting a number no one has
     // ruled on would encode my taste as a requirement. Measuring it first is what makes the
     // ruling answerable — and it is the precondition for tuning, since you cannot tune toward a
     // target you are not measuring.
@@ -348,7 +357,7 @@ async function measure(width, lang) {
     // row sizes [5,5,5,3,3,2,2,1,1] — the short rows are the REMAINDERS of collapsible sections,
     // not a density failure. Reading the first row alone would be right here by luck and wrong on
     // a wall whose first section holds one poster. The max across all rows is the density the
-    // Driver's "around 4 per row" is about; cardW is reported beside it because the two move
+    // "around 4 per row" ask is about; cardW is reported beside it because the two move
     // together and the width is what explains the count.
     let perRow = 0, cardW = 0
     if (cards.length) {
@@ -364,7 +373,8 @@ async function measure(width, lang) {
              overflowing, worst, intrusions, coveringPreview, worstY,
              previewsPainted, previewsBroken, noPreview, unnamedPreview, clipped: clipped.length,
              controls: ctrls.length, tiny: tiny.length, perRow, cardW,
-             notTaped, worstTape, selectsInRow, headNotTaped, worstHead, mapCovered, worstCover }
+             notTaped, worstTape, selectsInRow, headNotTaped, worstHead, mapCovered, worstCover,
+             uncontained, worstBelow }
   })()`)
   await page.close()
   return { width, lang, hover, reach, ...out }
@@ -382,6 +392,7 @@ console.log(`  leaf      : ${LEAF}`)
 for (const r of results) {
   console.log(`  ${(r.lang || 'en').padEnd(2)} ${String(r.width).padStart(4)}px   cards ${String(r.cards).padStart(2)}`
     + ` · overflow ${r.overflowing}${r.worst ? ` (${r.worst}px)` : ''}`
+    + ` · below-card ${r.uncontained}${r.worstBelow ? ` (${r.worstBelow}px)` : ''}`
     + ` · neighbour ${r.intrusions}`
     + ` · over-preview ${r.coveringPreview}${r.worstY ? ` (${r.worstY}px)` : ''}`
     + ` · off-frame ${r.notTaped}${r.worstTape ? ` (${r.worstTape > 0 ? '+' : ''}${r.worstTape}px)` : ''}`
@@ -408,6 +419,7 @@ for (const r of results) {
   if (!r.rows) { fails.push(`${at}: ${r.cards} card(s) but none carry a .pfs print-options row`); continue }
   if (r.intrusions) fails.push(`${at}: ${r.intrusions} print row(s) overlap a NEIGHBOURING card`)
   if (r.overflowing) fails.push(`${at}: ${r.overflowing} print row(s) extend past their own card (worst ${r.worst}px)`)
+  if (r.uncontained) fails.push(`${at}: ${r.uncontained} print row(s) hang below their own card's box (worst ${r.worstBelow}px): the card must contain its row`)
   // ⚠ "Nothing overflows" is trivially satisfied by a row whose buttons collapsed to nothing.
   if (r.tiny) {
     fails.push(`${at}: ${r.tiny} print control(s) shrank below a usable size — fitting the row by `
@@ -420,11 +432,11 @@ for (const r of results) {
       + '(scrollWidth exceeds clientWidth) — the button is big enough to press and no longer says '
       + 'what it does')
   }
-  // The row belongs BELOW the preview. Driver-reported 2026-09-24: "the download print options are
-  // not showing up under the blue outline, they are overlapping where the blue outline would be".
+  // The row belongs BELOW the preview. Reported 2026-09-24: the download/print options were not
+  // showing under the blue outline; they overlapped where the blue outline would be.
   // THE PREVIEW MUST ACTUALLY BE THERE. A card with no image passes every geometry assertion
-  // above trivially — nothing can overlap what does not render. Driver 2026-09-24: "it is supposed
-  // to show the previews".
+  // above trivially — nothing can overlap what does not render. The wall is
+  // supposed to show the previews (2026-09-24).
   if (r.unnamedPreview) {
     fails.push(`${at}: ${r.unnamedPreview} poster preview(s) have no alt text — the card's own text `
       + 'is a count and an action ("116 UPG · Show on map"), so the alt is the ONLY thing naming '
@@ -446,8 +458,8 @@ for (const r of results) {
       + '"slight overlap over the banner, but not over the content of the banner". A row '
       + 'floating clear of the banner is as wrong as one covering the map.')
   }
-  // ★ THE ONE THE DRIVER CARES ABOUT MOST. "The preview banner to showcase a map should not
-  // have anything overlapping the map because the map needs to be fully visible."
+  // ★ THE ONE THAT MATTERS MOST: nothing may overlap the map on the preview banner that showcases
+  // it, because the map needs to be fully visible.
   if (r.mapCovered) {
     fails.push(`${at}: ${r.mapCovered} sticker(s) OVERLAP the map preview (worst ${r.worstCover}px). `
       + 'The banner\'s header and footer stickers straddle the banner\'s edges; the map inside is '

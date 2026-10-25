@@ -2,7 +2,7 @@
  * fetch-doxa-people-groups.mjs — the 2,107 people groups DOXA actually prays for.
  *
  * ═══ WHY THIS EXISTS ════════════════════════════════════════════════════════════════════
- * This map was built on the full 12,379-pin people-groups dataset, and the Driver's reading
+ * This map was built on the full 12,379-pin people-groups dataset, and the reading
  * of it was blunt and correct: it is MISLEADING for the job it is meant to do. Doxa does not
  * work 12,379 groups. They work the ~2,100 on pray.doxa.life, and a map that shows every
  * group on earth buries the ones they can actually reach — and paints countries by a gap

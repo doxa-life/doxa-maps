@@ -190,19 +190,18 @@ function onClearAll() { emit('clear-all') }
     <!-- ★ THE SELECTIONS ROW IS PERMANENT — it must never leave the DOM.
          This was v-if="useFilters && chips.length", so the row DISAPPEARED whenever nothing was
          selected. That is the actual bug, and it is layout shift rather than chip placement:
-           "whenever I deselect it, it removes that space from the second header... the decompression
-            of the height causes the ENTIRE LOWER APP TO SHIFT UPWARD, which makes it really hard to
-            track with your eyes." (Driver, 2026-09-22)
+         deselecting removed the row's height, so the ENTIRE LOWER APP SHIFTED UPWARD, which is very
+         hard to track with the eyes.
          A row that appears on select and vanishes on clear moves the map, the table and the grid on
          every single click. The row now always renders and only its CONTENTS change, so nothing below
          it can move.
-         The empty state is "World" — the Driver's word, and it reads correctly too: no filter really
+         The empty state is "World", and it reads correctly: no filter really
          does mean the whole world is in scope. Clear-all is omitted rather than the row collapsing,
          because there is nothing to clear; the row keeps its height either way. -->
     <!-- ★ CLEAR ALL TRAVELS WITH THE CHIPS — it is the LAST CHILD OF THE SCROLL STRIP
          (card BUILD-CLEAR-ALL-SITS-BESIDE-THE-SELECTIONS-NOT-FAR-RIGHT).
-         DRIVER: "the clear all button is to look fancy, fancy Nancy. And it doesn't need to be at
-         the far right. It needs to be right next to the selected stuff."
+         The Clear All button should look polished, and it belongs right next to the
+         selections, not at the far right.
 
          THIS DELIBERATELY REVERSES the previous instruction (kept below for the record, because
          the reasoning was sound and someone will be tempted to re-apply it): Clear All used to be
@@ -285,7 +284,7 @@ function onClearAll() { emit('clear-all') }
    which is why FilterDropdown's menu is position:FIXED and escapes the clip chain entirely
    rather than trying to out-z-index it. Do not "restore" an overflow-y here; it cannot work. */
 /* ★ CENTRED AS A GROUP, EVENLY SPACED (card BUILD-THE-FOUR-HEADERS-ARE-ONE-CENTRED-STACK).
-   DRIVER: "evenly spaced out so that everything is centred, not justified left."
+   Evenly spaced, so that everything is centred rather than justified left.
 
    MEASURED BEFORE at 1600x900 standalone: the triggers started 14px from the left edge and ended
    242px from the right — a quarter-screen of dead space on one side only, which is precisely what
@@ -302,15 +301,15 @@ function onClearAll() { emit('clear-all') }
    The unprefixed fallback is listed first for engines without `safe` — they get plain centring,
    which is the pre-existing behaviour for the fitting case and no worse for the other. */
 /* ★ THE SLACK GOES BETWEEN THE TRIGGERS, NOT INTO TWO EDGE VOIDS
-   (card BUILD-CENTRE-THE-SEARCH-BAR-AND-SPREAD-THE-FILTER-TOGGLES). DRIVER: "the dropdown
-   toggles for the filters need to be centred also, so that they FILL UP THE FULL WIDTH, equally
-   spaced to fill up the second header."
+   (card BUILD-CENTRE-THE-SEARCH-BAR-AND-SPREAD-THE-FILTER-TOGGLES). The filter dropdown
+   toggles are centred too, so that they FILL THE FULL WIDTH of the second header, equally
+   spaced.
 
    MEASURED at 1600x900 standalone BEFORE this change: the row is 1572px wide and its content is
    6 triggers x 168px + 5 gaps x 10px = 1058px — so scrollWidth (1572) == clientWidth (1572),
    `overflowing: false`, with 514px of slack. Centring alone therefore parks ~257px of dead space
    at EACH edge, which is what "not filling the width" looks like in numbers. The row is NOT
-   overflowing at desktop width, so the horizontal scrollbar the Driver complained about is a
+   overflowing at desktop width, so the reported horizontal scrollbar is a
    narrow-viewport artifact, not the desktop case.
 
    `space-between` would push the first and last triggers hard against the edges, breaking the
@@ -328,14 +327,14 @@ function onClearAll() { emit('clear-all') }
    The studio host was measured overflowing once already (right gutter -40), so this is a live
    case, not a hypothetical — do not simplify this to a single unguarded value. */
 /* ★ WRAP, DO NOT SCROLL (2026-09-23). This row was flex-wrap:nowrap + overflow-x:auto — a
-   horizontal SCROLLER. The Driver's constraint is explicit: "I shouldn't see any horizontal scroll
-   bar in the filter section. You need to resize everything, but everything is visible."
+   horizontal SCROLLER. The constraint is explicit: no horizontal scrollbar in the filter section;
+   everything resizes and everything stays visible.
    MEASURED with the eighth dropdown (engagement/Status) added: the dropdowns are a fixed 168px on a
    200px pitch, so eight need ~1428px. At a 1440 viewport that just fits (maxRight 1428); at 1280 it
    did not, and sfh__filters-row reported scrollWidth 1414 against clientWidth 1252 — a scrollbar,
-   exactly what he asked not to see.
+   exactly what was asked not to be shown.
    Wrapping is the right lever rather than shrinking the dropdowns: their fixed 168px width is itself
-   a Driver decision ("filters not so wide"), and a flexible width was what made them jump as a
+   a product decision (filters not so wide), and a flexible width was what made them jump as a
    selection changed. So the row now flows onto a second line when it must.
    ★ AND START THE WRAPPED LINE ON THE SAME LEFT EDGE (2026-09-23). `space-evenly` was kept here
    when wrapping landed, on the reasoning that `safe` made it harmless. That reasoning was about a
@@ -384,12 +383,12 @@ function onClearAll() { emit('clear-all') }
    set TOGETHER, every time either moves.
 
    ★ 18px, AND THE OLD 24px MEASUREMENT IS NOT EVIDENCE IT WAS RIGHT
-   (card BUILD-SELECTED-ROW-MUCH-THINNER-AND-CENTRED). DRIVER, twice in one message: "the selected
-   row is way too tall, needs to be thinner, a lot thinner, a lot more subtle."
+   (card BUILD-SELECTED-ROW-MUCH-THINNER-AND-CENTRED). Asked twice in one message: the selected
+   row was far too tall, and needed to be a lot thinner and a lot more subtle.
    A previous fix asserted rowH=24 identical across empty / one-chip / many-chip states and cited it
    as done. That measurement was TRUE and it proved the row does not RESIZE — it never said a word
-   about whether 24 is the right number, which is a different question that only the Driver can
-   answer. He has now answered it: still too tall. Do not re-cite a stability measurement as a
+   about whether 24 is the right number, which is a different question, a product one. The
+   answer came back: still too tall. Do not re-cite a stability measurement as a
    sizing one.
    He named THREE height sources, so all three come down together — reducing only the row would
    have been the same partial fix again:
@@ -398,8 +397,8 @@ function onClearAll() { emit('clear-all') }
      3. the CHIP BUTTONS                  -> .sfh__chip height 22 -> 18, font 0.9375rem -> 0.8125rem
    --dx-sel-row-h keeps the floor tokenized so a consumer can trade density back without forking.
 
-   ★ CENTRED: justify-content:center, because the Driver puts the selections directly above the map
-   — "that needs to be centred... right above the globe, centred, is going to be what is selected."
+   ★ CENTRED: justify-content:center, because the selections sit directly above the map, centred
+   right above the globe.
    ★ THE ROW ITSELF STILL DOES NOT SCROLL. overflow-x lives on .sfh__chip-strip. That split is now
    doing a different job than when it was introduced (it was there to pin Clear All OUTSIDE the
    scroller; Clear All has since moved INSIDE, per its own card) — it is kept because a scroll box
@@ -418,7 +417,7 @@ function onClearAll() { emit('clear-all') }
    would widen the row instead of scrolling inside itself.
    ★ flex is now `0 1 auto`, not `1 1 auto`. Growing was only needed while Clear All sat OUTSIDE
    as a pinned sibling — the strip had to eat all the free space to shove it to the far right.
-   That is the layout the Driver just reversed, so the growth term goes with it: at 0 1 auto the
+   That is the layout that was just reversed, so the growth term goes with it: at 0 1 auto the
    strip is only as wide as its chips (shrinking to fit when they overflow), which is what lets
    .sfh__chips centre it as a group rather than centring a full-width box that merely CONTAINS
    left-aligned chips. Keeping flex-grow here would have silently defeated the centring above.
@@ -440,8 +439,8 @@ function onClearAll() { emit('clear-all') }
    would have been a fixed-width item that the centring had to work around, pushing the chips
    off-centre by its own width. It scrolls with the chips now, which is the same trade Clear All
    makes and for the same reason: the label describes the chips, so it belongs with them.
-   0.6875rem + subtler colour: this is a LABEL, not content — the Driver asked for the row to read
-   "a lot more subtle", and shrinking the all-caps prefix is the cheapest way to drop the row's
+   0.6875rem + subtler colour: this is a LABEL, not content — the row is to read a lot more
+   subtly, and shrinking the all-caps prefix is the cheapest way to drop the row's
    visual weight without touching the chips' legibility. */
 .sfh__sel-label { flex: 0 0 auto; font-size: 0.6875rem; font-weight: 700; letter-spacing: .5px;
   text-transform: uppercase; color: var(--mut, #6d766e); opacity: .75; }
@@ -452,8 +451,8 @@ function onClearAll() { emit('clear-all') }
 /* ★ SOURCE 3 OF THE THREE HEIGHT SOURCES — "the size of the buttons that show up whenever you
    select something." 22px -> 18px, and the type comes DOWN with it (0.9375rem -> 0.8125rem).
    NOTE THIS REVERSES AN EARLIER, CORRECTLY-FOLLOWED INSTRUCTION. A previous round was told
-   "increase the font slightly of the selected row", and did: 0.85rem -> 0.9375rem. The Driver is
-   now asking for the whole row to be "a lot more subtle", and at 18px a 0.9375rem glyph does not
+   "increase the font slightly of the selected row", and did: 0.85rem -> 0.9375rem. The whole row
+   is now to be a lot more subtle, and at 18px a 0.9375rem glyph does not
    fit its box. The newer instruction wins; this is not a regression of the older one.
    white-space:nowrap keeps a two-word label on one line — a wrapped chip would grow the row and
    re-break the fixed-height invariant.
@@ -477,7 +476,7 @@ function onClearAll() { emit('clear-all') }
      the user the whole view.
      THE ROW HEIGHT IS NOT NEGOTIABLE and must not be touched here: the three comment blocks above
      record a measured layout-shift bug (18px vs a 24.25px chipped row walking the map 180 -> 182.25px)
-     and the Driver's "a lot more subtle" instruction that set 16px. Growing the button would reopen
+     and the "a lot more subtle" instruction that set 16px. Growing the button would reopen
      both.
      So the HIT AREA grows and the BOX does not. An absolutely-positioned ::after centred on the
      button claims 24x24 of pointer/touch surface while contributing nothing to the flex row's

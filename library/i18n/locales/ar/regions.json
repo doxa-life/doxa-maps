@@ -74,5 +74,6 @@
   "Countries: %count%": "الدول: %count%",
   "Regions: %count%": "المناطق: %count%",
   "countryCount": "لا دول | دولة واحدة | دولتان | {n} دول | {n} دولة | {n} دولة",
-  "regionCount": "لا مناطق | منطقة واحدة | منطقتان | {n} مناطق | {n} منطقة | {n} منطقة"
+  "regionCount": "لا مناطق | منطقة واحدة | منطقتان | {n} مناطق | {n} منطقة | {n} منطقة",
+  "Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it.": "قريبًا — ستُنشأ قائمة صلاة لكل دولة، تذكر كل مجموعة شعبية غير مبلَّغة فيها."
 }

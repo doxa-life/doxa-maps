@@ -2,10 +2,10 @@
 /**
  * check-reduced-motion-jumps.mjs — with prefers-reduced-motion, the grid→map framing must JUMP.
  *
- * ★ THE DRIVER IS PHOTOSENSITIVE. This is not a polish item: a camera that sweeps the globe every
+ * ★ A READER OF THIS MAP IS PHOTOSENSITIVE. This is not a polish item: a camera that sweeps the globe every
  * time a list is filtered is the strobe class this repo has already paid for once.
  *
- * THE DEFECT, measured by rega in a real browser with the preference set: the framing move still
+ * THE DEFECT, measured in a real browser with the preference set: the framing move still
  * animated for ~5.0s on MapLibre and ~6.7s on Mapbox — indistinguishable from no preference at all,
  * where a jump is ~0ms. The preference WAS being read correctly in research-map.vue and then thrown
  * away one layer down: useMapFly's `flyToCoords(coords, zoom)` takes NO options argument, so the
@@ -13,13 +13,13 @@
  * options)` does accept one — two functions in one file, different signatures, and nothing at the
  * call site to show it.
  *
- * ★ WHY THIS RUNS WITHOUT A BROWSER, WHICH IS THE POINT. rega found it by watching movestart →
- * moveend for six seconds; only rega can do that, and only occasionally. What can be checked any
+ * ★ WHY THIS RUNS WITHOUT A BROWSER, WHICH IS THE POINT. it was found by watching movestart →
+ * moveend for six seconds; only a real browser can do that, and only occasionally. What can be checked any
  * time, in milliseconds, is the DECISION: given the preference, which camera call does the code
  * make? So this lifts the real camera block out of the SFC, runs it against a mocked matchMedia and
  * a recording map, and asserts the call that comes out.
  *
- * It cannot prove the engine honours duration 0 — that is rega's half. It proves we ASK for a jump,
+ * It cannot prove the engine honours duration 0 — that is the browser half. It proves we ASK for a jump,
  * which is the half that was wrong.
  *
  * ASSERTIONS:
@@ -116,7 +116,7 @@ for (const l of lines) console.log(l)
 if (fails.length) {
   console.log(`\n${TAG}: FAIL`)
   for (const f of fails) console.log(`  ✗ ${f}`)
-  console.log('\n  The Driver is photosensitive. A camera that sweeps on every filter is the defect.')
+  console.log('\n  Readers may be photosensitive. A camera that sweeps on every filter is the defect.')
   process.exit(1)
 }
 console.log(`${TAG}: PASS — reduced motion asks the engine to jump on every branch, and ordinary motion is untouched.`)

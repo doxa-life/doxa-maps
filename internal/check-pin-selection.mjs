@@ -11,7 +11,7 @@
  *     this._data = typeof options.data === 'string' ? { url: options.data } : { geojson: options.data }
  *
  * so `data.features` was undefined and the reader returned an EMPTY LIST on MapLibre — the keyless
- * engine the public builds use. Measured by rega on 2026-09-28: a language-family selection and a
+ * engine the public builds use. Measured on 2026-09-28: a language-family selection and a
  * prayer selection both logged "0 pin(s) selected" with the pins plainly on screen.
  *
  * ★ THE FAILURE MODE IS WHY A TEST IS THE ONLY GUARD. Every caller is written to NO-OP when it finds no
@@ -79,7 +79,7 @@ for (const [label, src] of [['mapbox', { _data: COLLECTION }], ['maplibre', { _d
 eq('expressions are ANDed', matchesExpression(['all', ['==', ['get', 'uniqueId'], 'a'], ['==', ['get', 'languageFamily'], 'Indo-European']], FEATURES[0].properties), false)
 
 // ── PACKETSEL: the prayer count is LIVE, so the packet must read feature-state ──────────────────
-// rega, RQ3(b): the packet's "Has Prayer" selection showed 50 of 997 where the legend row said 699.
+// RQ3(b): the packet's "Has Prayer" selection showed 50 of 997 where the legend row said 699.
 // The legend is right. Polling writes each pin's current count with setFeatureState() and
 // prayer-progress.js:94 colours from ['feature-state','peoplePraying']; the GeoJSON property is
 // whatever was true at page load. Reading the property selects the wrong people to pray for, which is

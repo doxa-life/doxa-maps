@@ -1,4 +1,4 @@
 {
-  "approximate": "Il punto indica dove si trova questo popolo, non una città né un confine.",
-  "sharedPoint": "Si trova nello stesso punto di {names} — {n} gruppi condividono questa coordinata, quindi la posizione indica la zona e non dove si trova ciascun gruppo."
+  "approximate": "Il punto rappresenta un popolo, non una città né un confine.",
+  "sharedPoint": "Si trova nello stesso punto di {names} — {n} gruppi condividono questo punto."
 }

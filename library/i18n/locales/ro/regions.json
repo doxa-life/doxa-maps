@@ -74,5 +74,6 @@
   "Countries: %count%": "Țări: %count%",
   "Regions: %count%": "Regiuni: %count%",
   "countryCount": "o țară | {n} țări | {n} de țări",
-  "regionCount": "o regiune | {n} regiuni | {n} de regiuni"
+  "regionCount": "o regiune | {n} regiuni | {n} de regiuni",
+  "Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it.": "În curând — pentru fiecare țară va fi generată o listă de rugăciune, numind fiecare grup etnic neatins din ea."
 }

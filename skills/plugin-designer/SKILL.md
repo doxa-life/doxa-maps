@@ -42,7 +42,7 @@ plugin-designs/<your-plugin>/     one FOLDER = one BUNDLE (the folder name is th
 - **Folders starting with `_` are skipped** by the build: a free place for work in progress.
 - **New plugins appear in the Plugin Studio at once**, sorted into the rail by **capability**, with
   a translated "experimental" prefix until they are marked production. There is no Experimental
-  *section* to be promoted out of — the Driver replaced it with capability tiers
+  *section* to be promoted out of — it was replaced with capability tiers
   (`plugin-designs/plugin-studio/plugin-studio.vue:630`, and `:642` for the label). Stage and
   capability are different axes; see `references/glossary.md`.
 - **Your rail entry comes from `<profile>.meta.json` `"label"`**, and
@@ -84,8 +84,17 @@ provided instance. Drop the provide and a host can no longer set your plugin's l
 - **Don't edit `library/` to customise one plugin.** A library change reaches every plugin that
   imports it, so it needs every consumer rebuilt. On a team with a build owner, hand library
   changes to that owner rather than landing them yourself.
-- **Graduate late.** Move code into `library/` only when a second plugin needs the same thing
-  and it takes props instead of hard-coded specifics.
+- **Reusable by default.** If a component could serve more than one plugin, build it once in
+  `library/`, driven by props rather than hard-coded to your plugin, and land it through the build owner.
+  Other plugins then adopt it instead of copying it.
+- **A new pattern is piloted, approved, then rolled out.** It starts on one plugin, built by that
+  plugin's owner, and a maintainer approves it on the dev server (the Plugin Studio). Only then do
+  the owners of the other plugins it applies to adopt it, each in their own plugin.
+- **One shape per kind of control.** Controls on a map are round and spaced apart: put them in
+  `MapToolbar`, whose default is a spaced column of round `MapControlButton`s (both in
+  `library/components/map-controls/`), not its grouped square card (`controls="square"`). Buttons in
+  a dashboard's header bar are rounded squares with the vertical tabs' corner radius
+  (`var(--vtl-radius, 8px)` in `library/layouts/VerticalTabsLayout.vue`).
 
 ## 4. The universal props — every plugin honours these
 
@@ -94,7 +103,7 @@ header sets all of them, which is how you test yours.
 
 | Prop | Values | Channels, first found wins | Default |
 |---|---|---|---|
-| **Map engine** (`provider`) | `mapbox` · `maplibre` · `auto` (any case) | `profile-config` `"provider"` → `?provider=` in the page address → `window.MAP_PROVIDER`; an explicit choice always wins | `auto`: Mapbox when a token is available (any row below), MapLibre otherwise. Confirm in `library/composables/useMapProvider.js`, never assume it |
+| **Map engine** (`provider`) | `mapbox` · `maplibre` · `auto` (any case) | `profile-config` `"provider"` → `?provider=` in the page address → `window.MAP_PROVIDER`; an explicit choice always wins | `auto`: MapLibre. A token no longer chooses the engine: Mapbox needs `"provider": "mapbox"` plus a token (any row below). Confirm in `library/composables/useMapProvider.js`, never assume it |
 | **Language** (`locale`) | one of the 11 in `library/i18n/locales/` | `profile-config` `"locale"` (or `"lang"`) → `?lang=` / `?locale=` → `<html lang>` | English |
 | **Mapbox token** (`tk`) | a public `pk.…` token | `profile-config` `"tk"` → `?tk=` on a generated page → `window.MAP_TOKEN`; generated pages also keep a token pasted once in the tree (browser storage) | none. The embed snippet's `YOUR_MAPBOX_TOKEN` placeholder counts as no token |
 | **Token service** (`tokenUrl`) | a URL that returns a `pk.` token | `profile-config` `"tokenUrl"` (the element asks it when it has no token; the studio header's field feeds this) → on generated pages also `window.MAP_TOKEN_URL` → the build config's `tokenUrl` → same-origin `/api/maps/token` | none |
@@ -147,6 +156,16 @@ real bug:
    ```
 
    Run each paint and filter expression your layers use against a few real features from the data.
+8. **ATTRIBUTION PLACEMENT (best practice).** The engine's credit is a licence term, so it must always
+   be on the map, uncovered and tappable. On a phone:
+   - **A map with a footer legend sheet** (`LegendMobile`): the credit goes in the **top corner on the
+     start side** (top-left; top-right in RTL), opposite the map's control column. LegendMobile does
+     this while it is mounted.
+   - **A map without a footer sheet**: the credit goes at the **bottom-right** (bottom-left in RTL).
+   - **Both**: the credit is compact and **folds to its (i) 3 s after it first shows**; a tap on the (i)
+     expands it again. Its corner's z-index sits **above the scroll-edge strips** (`.map-scroll-edge`,
+     z-index 2), so the tap always lands.
+   - Remove MapLibre's optional logo control. Its licence does not require it; the credit stays.
 
 ## 6. Localization and right to left
 
@@ -172,7 +191,7 @@ levels 1 and 2 are detected on their own.
 | 2 | preset element (`parameterized`) | one screen, several named presets from `<screen>.instances.json` | `plugin-designs/doxa-simple-map/` |
 | 3 | multi-view element (`monolithic`) | many views fused inside one element | `plugin-designs/doxa-research-map/` |
 | 4 | composite element (`nested-elements-mfe`) | nests other elements, each still embeddable alone, wired by props and events | `plugin-designs/dashboard-plus-grid/` (the Big Picture tab) |
-| 5 | app shell (`nested-mfe-spa`) | nests whole apps | `plugin-designs/doxa-maps-spa/` (the Research Gallery) |
+| 5 | app shell (`nested-mfe-spa`) | nests whole apps | `plugin-designs/doxa-maps-spa/` (Deep Research) |
 
 **Your declaration is checked, not merely trusted.** `internal/check-capability-derived.mjs`
 derives the level from what your plugin actually `composes` and fails when an explicit `"type"`
@@ -202,7 +221,7 @@ line number, because lines move.
 | Interop: one element reacts to another's events | Simple Research: `plugin-designs/research-map-plus-grid/research-map-plus-grid.vue` | the map listening for the grid's `groups-filtered` event |
 | Composite element (capability 4) | Big Picture: `plugin-designs/dashboard-plus-grid/dashboard-plus-grid.meta.json` | `"composes"`: two elements, each still embeddable alone |
 | One bundle, several embeddable screens | UPG-100: `plugin-designs/my-upg-100-list/` | `upg-100-mfe`, `upg-100-list` and `poster-wall` from one bundle |
-| App shell (capability 5) | Research Gallery: `plugin-designs/doxa-maps-spa/doxa-maps-spa.vue` | every plugin as a tab, filled from the manifest |
+| App shell (capability 5) | Deep Research: `plugin-designs/doxa-maps-spa/doxa-maps-spa.vue` | every plugin as a tab, filled from the manifest |
 
 `emissivePaint` and `labelFont` (section 5) have no production-plugin exemplar, because the
 production plugins get them through the library's own layers. The starter uses both directly:
@@ -213,7 +232,7 @@ read the pin and label layers in `plugin-designs/template-bundle/template-map-a.
 ```bash
 bun run dev                              # the Plugin Studio at http://localhost:5173/
 BUNDLE=<your-plugin> bun x vite build    # just your bundle → public/dx-maps/<your-plugin>/
-git add -A && git commit -m "…" && git pull --rebase origin main && git push origin HEAD:main
+git add -A && git commit -m "…" && git pull --rebase origin development && git push origin HEAD:development
 ```
 
 - Your plugin appears in the studio as soon as its folder exists; edits reload live. One screen
@@ -239,7 +258,7 @@ tag from any host), the **mobile app** (the same folder wrapped by Capacitor, `b
 the **desktop app** (the same folder in Tauri, `bun run tauri:build`, a proof of concept).
 
 **Your plugin runs everywhere unless you say otherwise.** A `<profile>.meta.json` `"targets"` list
-narrows that, and it is read, not decorative: the Research Gallery skips a bundle that does not
+narrows that, and it is read, not decorative: Deep Research skips a bundle that does not
 list `web` (`plugin-designs/doxa-maps-spa/doxa-maps-spa.vue:605`). Declare it only for a plugin
 that genuinely cannot work in a plain web embed — Rudder needs a local speech engine. Details:
 `references/targets.md`.

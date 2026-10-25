@@ -120,7 +120,7 @@ A URL that returns a public token as JSON (`{token|tk|accessToken}`) or as a bar
   found; a token baked at build time wins.
 - **The studio:** the reader's URL (localStorage). The studio fetches it itself, and the fetched
   token then travels as `tk` / `window.MAP_TOKEN`.
-- **Plugins:** none reads `profile-config.tokenUrl` today. The studio and the Research Gallery
+- **Plugins:** none reads `profile-config.tokenUrl` today. The studio and Deep Research
   forward it, but no element consumes it (see the open points below).
 
 ## 5. People-group list: `'doxa'` | `'unreached'` | `'frontier'` | `'frontier-500k'` | `'unengaged'`
@@ -158,7 +158,7 @@ the IMB / peoplegroups.org dataset (never a hand-kept roster). Aliases name them
 
 ## Open points found while writing this down
 
-Each is a defect or a decision, routed through dx-shepherd.
+Each is a defect or a decision, still open.
 
 1. **`profile-config.tokenUrl` has no reader.** It is written by the studio and the gallery and
    read by nothing. The reader's own URL is also never forwarded as `tokenUrl`, only as the token

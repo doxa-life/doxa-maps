@@ -2,8 +2,9 @@
 /**
  * sync-dropin.mjs — mirror the built web-root (public/) into a HOST checkout as a "drop-in".
  *
- * WHY: the website (doxa-life) consumes this bundler's output as generated files under
- * public/embed/doxa-maps-build/. Hand-editing there is forbidden — the ONLY way a map changes
+ * WHY: the website (doxa-life) consumes this bundler's output as generated files: the tree folder
+ * (dx-maps/) dropped straight into its public/, so one server serves the site and the maps. Hand-
+ * editing there is forbidden — the ONLY way a map changes
  * on the site is: change the bundler → `bun run build` → sync. This is that one honest step,
  * so it is a script and not a remembered rsync incantation.
  *
@@ -38,9 +39,9 @@
  * Refuses to CREATE <dest>: the drop-in folder is the host's decision, not this script's.
  * Gate: `node internal/public-hygiene-check.mjs <dest> --strict` must pass before a public push.
  *
- * Usage:  node internal/sync-dropin.mjs <dest> [--from public] [--tree doxa-maps] [--keep-staging]
+ * Usage:  node internal/sync-dropin.mjs <dest> [--from public] [--tree doxa-maps] [--keep-staging] [--if-present]
  *           [--only a,b | --from-config] [--prune] [--protect a.txt,other] [--dry-run]
- *   e.g.  node internal/sync-dropin.mjs ../doxa-life/public/embed/doxa-maps-build --from-config --prune
+ *   e.g.  bun run dropin      (= --from-config, into dropin.dest: ../doxa-life/public)
  * Prints: copied · unchanged · deleted (stale inside the allowlist) · pruned (outside it) ·
  *         excluded (credentials/docs/staging) · excluded (not shipped: dropin.exclude), then the
  *         destination's top-level tree after the sync.
@@ -48,7 +49,7 @@
  * Review the result with `git -C <host> status` — the host repo is the restore point.
  */
 import { readdirSync, statSync, lstatSync, mkdirSync, copyFileSync, rmSync, existsSync, readFileSync, realpathSync } from 'node:fs'
-import { join, relative, resolve, dirname, sep } from 'node:path'
+import { join, relative, resolve, dirname, sep, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { TREE_NAME } from './_tree-name.mjs'
@@ -61,7 +62,10 @@ const VALUE_FLAGS = new Set(['--from', '--tree', '--protect', '--only'])
 const argOf = (k, d) => { const i = args.indexOf(k); const v = args[i + 1]; return i >= 0 && v !== undefined && !v.startsWith('--') ? v : d }
 // Destination: positional <dest> · else DOXA_DROPIN_DEST · else "dropin.dest" in the build-config
 // (the ONE place the host folder is declared; moving the drop-in = changing that line).
-const configDest = (() => { try { const d = JSON.parse(readFileSync(CONFIG, 'utf8')).dropin?.dest; return typeof d === 'string' && d.trim() ? resolve(ROOT, d.trim()) : null } catch { return null } })()
+// A config that EXISTS but does not parse is recorded, never swallowed: with --if-present a silent null would read
+// as "no destination configured" and a green build would never refresh the site.
+let configBroken = ''
+const configDest = (() => { try { const d = JSON.parse(readFileSync(CONFIG, 'utf8')).dropin?.dest; return typeof d === 'string' && d.trim() ? resolve(ROOT, d.trim()) : null } catch (e) { if (existsSync(CONFIG)) configBroken = e.message; return null } })()
 const DEST = args.find((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(args[i - 1])) || process.env.DOXA_DROPIN_DEST || configDest
 const FROM = resolve(ROOT, argOf('--from', 'public'))
 const DRY = args.includes('--dry-run')
@@ -85,8 +89,28 @@ const excludedInternal = (f) => EXCLUDE.has(f) || isDoc(f) || isStaging(f)
 const excluded = (f) => excludedInternal(f) || isNotShipped(f)
 
 const usage = 'usage: node internal/sync-dropin.mjs [<dest>] [--from public] [--only a,b | --from-config] [--prune] [--protect a,b] [--dry-run]   (<dest> defaults to $DOXA_DROPIN_DEST, then dropin.dest in vite.doxa-maps-build-config.json)'
+if (configBroken && (args.includes('--if-present') || args.includes('--from-config'))) {
+  console.error(`[sync-dropin] build config unreadable: ${norm(relative(ROOT, CONFIG))}: ${configBroken}`)
+  process.exit(1)
+}
+if (!DEST && args.includes('--if-present')) { console.log('[sync-dropin] skipped: no drop-in destination configured (dropin.dest)'); process.exit(0) }
 if (!DEST) { console.error(`[sync-dropin] ${usage}`); process.exit(1) }
 const dest = resolve(DEST)
+// ★ --prune INTO A SITE'S WEB-ROOT WOULD DELETE THE SITE. --prune removes every file in <dest> outside the
+// allowlist, which was right while <dest> was a folder of its own (public/embed/doxa-maps-build). The
+// one-server drop-in goes straight into the site's public/, so <dest> IS the site and everything outside
+// dx-maps/ would go. Refuse it outright rather than trust that nobody types it.
+if (PRUNE && basename(dest) === 'public') {
+  console.error(`[sync-dropin] refusing --prune into ${dest}: it is a site's web-root, and --prune would delete every file of the site outside the drop-in. Sync without --prune (bun run dropin); stale files INSIDE the drop-in are still removed.`)
+  process.exit(1)
+}
+// --if-present (the full build's last step): the configured host is OPTIONAL. Its absence is a skip, not an error.
+// Only the ONE configured path is checked (dropin.dest, or DOXA_DROPIN_DEST): nothing on the filesystem is searched
+// for other repos or sites. DOXA_DROPIN=off skips it even when the host is there.
+if (args.includes('--if-present')) {
+  if (process.env.DOXA_DROPIN === 'off') { console.log('[sync-dropin] skipped: DOXA_DROPIN=off'); process.exit(0) }
+  if (!existsSync(dest) || !statSync(dest).isDirectory()) { console.log(`[sync-dropin] skipped: no host at the configured path ${dest}`); process.exit(0) }
+}
 if (!existsSync(dest) || !statSync(dest).isDirectory()) { console.error(`[sync-dropin] dest does not exist or is not a directory: ${dest} — create the drop-in folder in the host first`); process.exit(1) }
 if (!existsSync(FROM)) { console.error(`[sync-dropin] source missing: ${FROM} — run \`bun run build\` first`); process.exit(1) }
 

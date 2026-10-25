@@ -23,7 +23,7 @@
  * DashboardSearchHeader (DOXA-LIB-3) remains available in the kit but is not mounted here.
  */
 import { computed, watch, inject, ref, unref, onMounted, onBeforeUnmount } from 'vue'
-import { tStatic } from '@map/i18n/index.js'
+import { tStatic, formatList } from '@map/i18n/index.js'
 
 // This component's chrome, read out of the catalogue. tStatic and not useI18n: these mount inside
 // custom elements that install no i18n plugin, and an unguarded useI18n() throws on the way in and
@@ -115,7 +115,7 @@ const mergedConfig = computed(() => {
 // table 269px over 54834px of rows — so a wheel anywhere in the lower third lands on the table,
 // which has 54 thousand pixels of its own to consume and never passes anything upward. MEASURED:
 // the same gesture moved the page 2311px lower down and 300px over the dashboard. The grid below
-// was unreachable by the gesture the Driver actually makes.
+// was unreachable by the gesture readers actually make.
 //
 // It is a LAYOUT MISMATCH, not a CSS property — two philosophies stacked. overscroll-behavior does
 // not help (it governs chaining OUT of an element that has bottomed out; this one never bottoms
@@ -183,7 +183,10 @@ function announce() {
   // chips that carry that answer are exactly what a screen-reader user cannot glance at.
   const active = Object.keys(bus.filterSet)
   if (active.length) {
-    const names = active.map((k) => mergedConfig.value.facets?.[k]?.label || k).join(', ')
+    // CONJUNCTION: these are separate facets that all hold at once — Religion AND Affinity Bloc AND
+    // Country — each one narrowing the set further. Read aloud, so the connector is the difference
+    // between a list and a sentence in most locales.
+    const names = formatList(active.map((k) => mergedConfig.value.facets?.[k]?.label || k), { type: 'conjunction' })
     msg += ' · ' + T('dashboard.filters_live', 'Filters: {list}').replace('{list}', names)
   }
   const q = (bus.searchTerm?.value || '').trim()
@@ -311,14 +314,15 @@ useShadowStyles(`
      authored panels, so the dashboard rendered a COOLER palette than the light shell hosting
      it. Nobody chose that; each panel simply invented its own hex.
 
-     Values are the live DX-life site's material-light palette (see
-     _qa-cycle/01-ideation-research/REFERENCE-slim-material-ui-standards.md, REF-slim-material-ui-standards).
+     Values are the live DX-life site's material-light palette, taken FROM THE SITE rather than
+     re-invented here — which is what stops an embedded dashboard reading cooler than the page
+     hosting it.
      LIGHT ONLY — there is no dark mode in this product and none may be added.
 
      ★ SCOPE: this law governs UI CHROME — panels, cards, type, borders, controls; everything
      whose colour comes from a token above. It does NOT govern BASEMAP TILES. The map panel
-     renders a dark basemap ('galaxy' — black ground, blue water, set in dashboard.config.js on
-     the Driver's 2026-09-23 ruling), and that is DELIBERATE, not drift: a basemap is imagery the
+     renders a dark basemap ('galaxy' — black ground, blue water, set in dashboard.config.js),
+     and that is DELIBERATE, not drift: a basemap is imagery the
      data is drawn ON, chosen for choropleth contrast, not a surface the UI is themed with. A
      dark map inside light chrome is the intended composition. Do not "fix" it to match the
      palette, and do not cite it as precedent for darkening any chrome.
@@ -338,19 +342,19 @@ useShadowStyles(`
     --rd-primary:var(--dx-accent);
     /* ── RAIL BALANCE (card BUILD-REBALANCE-THE-TWO-SIDEBARS) ────────────────────────────
        The charts rail used to be 312px against the tree rail's 248px — the CHARTS rail was
-       64px WIDER than the tree, which is exactly what the Driver saw ("it looks like the
-       CHART sidebar is LARGER than the TREE sidebar"). That was backwards for the content:
+       64px WIDER than the tree, so the CHART sidebar looked LARGER than the TREE sidebar.
+       That was backwards for the content:
        the tree carries long multi-word labels (bloc/cluster/region names) that must read on
        ONE line, while the charts carry a donut plus a legend that can wrap.
        So the widths SWAP ROLES: the tree takes the wider column, the charts the narrower.
        The pair still sums to 560px, so the centre map cell is unchanged. */
-    /* ★ SYMMETRIC SIDEBARS (Driver 2026-09-23: "the charts sidebar can be wider so it is the
-       same width as the left sidebar, which will put the map in the exact center"). rail
-       264 -> 296 = facet width; equal flanks centre the middle column by construction. */
+    /* ★ SYMMETRIC SIDEBARS: the charts rail is as wide as the tree rail, which puts the map in the
+       exact centre. rail 264 -> 296 = facet width; equal flanks centre the middle column by
+       construction. */
     --facet-w:296px; --rail-w:296px;
     /* ── ★ ONE EDGE GUTTER FOR THE WHOLE HEADER STACK ────────────────────────────────────
-       (card BUILD-THE-FOUR-HEADERS-ARE-ONE-CENTRED-STACK: "on the edges there should be padding
-       so that everything lines up perfectly.")
+       (card BUILD-THE-FOUR-HEADERS-ARE-ONE-CENTRED-STACK: one edge padding for every band, so
+       everything lines up.)
        MEASURED BEFORE at 1600x900: topbar padding 14px, filters band 14px, KPI strip 16px. The
        KPI band was inset 2px further than the two bands above it, so the stack's left edge was a
        2px staircase rather than a line. Nobody chose that — each band picked its own number
@@ -359,15 +363,15 @@ useShadowStyles(`
        and a consumer can retune the whole stack's margin with one value. */
     --rd-edge:14px;
     /* ── ★ STATS-ROW HEIGHT, TOKENIZED (card BUILD-SLIM-THE-THREE-HEADERS) ─────────────────
-       DRIVER, 2026-09-23: "the three headers ... can be potentially slimmer ... I don't want a
-       super tall big picture dashboard. I want it to be visible all at once" — the goal is an
+       Asked 2026-09-23: the three headers can be slimmer — not a
+       super tall big picture dashboard, but one visible all at once. The goal is an
        AFFORDANCE (the people-groups grid peeking below the fold), not a size limit, so this is a
        density pass, not a deletion.
        MEASURED at 1440x900: the KPI strip's own content (.kpi — a single baseline row, .n at
        15px/800 beside .l at 10px) is 18px tall, centred via align-items:center inside a grid row
        FIXED at 42px by .rd-shell's grid-template-rows — 24px of that 42 is empty space around an
        18px line, the largest untouched margin of the three header bands (the topbar and filters
-       band were both already driven to a Driver-set floor in earlier cards; see their own notes).
+       band were both already driven to a specified floor in earlier cards; see their own notes).
        30px keeps 6px of breathing room above and below the 18px content — visibly padded, not
        clipped — and recovers 12px with zero information loss.
        Tokenized (not a bare literal) because 42px is repeated in THREE places that must stay in
@@ -439,7 +443,7 @@ useShadowStyles(`
   .rd-rz::after{ content:''; position:absolute; background:transparent; border-radius:var(--r-pill,999px); transition:background .15s; }
   /* Logical margins: the grid mirrors under dir=rtl (grid-template-columns + justify-self both
      follow the inline direction), so a physical margin-right put the handle's 4px overhang on the
-     wrong side of its own column in Arabic. go-int's board already used the logical pair. */
+     wrong side of its own column in Arabic. the gospel-internet board already used the logical pair. */
   .rd-rz-facet{ grid-area:facets; justify-self:end; align-self:stretch; width:8px; margin-inline-end:-4px; cursor:col-resize; }
     .rd-rz-rail{ grid-area:rail; justify-self:start; align-self:stretch; width:8px; margin-inline-start:-4px; cursor:col-resize; }
   .rd-rz-table{ grid-area:map; align-self:end; justify-self:stretch; height:8px; margin-bottom:-4px; cursor:row-resize; }
@@ -447,7 +451,7 @@ useShadowStyles(`
   .rd-rz-table::after{ top:50%; left:50%; transform:translate(-50%,-50%); width:34px; height:3px; }
   /* ── SHELL HANDLE (page-scroll mode only) — the boundary between the WHOLE research-dashboard
      element and whatever a host stacks below it (BUG-SHELL-HANDLE-BOUND-TO-WRONG-DIVIDER: this is
-     the control the Driver actually asked for — "resize the height of the page" — which a previous
+     the control that resizes the height of the page, which a previous
      pass mistakenly bound to .rd-rz-table above instead). Positioned OUTSIDE the grid (the shell is
      already position:relative) rather than given a grid-area, because it must span all THREE
      columns (facets + map/table + rail) regardless of their widths, and no single grid-area does
@@ -471,7 +475,7 @@ useShadowStyles(`
        - justify-content:safe center, so the KPI tiles read as a centred group like the bands
          above rather than a left-justified run. MEASURED BEFORE: the 6 tiles spanned x=16..852
          inside a 1600px band — i.e. they occupied the left half and left ~750px of white space on
-         the right, which is the "justified left" the Driver is describing.
+         the right, which is the "justified left" described in the report.
      safe matters here as much as on the filter row: this band is overflow-x:auto, and plain
      centring on an overflowing scroller pushes the first tile to a negative, unreachable offset. */
   .rd-stats{ display:flex; align-items:center; gap:var(--s5,24px); height:100%; padding:0 var(--rd-edge,14px);
@@ -504,7 +508,7 @@ useShadowStyles(`
                       span) now roots in --rd-shell-h so the total stays the single source of
                       truth and the two handles cannot fight over the same pixels. */
   /* ★ THE SHELL TOTAL NOW DERIVES FROM THE TABLE, NOT THE OTHER WAY ROUND (regression I introduced
-     in a693865 and the Driver caught immediately: "the height of the table is smaller now, but that
+     in a693865 and it was caught immediately: "the height of the table is smaller now, but that
      introduced a GAP, a grey spot ... which also broke the ability to resize the table").
      WHAT I BROKE. The design was one budget with two consumers: --rd-shell-h was the total, and the
      table's keyhole was DERIVED as shell - map - bar - foot. Capping the keyhole at 7 rows replaced
@@ -526,7 +530,7 @@ useShadowStyles(`
      the content implies", and the map ELEMENT is separately pinned to --rd-map-h. The row grows,
      the element does not, and the difference paints as dead space between the map and the table.
      MEASURED in a fresh context: shell 849 while its parts sum to 602 — a 117px gap, exactly the
-     "grey spot between the height of the map" the Driver reported twice.
+     "grey spot between the height of the map" reported twice.
      Pinning the row to the SAME var the element uses makes row and element one quantity again, so
      the slack cannot exist. Both drags keep working because both write that var (or --rd-shell-h,
      which the table's keyhole below derives from). */
@@ -535,16 +539,15 @@ useShadowStyles(`
      to divide) and wrong in page-scroll, where the shell is height:auto: 1fr then stretches to
      whatever the content implies while the map ELEMENT stays pinned at --rd-map-h. The row grows,
      the element does not, and the difference paints as dead space above the table — reported by
-     the Driver three separate times. Pinning the ROW to the same var the ELEMENT uses makes them
+     three separate times. Pinning the ROW to the same var the ELEMENT uses makes them
      one quantity, so the slack cannot exist; the table row goes auto for the same reason.
      ★ HISTORY, so this does not get reverted on a false signal again: this exact rule was applied
      earlier today and reverted when a probe reported "no shell" — the real cause was a DEAD DEV
      SERVER, not this CSS. Verified this time against a live server with a screenshot. */
   .rd-shell.rd-page-scroll{ height:auto; --table-h:auto;
     grid-template-rows: var(--rd-topbar-h,38px) auto var(--rd-stats-h,22px) var(--rd-map-h,340px) auto; }
-  /* ★ COLLAPSE GIVES ITS SPACE TO THE MAP (Driver 2026-09-23: "collapsing the table is supposed to
-     collapse down and increase the size of the map -- instead it collapsed up and introduced white
-     space under the collapsed table"). The base .rd-table-collapsed template still says 1fr for the
+  /* ★ COLLAPSE GIVES ITS SPACE TO THE MAP: collapsing the table must collapse DOWN and grow the map.
+     It used to collapse UP and leave white space under the collapsed table. The base .rd-table-collapsed template still says 1fr for the
      map row, and 1fr cannot grow in an auto-height shell -- there is no fixed total to divide -- so
      the freed space pooled under the bar as white nothing. In page-scroll the collapsed map takes
      the SAME shell budget the open state uses, minus only the bar: the one-owner derivation again,
@@ -575,7 +578,7 @@ useShadowStyles(`
      sits on top of it and is not part of that budget, so the OUTER table CELL was always
      header-bar-height taller than the map row beside it. MEASURED at 1440x900 (prior to the
      40svh default below): bar 32px, grid 558px, cell 590px against a 522px map row — a stair-step
-     the Driver's "visible on one desktop page" invariant does not allow. calc() derives the
+     the "visible on one desktop page" invariant does not allow. calc() derives the
      grid's budget from --rd-map-h MINUS the bar's own rendered height, so the two rows land at
      the SAME total and can never drift apart again the way a second hardcoded svh number could.
      --rd-table-bar-h is a var, not a literal, so DashboardDataTable can correct it if the bar's
@@ -610,11 +613,9 @@ useShadowStyles(`
      table's real bottom edge, i.e. the sidebar grey-gap bug this card is fixing. --rd-table-foot-h
      is a var (not a literal) for the same reason --rd-table-bar-h is: DashboardDataTable can correct
      it if the footer's height ever changes, without this rule going stale. */
-  /* ★ SEVEN DATA ROWS BY DEFAULT (Driver 2026-09-23, and he did the arithmetic himself):
-     "the table needs to only show SEVEN rows by default height. 7 people group rows. That's NOT
-      including the header. If you include the field, there'll be 8 rows. If you include the footer,
-      that'd be 9. If you include the table's header, 10. But 7 actual data people groups."
-     That also settles an earlier ambiguity: he had said 77 and 7 in one breath; 7 is DATA ROWS.
+  /* ★ SEVEN DATA ROWS BY DEFAULT, with the arithmetic done explicitly: the table shows SEVEN
+     people-group rows at its default height, chrome NOT counted: adding the filter field makes 8 rows'
+     height, the footer 9, and the table's header 10. 7 is DATA ROWS.
      ★ STATED IN ROWS, NOT PIXELS, deliberately. The old formula derived the keyhole by subtraction
      (shell - map - bar - foot), so the row count was whatever fell out — MEASURED 300px = 11 rows,
      not 7. Deriving from --rd-table-rows x --rd-table-row-h means the promise is the declaration:
@@ -646,7 +647,7 @@ useShadowStyles(`
      1440x900: facets 297..657 (h=360, identical to the map), table 658..1050. The sidebar ended
      where the table began.
 
-     ★ THE DRIVER HAS ASKED FOR THIS FOUR TIMES, and each earlier pass adjusted the rail's CONTENTS
+     ★ ASKED FOR FOUR TIMES, and each earlier pass adjusted the rail's CONTENTS
      instead of its BOUND: "the sidebars are supposed to pass the bottom of the map down to the
      bottom of the table, so they span the full sides of the map AND the table — you have a map and
      table in the middle surrounded by sidebars."
@@ -663,7 +664,7 @@ useShadowStyles(`
 
      ★ CORRECTED AGAIN, SAME DAY — "let the grid do the bounding" measured FALSE. min-height:0 +
      overflow:hidden with NO max-height reintroduced the original bug in a new shape: MEASURED with
-     4 of 5 trees open by default (the Driver's own correction, see DashboardFacetRail's
+     4 of 5 trees open by default (the correction, see DashboardFacetRail's
      OPEN_BY_DEFAULT), the map ROW TRACK itself grew to 1627px (gridTemplateRows became
      "52px 55px 30px 1627px 390px") and the whole band hit 2159px. Root cause: the map/table ROW
      TRACKS are 1fr/auto (line 275, --table-h:auto in this mode) — flexible tracks that size to
@@ -704,14 +705,14 @@ useShadowStyles(`
        FALLBACKS disagreed: the table keyhole fell back to 502px (seven rows) while this cap fell
        back to 720px. Nothing sets the var at rest, so the sidebars believed the shell was 119px
        taller than the table did -- the spanning columns stretched the auto table row to fit, and
-       the surplus painted as the grey band the Driver reported between/under map and table, and
+       the surplus painted as the grey band reported between/under map and table, and
        made a divider drag look broken (the row would not follow, the slack just moved).
        ONE QUANTITY, ONE OWNER applies to fallbacks too: same var, same fallback, everywhere. */
     max-height:calc(var(--rd-shell-h, 562px) + 1px); }
 
-  /* ★ THE ELEMENT MUST SIZE TO ITS CONTENT IN PAGE-SCROLL (Driver 2026-09-23: "massive grey gap
-     between map and table and the map overflows into the people-group grid page — the dashboard
-     element is not one unified element above the grid element, it is overflowing").
+  /* ★ THE ELEMENT MUST SIZE TO ITS CONTENT IN PAGE-SCROLL. The symptom: a large grey gap between the
+     map and the table, with the map overflowing into the people-group grid, so the dashboard did not
+     read as one element above the grid.
      MEASURED in the cap-5 shell at 1440x900: INSIDE the dashboard everything was tight (map bottom
      536, table top 537, gap 1px, table flush with .rd-shell at 899) while the HOST element measured
      3510px tall — 2611px of empty element below the content. That empty tail is the grey gap, and
@@ -816,10 +817,10 @@ onMounted(() => {
 <!-- (the floating "▴ Show table" restore button is gone: the table's own header bar — with its
            chevron, live count and Export CSV — now stays docked under the map while collapsed) -->
       <button v-if="!isNarrow" class="rd-edge-caret rd-edge-facet" type="button" data-toggle-facet
-              :title="facetCollapsed ? 'Show filters' : 'Hide filters — grow the map'"
+              :title="facetCollapsed ? T('dashboard.show_filters', 'Show filters') : T('dashboard.hide_filters', 'Hide filters — grow the map')"
               @click="toggleFacet">{{ facetCollapsed ? '▸' : '◂' }}</button>
       <button v-if="!isNarrow" class="rd-edge-caret rd-edge-rail" type="button" data-toggle-rail
-              :title="railCollapsed ? 'Show charts' : 'Hide charts — grow the map'"
+              :title="railCollapsed ? T('dashboard.show_charts', 'Show charts') : T('dashboard.hide_charts', 'Hide charts — grow the map')"
               @click="toggleRail">{{ railCollapsed ? '◂' : '▸' }}</button>
     </div>
     <!-- The table CELL stays mounted+visible when collapsed; DashboardDataTable hides only its own
@@ -891,7 +892,7 @@ onMounted(() => {
       <button v-for="s in SEG" :key="s.k" :class="{ on: mobileView === s.k }" data-view-btn :data-view="s.k">{{ s.l }}</button>
     </div>
     <div v-if="selCount" class="rd-exportbar" data-export-bar @click="onBarClick">
-      <b>{{ selCount }} selected</b><span class="sp"></span>
+      <b>{{ selCount }} {{ T('dashboard.selected', 'Selected') }}</b><span class="sp"></span>
       <button class="x-clr" data-bar-clear>{{ T('controls.clear', 'Clear') }}</button>
       <!-- The glyph stays a glyph and the words come from the catalogue — one spelling of this
            action across the dashboard, not two. -->

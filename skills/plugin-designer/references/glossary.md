@@ -54,7 +54,7 @@ These get confused, so keep them apart:
 - **Stage (`production` / experimental)** is *how finished* it is. It is an attribute on the
   plugin's row, not a place it lives.
 
-There is no "Experimental section" to be promoted out of. The Driver replaced that section with
+There is no "Experimental section" to be promoted out of. That section was replaced with
 capability tiers on 2026-09-27 — see the comment at `plugin-designs/plugin-studio/plugin-studio.vue:630`
 ("★ EVERY PLUGIN IS CAPABILITY 1-5 … replacing the Experimental section"). Line 642 shows what
 replaced it: a non-production row simply gets a translated `stageExperimental` prefix on its
@@ -76,4 +76,4 @@ So "give it a label" is a gate, not a convention. Run `bun run check:studio-rail
 
 - `targets.md` — capabilities, `targets`, and where a plugin is allowed to run
 - `backend.md` — data and the user tiers (design intent, not built)
-- `workflow.md` — the loop from empty folder to landed on main
+- `workflow.md` — the loop from empty folder to landed on development

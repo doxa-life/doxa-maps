@@ -5,15 +5,15 @@
  * ★ WHY. Every clone-fidelity gate here compares PROPERTIES of NAMED selectors ("the region card
  * matches on 37 of 37 properties"). All of them are blind to an element that exists on only one side,
  * because an element nobody named is an element nobody measured. Regions found an extra control and
- * an invented bar chart by eye, past eight green gates. The Driver's scope ruling is binary — "it
- * exists on their page and must MATCH, or it is a sanctioned addition" — and this executes it.
+ * an invented bar chart by eye, past eight green gates. The scope ruling is binary: it exists on
+ * their page and must MATCH, or it is a sanctioned addition. This executes it.
  * (Promoted from regions' _probe-element-census-vs-live.mjs, 2026-09-25.)
  *
  * HOW, per page pair (our leaf vs the live URL): harvest every VISIBLE TEXT NODE through every shadow
  * root on both sides (text nodes, not leaf elements — a leaf-element walk lost every country name that
  * shares its anchor with a count span and passed vacuously), then diff the two SETS:
  *   OURS-ONLY, unaccounted   an invention — a scope violation                         → FAIL
- *   OURS-ONLY, sanctioned    on the preset's allowlist, which carries the Driver's words + date + card
+ *   OURS-ONLY, sanctioned    on the preset's allowlist, which carries the ruling + date + card
  *   THEIRS-ONLY              a clone omission — something of theirs never ported        → FAIL
  *   DATA DRIFT               the same label with different digits (their pages are SSR snapshots, ours
  *                            is live) — reported, not failed
@@ -25,9 +25,9 @@
  * CENSUS IS BLIND and exits 75. No preset or ad-hoc run is accepted without one.
  *
  * PRESETS: internal/element-census/<name>.json — { owner, pages:[{name, leaf, live}], neg:{leaf, text},
- * sanctioned:[{match, flags, what, driver, date, card, theirs?, theirsFlags?}] }. `theirs` makes the entry a
+ * sanctioned:[{match, flags, what, ruling, date, card, theirs?, theirsFlags?}] }. `theirs` makes the entry a
  * SANCTIONED PAIR: their string for the same control (e.g. our "Hide Filters" / their "Show Filters"),
- * excused as an omission only while our half is on the page. An allowlist entry without the Driver's words,
+ * excused as an omission only while our half is on the page. An allowlist entry without the ruling,
  * a date and a card is REFUSED (exit 2): it is evidence, not an ignore list.
  *
  * USAGE  node internal/check-element-census-vs-live.mjs                      every preset
@@ -63,7 +63,7 @@ function validate(p, from) {
   p.neg.leaf = p.neg.leaf || p.pages[0].leaf
   if (!p.pages.some((pg) => pg.leaf === p.neg.leaf)) p.pages.push({ name: 'neg control page', leaf: p.neg.leaf, live: p.pages[0].live, negOnly: true })
   p.sanctioned = (p.sanctioned || []).map((s, i) => {
-    for (const k of ['match', 'driver', 'date', 'card']) if (!s[k]) bad(`${from}: sanctioned[${i}] has no "${k}" — every allowance carries the Driver's words, the date and the card`)
+    for (const k of ['match', 'ruling', 'date', 'card']) if (!s[k]) bad(`${from}: sanctioned[${i}] has no "${k}" — every allowance carries the ruling, the date and the card`)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.date)) bad(`${from}: sanctioned[${i}].date must be YYYY-MM-DD`)
     let re; try { re = new RegExp(s.match, s.flags || '') } catch (e) { bad(`${from}: sanctioned[${i}].match is not a regex: ${e.message}`) }
     // A SANCTIONED PAIR: `theirs` names THEIR string for the same control in its other state (their
@@ -99,7 +99,7 @@ for (const [, p] of presets) for (const pg of p.pages) {
 
 // ── our side: this checkout's tree on an OS-assigned port ─────────────────────────────────────────
 const port = await new Promise((ok) => { const s = createServer().listen(0, '127.0.0.1', () => { const n = s.address().port; s.close(() => ok(n)) }) })
-const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR], { stdio: 'ignore' })
+const srv = spawn(process.execPath, [resolve(ROOT, 'internal/serve-strict.mjs'), '--port', String(port), '--directory', DIR, '--exit-with-parent'], { stdio: 'ignore' })
 const stopSrv = () => { try { srv.kill() } catch { /* already gone */ } }
 let up = false
 for (let i = 0; i < 40 && !up; i++) { await new Promise((r) => setTimeout(r, 150)); up = await fetch(`http://127.0.0.1:${port}/${TREE_NAME}/manifest.json`).then((r) => r.ok).catch(() => false) }
@@ -145,7 +145,7 @@ const read = async (url) => {
 let violations = 0, omissions = 0, unmeasured = 0, blind = 0
 for (const [name, p] of presets) {
   console.log(`\n══ ${name} (owner: ${p.owner || '?'}) ══`)
-  const sanctionedBy = (s) => { const hit = p.sanctioned.find((x) => x.re.test(s)); return hit ? `${hit.what || hit.card} — Driver ${hit.date}: "${hit.driver}"` : null }
+  const sanctionedBy = (s) => { const hit = p.sanctioned.find((x) => x.re.test(s)); return hit ? `${hit.what || hit.card} — ruled ${hit.date}: ${hit.ruling}` : null }
   const oursByLeaf = new Map()
   let negSeenInOursOnly = null
   for (const pg of p.pages) {
@@ -193,7 +193,7 @@ for (const [name, p] of presets) {
       console.log(`    DATA DRIFT (same label, different figure — their page is an SSR snapshot, ours is live): ${drift.length}`)
       for (const [o, t] of drift.slice(0, 10)) console.log(`      ~   ours ${JSON.stringify(o.slice(0, 44))} vs theirs ${JSON.stringify(t.slice(0, 44))}`)
     }
-    for (const [t, x] of pairedTheirs) console.log(`      ok  their "${t.slice(0, 50)}" — the other half of a sanctioned pair (${x.what || x.card}, Driver ${x.date})`)
+    for (const [t, x] of pairedTheirs) console.log(`      ok  their "${t.slice(0, 50)}" — the other half of a sanctioned pair (${x.what || x.card}, ruled ${x.date})`)
     console.log(`    THEIRS-ONLY (ported nowhere on our side): ${theirsOnly.length}`)
     for (const s of theirsOnly.slice(0, 25)) console.log(`      !!  "${s.slice(0, 80)}"`)
     if (theirsOnly.length > 25) console.log(`      … and ${theirsOnly.length - 25} more`)
@@ -207,7 +207,7 @@ await browser.close(); stopSrv()
 
 console.log(`\n── ${violations} unaccounted addition(s) · ${omissions} omission(s) · ${unmeasured} page(s) not measured · ${blind} blind preset(s) ──`)
 if (violations || omissions) {
-  console.log('ELEMENT-CENSUS: FAIL — an unaccounted addition is a scope violation under the Driver\'s binary test; an omission is a clone gap. Read the lists: this reports, the owner adjudicates.')
+  console.log('ELEMENT-CENSUS: FAIL — an unaccounted addition is a scope violation under the binary scope test; an omission is a clone gap. Read the lists: this reports, the owner adjudicates.')
   process.exit(1)
 }
 if (blind || unmeasured) { console.log('ELEMENT-CENSUS: NOT MEASURED — a page did not render or the census could not see its own negative control.'); process.exit(NOT_MEASURED) }

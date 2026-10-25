@@ -1,3 +1,4 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * upg-neighbor / index.js — bundle entry (emits upg-neighbor.js), defines <upg-neighbor>.
  *
@@ -7,7 +8,6 @@
  *
  * Mapbox RTL text plugin: registered ONCE at module init — several SEND targets (Urdu/Arabic) are RTL.
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 const profileModules = import.meta.glob('./*.vue')
 

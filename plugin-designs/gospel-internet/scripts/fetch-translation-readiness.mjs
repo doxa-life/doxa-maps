@@ -13,7 +13,7 @@
  * (Partial Scripture comes from eBible's index, already in data/tables, and is read by the builder.)
  *
  * Codes are mapped EXPLICITLY and every code that cannot be mapped is COUNTED and listed, never dropped
- * silently (dx-shepherd's guard 3).
+ * silently.
  * Writes data/translation-readiness/snapshot.json. Refuses a much smaller snapshot than the last one.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'

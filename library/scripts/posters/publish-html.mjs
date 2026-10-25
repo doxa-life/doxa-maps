@@ -85,7 +85,11 @@ let bytes = 0;
 const skipped = [];
 for (const file of readdirSync(SRC)) {
   if (!file.endsWith('.html')) continue;
-  const id = file.slice(0, -5);
+  // ★ PAPER FORMATS CARRY A SUFFIX (generate.mjs FILE_SUFFIX): <zone>.packet.html is page 1 of the
+  // prayer packet, <zone>.letter.html the poster on letter paper. The zone id is what precedes it —
+  // taking everything before ".html" as the id reported every packet sheet as an unknown zone and
+  // silently skipped it.
+  const id = file.slice(0, -5).replace(/\.(packet|letter)$/, '');
   if (ONLY && id !== ONLY) continue;
   if (!zoneIds.has(id)) { skipped.push(id); continue; }
   const html = readFileSync(join(SRC, file), 'utf8');

@@ -6,13 +6,10 @@
  * collapsible sections. Extracted from my-upg-100-list/poster-wall.vue so that
  * every poster app renders from ONE component.
  *
- * > design note 2026-08-01: "instead of doing parameterized application profile, I want
- * > to do a duplicate application profile, but the area that will save space is the
- * > poster wall components will make all of them parameterized to where all you do
- * > is you choose your template that you want and you choose your data or the
- * > posters that go on your poster wall. And that way our library is getting good
- * > work out of it, because the library was built for reusable parameterized
- * > components like the poster wall."
+ * The design: application PROFILES are duplicated per app, while the shared poster wall
+ * is ONE parameterized library component. An app picks its template and supplies its
+ * data (the posters on its wall); the reusable work lives in the library, which exists
+ * for parameterized components like this one.
  *
  * So: PROFILES duplicate, COMPONENTS get promoted here and parameterized.
  *
@@ -32,22 +29,26 @@
  *   bearing: 92 of 175 countries have exactly ONE people group, so without this
  *   the wall opens on a wall of single-entry cards.
  *
- * COLLAPSIBILITY IS NOT COSMETIC. Brief: "there's going to be way too many
- * countries… people don't want to scroll through hundreds of countries." Measured:
+ * COLLAPSIBILITY IS NOT COSMETIC. A country wall has far too many countries to scroll
+ * through one by one, so sections collapse. Measured:
  * Europe alone is 27 countries averaging 2 groups each.
  *
  * CROSS-PANE COMMS — this wall NEVER imports a map. It dispatches a window
  * CustomEvent scoped by instanceId, so several embeds on one page never cross-talk.
  */
-import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, onMounted, onUpdated, provide, toRefs } from 'vue'
+import PosterSection from './PosterSection.vue'
+import { POSTER_WALL_CTX } from './posterWallContext.js'
 import { tStatic } from '../../i18n/index.js'
 
 // This component's chrome, read out of the catalogue. tStatic and not useI18n: these mount inside
 // custom elements that install no i18n plugin, and an unguarded useI18n() throws on the way in.
 const T = (key, en) => tStatic(key) || en
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
+import { fetchPosterRaster, fetchPosterSource } from '@map/packet/poster-fetch.js'
 import { usePosterPrints } from '@map/composables/usePosterPrints.js'
-import { useOptionalI18n } from '@map/composables/useOptionalT.js'
+import { keyedError, errorText } from '@map/i18n/keyedError.js'
+import { useOptionalI18n, useOptionalT } from '@map/composables/useOptionalT.js'
 // Export-modal geometry. A fixed;inset:0 scrim covers only the CONTENT PANE in the cap-5 shell
 // (contain:layout on .vtl-content). Measured 1024x793 @ (256,107) at 1280x900 — rail clickable
 // behind the "modal". See library/utils/viewportScrim.js for the measurements and rejected fixes.
@@ -70,10 +71,18 @@ const props = defineProps({
   itemNoun:    { type: String, default: 'list' },
   // English plurals are not "+s". A naive pluralizer shipped "28 countrys" to the
   // section headers, so the plural is a PARAMETER — the caller knows its own noun.
-  // Defaults to itemNoun + 's', which is right for "list"/"poster".
+  // ⚠ No "+s" default any more: a noun pair is English-only by construction.
   itemNounPlural: { type: String, default: '' },
+  // ★ THE LOCALIZED WAY TO COUNT ITEMS: a catalogue PLURAL key ("{n} country | {n} countries" in en,
+  // four forms in ru, six in ar, one in zh), rendered with the count so each locale picks its own CLDR
+  // form. Wins over itemNoun/itemNounPlural, which remain for callers that have not moved yet.
+  itemCountKey: { type: String, default: '' },
   collapsible: { type: Boolean, default: false },
   collapsedBy: { type: Function, default: () => false },
+  // A section's people-group total, shown in its header and used to order the sections (largest first).
+  // Default: the sum of its cards' counts. A caller whose cards overlap overrides it, so a group is counted
+  // once: the Country Posters India section holds India's own card AND one card per state, the same 855 groups.
+  sectionTotal: { type: Function, default: null },
   // A card may declare itself unsupported (India: 855 groups do not fit a sheet).
   // The caller supplies the reason; the wall renders it instead of a poster.
   unsupported: { type: Function, default: () => null },
@@ -81,8 +90,8 @@ const props = defineProps({
   // What "Prayer List" says while it is unbuilt. PARAMETERIZED because the unit
   // differs per app: the 100-list generates a list per PEOPLE GROUP, the country
   // app one per COUNTRY. A shared hardcoded string told country users the wrong
-  // thing. (design note 2026-08-01: "it needs to mention that there's going to be a
-  // prayer list for each country generated.")
+  // thing. The message must say that a prayer list is generated for each item the
+  // app lists (each country, on the country app).
   prayerListSoonMessage: { type: String,
     default: 'Coming soon — the prayer list for each people group is in build.' },
   // ★ RECORDS PROVIDER — the seam that makes the print actions shareable.
@@ -93,6 +102,16 @@ const props = defineProps({
   // and gets the list + card-deck prints; one that cannot simply omits it and
   // those buttons stay hidden, rather than failing at click time.
   records: { type: Function, default: null },
+  // () => the ISO3 -> English name table the host's map sheets were generated from (a loader, so a
+  // bundle can keep it lazy). With it, a packet's page-1 map names its countries in the packet's
+  // language; without it the sheet prints as drawn. usePosterPrints' iso3Names.
+  iso3Names: { type: Function, default: null },
+  // async (item) => an image URL of this item's map that the host GENERATES (a live map raster), used
+  // for the packet's page 1 before any stored sheet. usePosterPrints' mapImage.
+  mapImage: { type: Function, default: null },
+  // async (item, format) => a map SHEET generated now (packet/posterSheets.js); tried first for the poster
+  // print and the packet's page 1. usePosterPrints' sheet.
+  sheet: { type: Function, default: null },
   // Card stock for the deck print, when this wall offers one. See card-render.js
   // STOCK — both orientations are available. This is the DEFAULT selection.
   cardStock: { type: String, default: 'poker' },
@@ -108,29 +127,28 @@ const props = defineProps({
   // comment saying they "come from the renderer's own STOCK table so this list cannot
   // drift" — which was the intent, not the implementation. Deriving them makes it true.
   cardStocks: { type: [Boolean, Array], default: false },
-  // ★ DOWNLOAD OR PRINT? A DRIVER RULING, NOT A PREFERENCE — and the reason the
+  // ★ DOWNLOAD OR PRINT? A PRODUCT RULING, NOT A PREFERENCE — and the reason the
   // 100-list could not simply adopt this component.
   // Default 'download' is what country-posters and key-cities do today and keeps
   // them byte-for-byte unchanged. 'print' opens the OS print dialog on the poster
   // instead, which is what my-upg-100-list/poster-wall.vue:280 records as the
-  // Driver's explicit brief (2026-09-23): "three print buttons, each opening an
-  // in-browser print dialog, no silent file download as the default action. A raw
-  // 'Download' button and a 'Prayer List: coming soon' placeholder were exactly the
-  // two buttons he objected to." Printing to PDF from that dialog covers the
-  // get-a-file need without a fourth competing button.
+  // brief: three print buttons, each opening an in-browser print dialog, and no
+  // silent file download as the default action (a raw 'Download' button and a
+  // 'Prayer List: coming soon' placeholder were the two rejected). Printing to PDF
+  // from that dialog covers the get-a-file need without a fourth competing button.
   // Migrating the 100-list onto this component WITHOUT this prop would have
   // reintroduced both rejected buttons — the capability gap was never the whole
   // blocker; the shared component still encoded the pre-brief design.
-  // ★ DEFAULT 'print' (Driver rule 2026-09-28: an export-poster button opens the PRINT DIALOG with a
-  // preview, never a direct download). country-posters and key-cities set nothing and downloaded.
+  // ★ DEFAULT 'print': an export-poster button opens the PRINT DIALOG with a preview, never a direct
+  // download. country-posters and key-cities set nothing and downloaded.
   // 'download' is an explicit opt-in, and a consumer that opts in must say why in a comment carrying
   // `posterAction-download:` (check:poster-action-print). Multi-page PDF packets and CSV exports are not
   // poster buttons and stay downloads.
   posterAction: { type: String, default: 'print' },   // 'print' | 'download'
   // ★ IS THE PREVIEW ITSELF A CONTROL? Default 'none' keeps the image inert, which is
   // what country-posters and key-cities render today. 'print' makes clicking the
-  // poster preview open it for printing — a Driver-named behaviour ("show the poster
-  // in the browser to help print it"), and the LAST capability the my-upg-100-list
+  // poster preview open it for printing (the poster shown in the browser to help
+  // print it), and the LAST capability the my-upg-100-list
   // migration had not carried across.
   // ⚠ WHEN IT IS A CONTROL IT MUST BE A KEYBOARD CONTROL. The original carried
   // role="button", tabindex="0" and Enter/Space handlers alongside the click; an
@@ -141,7 +159,7 @@ const props = defineProps({
   previewAction: { type: String, default: 'none' },      // 'none' | 'print'
   // Hide the Prayer List button entirely, rather than showing it as a
   // "coming soon" placeholder. The placeholder is honest where the feature is
-  // genuinely unbuilt, and it is the OTHER button the Driver objected to on a wall
+  // genuinely unbuilt, and it is the OTHER rejected button on a wall
   // where the list DOES print — so a wall with a records provider can suppress it.
   hidePrayerListWhenSoon: { type: Boolean, default: false },
   // EMBEDDED mode (added 2026-09-24 for the regions-tab poster dropdown). The wall's root is
@@ -156,8 +174,8 @@ const props = defineProps({
   // group in its own chrome (the region card's header and summary) would otherwise repeat it,
   // and with a single unnamed group the head renders the literal "Other". Default true.
   sectionHeads:{ type: Boolean, default: true },
-  // ★ HOW MANY POSTERS SIT IN A ROW. The Driver, on the regions posters: "i need two posters per
-  // row on the regiosn posters and witha setitn got icnreat eh number of poswers per row".
+  // ★ HOW MANY POSTERS SIT IN A ROW. The regions posters want two per row, with a setting to raise
+  // the number.
   // 0 keeps the wall's existing auto-fill (repeat(auto-fill, minmax(210px, 1fr))), so the two
   // panes that already ship — country-posters and my-upg-100-list — are byte-identical unless
   // their owner opts in. A positive number fixes the track count instead.
@@ -165,7 +183,36 @@ const props = defineProps({
   // And the control that changes it, off by default for the same reason. Only the caller that
   // asked for a fixed count wants a knob for it.
   columnsControl: { type: Boolean, default: false },
+  // The narrowest card this wall will lay out before it drops a column. 0 (the default) means
+  // CARD_MIN_PX, 210 -- so every wall that does not set it lays out exactly as before. A wall whose
+  // cards are thumbnails can set it lower so a phone keeps two per row; see the clamp below for why
+  // that is safe now.
+  minCardPx:      { type: Number,  default: 0 },
+  // ★ WHAT THE CARD'S HEADER STICKER DOES. null (the default) is today's "Show on map" toggle,
+  // unchanged for every wall that does not set it. A wall with no map beside it (a gallery of
+  // templates) passes { labelKey, ariaKey } instead: the sticker then reads t(labelKey), is a plain
+  // button rather than a toggle (no aria-pressed, no is-last highlight), and emits 'header-action'
+  // with the item, dispatching no window event. ariaKey gets { label: item.label }. An item with no
+  // count (a template, not a list of people) shows the label alone, without the "N UPG ·" prefix.
+  headerAction:   { type: Object,  default: null },
+  // ★ WHERE A CARD'S PREVIEW IMAGE COMES FROM. null (the default) is the stored
+  // previews/<id>.webp every wall uses today, untouched. A wall whose cards have no stored
+  // preview (a gallery of templates drawn from the library, so a library change shows up in it)
+  // passes async (item) => an image URL | null. It runs only for cards that come into view, one at
+  // a time, cached per page by instanceId + item id; until it answers the card shows its label, and
+  // null, a throw or no answer within PREVIEW_TIMEOUT_MS shows the "preview unavailable" placeholder.
+  // The page keeps each returned URL and never revokes it (see GENERATED PREVIEWS below).
+  previewSrc:     { type: Function, default: null },
+  // ★ ONE SECTION COUNTED IN ITS OWN WORDS. null (the default) counts every section's cards with item-count-key, as
+  // always. A wall whose section holds a different kind of card passes (sec) => an i18n plural key, or { key, n }
+  // to count n rather than the section's card count, or null for that section to keep the default. The Country
+  // Posters India section holds India's own card and one per state and union territory, which are not countries.
+  sectionItemCountKey: { type: Function, default: null },
+  // SECTION-ONLY: the wall's own head (heading, tag, intro) is not drawn, only its section(s): a standalone poster
+  // section (<dxm-poster-section>). Off by default, so every existing wall renders exactly as before.
+  sectionOnly:    { type: Boolean, default: false },
 })
+const emit = defineEmits(['header-action'])
 
 // The live count, seeded from the prop. A ref rather than the prop directly, because the control
 // changes it and a prop is not ours to write.
@@ -180,20 +227,19 @@ watch(() => props.columns, (n) => { if (readStoredPerRow() == null) perRow.value
 watch(perRow, (n) => {
   if (n === PER_ROW_AUTO || (Number.isFinite(n) && n >= PER_ROW_MIN && n <= PER_ROW_MAX)) storePerRow(n)
 })
-// The choices the control offers. Two is the Driver's default; the ceiling is the wall's own
-// auto-fill behaviour, offered as "fit" so the knob can always get back to where it started.
-// Driver: "poster per row should have a minimum of 2 and a max of 5 and a default of 2".
+// The choices the control offers: a minimum of 1, a maximum of 5, a default of 2; the ceiling is the
+// wall's own auto-fill behaviour, offered as "fit" so the knob can always get back to where it started.
 // ★ AUTO IS 0, AND 0 IS NOT A COUNT — it is the absence of an override. gridStyle already returns
 // {} for a non-positive value, leaving the stylesheet's auto-fill rule in charge, so Auto needed no
 // new branch in the layout: it needed to become REACHABLE from the control and from storage.
 // This extends the earlier ruling (min 2, max 5, default 2) rather than contradicting it: those
 // bound the COUNTS, and Auto is the option that declines to pick one.
 const PER_ROW_AUTO = 0
-const PER_ROW_CHOICES = [PER_ROW_AUTO, 2, 3, 4, 5]
-const PER_ROW_MIN = 2, PER_ROW_MAX = 5, PER_ROW_DEFAULT = 2
-// ...and "it needs to honour local storage so if you change the default number it is saved in local
-// storage so you can reload and your default you set is persistent". One key for the whole wall,
-// not per instance: the Driver is setting a PREFERENCE, and a preference that only survives on the
+// 1 joined the counts 2026-09-30: on a phone the choices are Auto / 1 / 2, and 1 is the one a reader
+// asks for when two posters are too small to read (see perRowChoices below).
+const PER_ROW_MIN = 1, PER_ROW_MAX = 5, PER_ROW_DEFAULT = 2
+// The choice persists in localStorage, so a number the reader sets survives a reload. One key for the
+// whole wall, not per instance: the reader is setting a PREFERENCE, and a preference that only survives on the
 // page you set it on is not one. Every access is wrapped because localStorage THROWS outright in a
 // private window or with site data blocked -- a preference must never be able to break the wall.
 const PER_ROW_KEY = 'doxa-maps:poster-wall:per-row'
@@ -220,7 +266,7 @@ function storePerRow(n) {
 // An inline style beats the stylesheet, so `repeat(2, minmax(0,1fr))` overrode the CSS rule's
 // `minmax(210px,1fr)` at EVERY width — including 390px, where two columns give a ~162px card.
 // Reported from a 390x844 phone shot: two posters per row, where the CSS alone would have
-// given one. The stored preference is the Driver's and must survive; it is a preference for
+// given one. The stored preference is the reader's and must survive; it is a preference for
 // DESKTOP density, not an instruction to overflow a phone.
 // 210px is the same minimum the stylesheet's auto-fill uses, so the clamp agrees with the rule
 // it is overriding rather than inventing a second breakpoint.
@@ -231,19 +277,65 @@ if (typeof window !== 'undefined') {
   window.addEventListener('resize', onResize)
   onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 }
+// ★ OFFER ONLY WHAT FITS (2026-09-30, from a phone: "3" and "4" still showed two). The grid below
+// clamps a count to what the viewport can hold, so a choice above that clamp was a promise the wall
+// could not keep. The choices are Auto plus every count up to what fits, capped at 5: Auto / 1 / 2 on
+// a 390px phone (minCardPx 150), up to 5 on a desktop. A stored preference above the fit (4, set on a
+// desktop) is SHOWN as what is rendered and stays stored, so the desktop keeps its 4.
+const fitsPerRow = computed(() => {
+  const usable = Math.max(0, viewportW.value - 36)
+  const minCard = props.minCardPx > 0 ? props.minCardPx : CARD_MIN_PX
+  return Math.max(1, Math.floor(usable / minCard))
+})
+const perRowChoices = computed(() => [PER_ROW_AUTO, ...Array.from({ length: Math.min(PER_ROW_MAX, fitsPerRow.value) }, (_, i) => i + 1)])
+const perRowShown = computed({
+  get: () => (perRow.value > 0 ? Math.min(perRow.value, fitsPerRow.value) : perRow.value),
+  set: (n) => { perRow.value = n },
+})
 const gridStyle = computed(() => {
   if (!(perRow.value > 0)) return {}
   // The wall's own padding either side; err toward FEWER columns rather than a clipped card.
   const usable = Math.max(0, viewportW.value - 36)
-  const fits = Math.max(1, Math.floor(usable / CARD_MIN_PX))
+  // ★ A PHONE CAN NOW HOLD TWO, IF THE WALL ASKS. This clamp forced ONE poster per row at 390
+  // (floor(354 / 210) = 1), silently overriding a per-row setting of 2 -- reported from a phone
+  // as "2 posters per row does not work". It was added while the card's action labels were
+  // being CLIPPED at ~162px ('Pra...', Romanian 'Pachet de cartonase'); those labels now WRAP
+  // (the .pfs > .pbtn rule below), so a two-up card stays legible and only grows taller.
+  // It stays OPT-IN: the default is still CARD_MIN_PX, so no wall changes unless it sets minCardPx.
+  const minCard = props.minCardPx > 0 ? props.minCardPx : CARD_MIN_PX
+  const fits = Math.max(1, Math.floor(usable / minCard))
   return { gridTemplateColumns: `repeat(${Math.min(perRow.value, fits)}, minmax(0, 1fr))` }
 })
 
-const plural     = computed(() => props.itemNounPlural || `${props.itemNoun}s`)
+const plural     = computed(() => props.itemNounPlural || props.itemNoun)
+// Counts are PLURAL catalogue keys, rendered with the number so each locale takes its own CLDR form.
+// `t` here is useOptionalI18n's, whose bare-host fallback is humanizeKey — right for button labels,
+// wrong for a count — so counts use a catalogue translator of their own (tStatic when no i18n).
+const tCount = useOptionalT('')
+const countOf = (key, n) => tCount(key, { n: Number(n || 0).toLocaleString() }, Number(n || 0))
+// The HUD's kinds and progress messages, and the poster image's alt text (what a screen reader announces
+// for a card), in the page's language; English only where a key is absent. The same translator goes to
+// usePosterPrints (opts.t) so the messages IT sets are localized too.
+const hud = (key, en, params = null, n = undefined) => {
+  const v = tCount(key, params || {}, n)
+  return v && v !== key ? v : String(en).replace(/\{(\w+)\}/g, (m, k) => (params && params[k] != null ? String(params[k]) : m))
+}
+const itemCount = (n) => (props.itemCountKey ? countOf(props.itemCountKey, n) : `${n} ${n === 1 ? props.itemNoun : plural.value}`)
+// A section head's count line. The people-group total and its " · " leave together when the total is 0 (a gallery
+// of poster templates counts no people), the rule the cards already follow with v-if="item.count". One string in
+// one interpolation, so a head with a total renders exactly the text it always did, whitespace included.
+const sectionItems = (sec) => {
+  const own = props.sectionItemCountKey ? props.sectionItemCountKey(sec) : null
+  if (!own) return itemCount(sec.items.length)
+  return typeof own === 'string' ? countOf(own, sec.items.length) : countOf(own.key, own.n ?? sec.items.length)
+}
+const sectionCount = (sec) => (sec.total > 0
+  ? `${countOf('wall.peopleGroupCount', sec.total)} · ${sectionItems(sec)}`
+  : sectionItems(sec))
 const base       = computed(() => String(props.assetsBase || './assets').replace(/\/+$/, ''))
 
 // ★ A SECOND PLACE TO LOOK, because "poster not generated yet" was being shown for posters that
-// ARE generated. The DRIVER reported it on Ethiopia, whose country-eth.webp exists (174 of the 175
+// ARE generated. It was reported on Ethiopia, whose country-eth.webp exists (174 of the 175
 // records have their .webp; India is the one that legitimately does not and carries its own
 // reason). MEASURED here — static build AND dev server, every request 200, zero cards in that
 // branch — so the file is not missing; a HOST LAYOUT is. resolveAssetsBase points at
@@ -260,6 +352,8 @@ const fallbackBase = computed(() => {
 const attempt    = ref({})
 const previewUrl = (id) => `${attempt.value[id] ? fallbackBase.value : base.value}/previews/${id}.webp`
 function onPreviewError(id) {
+  // A generated preview has no second base to try.
+  if (props.previewSrc) { missing.value = { ...missing.value, [id]: true }; return }
   const fb = fallbackBase.value
   if (!attempt.value[id] && fb && fb !== base.value) { attempt.value = { ...attempt.value, [id]: 1 }; return }
   missing.value = { ...missing.value, [id]: true }
@@ -279,7 +373,7 @@ const sections = computed(() => {
     .map(([name, items]) => ({
       name,
       items: items.slice().sort((a, b) => (b.count || 0) - (a.count || 0)),
-      total: items.reduce((n, x) => n + (x.count || 0), 0),
+      total: props.sectionTotal ? props.sectionTotal(name, items) : items.reduce((n, x) => n + (x.count || 0), 0),
     }))
     .sort((a, b) => b.total - a.total)
 })
@@ -308,7 +402,7 @@ const toggleSection = (name) => {
 
 const lastShown = ref(null)
 const missing   = ref({})
-// FORGET the shown card when the wall's view goes inactive (dx-shepherd, row 79). A composite marks its
+// FORGET the shown card when the wall's view goes inactive (row 79). A composite marks its
 // inactive pane `inert` (the PinHint contract); after "Show zone" -> Map -> back, the same card must SHOW
 // again, not toggle off a selection the reader can no longer see. Watches the ancestor chain, through
 // shadow roots, for inert/hidden/aria-hidden; clears lastShown only (the map keeps its selection).
@@ -326,6 +420,119 @@ onMounted(() => {
   }
 })
 onBeforeUnmount(() => { for (const mo of paneMOs) mo.disconnect(); paneMOs = [] })
+
+// ★ THE CARD CONTAINS ITS PRINT ROW (2026-09-30, from a phone at two posters per row). The row is a sticker
+// pinned --tape-overlap over the banner's bottom edge that grows DOWNWARD as its labels wrap. One line
+// fits inside the card's 26px bottom padding; on a ~162px two-up card it wraps to three lines and hung
+// about 45px below the card's white box. No fixed padding fits every locale x width (the reason the row
+// is pinned by its overlap and not its centre), so each card is fitted to its own row: a ResizeObserver
+// on every .pfs writes --pfs-room on the card: for a row that hangs past the white box (the 26px padding
+// and the 1px border), the part below the banner plus ROW_DAYLIGHT_PX that the 26px does not cover. A row
+// that fits writes 0 (a one-line row ends ~5px inside the box), so every card that fit is unchanged.
+// The revealed packet/size rows stay overlays on purpose (.has-tape-open lifts the card above its
+// neighbours); only the print row itself is contained.
+const CARD_PAD_BOTTOM_PX = 26
+const CARD_BORDER_PX = 1
+const ROW_DAYLIGHT_PX = 8
+let rowRO = null
+function fitCardToRow(pfs) {
+  const card = pfs.closest('.card')
+  const banner = pfs.parentElement
+  if (!card || !banner) return
+  // Rect DIFFERENCES inside one card: the hover lift (a translateY on the card) moves both edges alike.
+  const below = pfs.getBoundingClientRect().bottom - banner.getBoundingClientRect().bottom
+  const hangs = below > CARD_PAD_BOTTOM_PX + CARD_BORDER_PX
+  const room = `${hangs ? Math.ceil(below + ROW_DAYLIGHT_PX - CARD_PAD_BOTTOM_PX) : 0}px`
+  if (card.style.getPropertyValue('--pfs-room') !== room) card.style.setProperty('--pfs-room', room)
+}
+// observe() is idempotent, so re-scanning after every render only adds the rows that are new (items,
+// sections opened, the per-row choice); a hidden wall reports 0 and writes 0 until it is shown.
+function observeRows() {
+  if (!rowRO || !wallEl.value) return
+  for (const pfs of wallEl.value.querySelectorAll('.pfs')) rowRO.observe(pfs)
+}
+onMounted(() => {
+  if (typeof ResizeObserver === 'undefined') return
+  rowRO = new ResizeObserver((entries) => { for (const e of entries) fitCardToRow(e.target) })
+  observeRows()
+})
+onUpdated(observeRows)
+onBeforeUnmount(() => { if (rowRO) rowRO.disconnect(); rowRO = null })
+
+// ─── GENERATED PREVIEWS (the previewSrc prop) ────────────────────────────────
+// Nothing here runs unless the caller passes previewSrc. A pending card registers its placeholder
+// through a function ref; the observer queues it once it is in view; the queue renders ONE preview
+// at a time, so a gallery never starts a burst of renders on load. The answer is cached on the page
+// (a module cache would be per bundle), so a remount or a second tab shows it without a re-render.
+// Two limits, both deliberate: (1) the timeout stops the WAIT, not the render, so after one times out
+// the next may start while the slow one still runs ("one at a time" is best-effort past a timeout);
+// (2) the cache keeps whatever URL previewSrc returns for the life of the page and never revokes it,
+// which suits a gallery that shows the same few previews again; a caller that makes many should say so.
+const PREVIEW_TIMEOUT_MS = 20000
+const previewCache = (globalThis.__posterWallPreviews_v1 ||= new Map())
+const generated = ref({})          // id -> the URL previewSrc answered
+const previewEls = new Map()       // id -> its pending placeholder
+const previewIds = new WeakMap()   // placeholder -> id
+const previewQueue = []
+let previewBusy = false
+let previewIO = null
+
+function setPreviewEl(id, el) {
+  const old = previewEls.get(id)
+  if (old === el) return
+  if (old && previewIO) previewIO.unobserve(old)
+  if (!el) { previewEls.delete(id); return }
+  previewEls.set(id, el)
+  previewIds.set(el, id)
+  if (previewIO) previewIO.observe(el)
+}
+function queuePreview(id) {
+  if (id == null || generated.value[id] || missing.value[id] || previewQueue.includes(id)) return
+  previewQueue.push(id)
+  pumpPreviews()
+}
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('preview timed out')), ms)
+    promise.then((v) => { clearTimeout(timer); resolve(v) }, (e) => { clearTimeout(timer); reject(e) })
+  })
+}
+async function pumpPreviews() {
+  if (previewBusy || !previewQueue.length) return
+  const id = previewQueue.shift()
+  const item = (props.items || []).find((x) => x && x.id === id)
+  if (!item || !props.previewSrc) { pumpPreviews(); return }
+  previewBusy = true
+  const key = `${props.instanceId}\u0000${id}`
+  try {
+    if (!previewCache.has(key)) {
+      previewCache.set(key, withTimeout(Promise.resolve().then(() => props.previewSrc(item)), PREVIEW_TIMEOUT_MS))
+    }
+    let url = null
+    try { url = await previewCache.get(key) } catch (_) { url = null }
+    if (url) generated.value = { ...generated.value, [id]: url }
+    else {
+      previewCache.delete(key)     // a later mount may try again
+      missing.value = { ...missing.value, [id]: true }
+    }
+  } finally {
+    previewBusy = false
+    pumpPreviews()
+  }
+}
+onMounted(() => {
+  if (!props.previewSrc) return
+  // No observer (an old engine): still one at a time, just not deferred to view.
+  if (typeof IntersectionObserver === 'undefined') { for (const id of previewEls.keys()) queuePreview(id); return }
+  // The ROOT is the wall's own scroller: a pane wall scrolls inside .wall, which clips its cards, so
+  // a viewport root would never see a card ahead of view and the margin would buy nothing. An embedded
+  // wall is in normal flow and the page scrolls it, so there the viewport is the right root.
+  previewIO = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) queuePreview(previewIds.get(e.target))
+  }, { root: props.embedded ? null : wallEl.value, rootMargin: '200px' })
+  for (const el of previewEls.values()) previewIO.observe(el)
+})
+onBeforeUnmount(() => { if (previewIO) previewIO.disconnect(); previewIO = null; previewQueue.length = 0 })
 
 function showOnMap(item) {
   // TOGGLE, not a one-way set: a control the user can turn on but not off reads as
@@ -355,12 +562,31 @@ async function exportPoster(item) {
   if (exportState.value) return                      // one at a time
   const reason = props.unsupported(item)
   if (reason) {
-    exportState.value = { label: item.label, kind: 'Poster', phase: 'soon', message: reason, pct: 0 }
+    exportState.value = { label: item.label, kind: hud('wall.hud.kindPoster', 'Poster'), phase: 'soon', message: reason, pct: 0 }
     return
   }
-  exportState.value = { label: item.label, kind: 'Poster', phase: 'fetch',
-                        message: 'fetching poster', pct: 20 }
+  exportState.value = { label: item.label, kind: hud('wall.hud.kindPoster', 'Poster'), phase: 'fetch',
+                        message: hud('wall.hud.fetchingPoster', 'fetching the poster'), pct: 20 }
   try {
+    // ★ GENERATED FIRST (the print standard): a host that can draw the sheet now (the `sheet` prop,
+    // packet/posterSheets.js) prints or downloads THAT — no stored file involved, so a country, which has
+    // no stored sheet on the published tree, still gets its poster. 'letter' for a print (the format made
+    // for a home printer), the item's own poster size for a download. A generation that fails falls through
+    // to the stored image and HTML below rather than to an error.
+    if (props.sheet) {
+      exportState.value = { ...exportState.value, phase: 'render', message: hud('wall.hud.generatingPoster', 'generating the poster'), pct: 35 }
+      const format = props.posterAction === 'print' ? 'letter' : (item.sheet === '3x3' ? '3x3' : '3x4')
+      const html = await Promise.resolve().then(() => props.sheet(item, format)).catch(() => '')
+      if (html) {
+        const { rasterPoster, looksRendered, hasExternalImages } = await import('@map/packet/poster-raster.js')
+        // ★ A SHEET WITH PHOTOS PRINTS AS ITS OWN DOCUMENT (the large side-lane sheets): a raster cannot carry a
+        // photo from its own host (poster-raster.js says why), and the sheet's own @page is its true size
+        // (60in 96in), where an image of it would be shrunk onto letter. A download still rasterises, without them.
+        if (props.posterAction === 'print' && hasExternalImages(html)) { await printSheetDocument(html); return }
+        const blob = await rasterPoster(html, { scale: 2 })
+        if (await looksRendered(blob)) { await deliverPoster(blob, item); return }
+      }
+    }
     // ⚠ A THROWN FETCH IS A MISS, NOT AN ERROR. `fetch` rejects — it does not return
     // !ok — when the request is blocked, offline, or refused by the network layer.
     // Letting that reject escape to the outer catch skips the rasterise fallback
@@ -370,10 +596,10 @@ async function exportPoster(item) {
     // which aborts every .webp at the network layer to force the default-drop
     // condition, went from PASS on the old wall to FAIL here with 0 .html requests.
     // The wall this component was extracted from already guarded it; the extraction
-    // did not carry the guard across.
-    let res = null
-    try { res = await fetch(`${base.value}/posters/${item.id}.webp`) } catch { /* treated as a miss */ }
-    if (!res || !res.ok) {
+    // did not carry the guard across. The guard now lives in poster-fetch.js, which also
+    // takes a host's 200 fallback page (text/html for a missing .webp) as a miss.
+    const raster = await fetchPosterRaster(`${base.value}/posters/${item.id}.webp`)
+    if (!raster) {
       // ★ NO PRE-RENDERED IMAGE? GENERATE IT. The 378 .webp posters were 41 MB in
       // every clone, shipped to every reader whether or not they opened one — and a
       // publish was already rejected once at a 74 MB asset tree. The poster HTML is
@@ -382,22 +608,22 @@ async function exportPoster(item) {
       // This is the same move the prayer packet already makes: generate on click,
       // ship nothing. A 404 used to end here as "poster not found".
       exportState.value = { ...exportState.value, phase: 'render',
-        message: 'generating the poster', pct: 45 }
-      const htmlRes = await fetch(`${base.value}/posters/${item.id}.html`)
-      if (!htmlRes.ok) throw new Error(`poster not found (${htmlRes.status})`)
+        message: hud('wall.hud.generatingPoster', 'generating the poster'), pct: 45 }
+      const source = await fetchPosterSource(`${base.value}/posters/${item.id}.html`)
+      if (!source.html) throw keyedError('wall.hud.posterNotFound', 'poster not found ({status})', { status: source.status })
       const { rasterPoster, looksRendered } = await import('@map/packet/poster-raster.js')
-      const blob = await rasterPoster(await htmlRes.text(), { scale: 2 })
+      const blob = await rasterPoster(source.html, { scale: 2 })
       // Fail LOUDLY rather than hand over a black rectangle: an SVG in an <img> is
       // an isolated document, so a missing stylesheet makes every fill fall back to
       // black with no error at all.
-      if (!(await looksRendered(blob))) throw new Error('the generated poster rendered blank')
+      if (!(await looksRendered(blob))) throw keyedError('wall.hud.posterBlank', 'the generated poster came out blank')
       await deliverPoster(blob, item)
       return
     }
-    await deliverPoster(await res.blob(), item)
+    await deliverPoster(raster, item)
   } catch (e) {
-    exportState.value = { label: item.label, kind: 'Poster', phase: 'error',
-      message: String(e?.message || e).slice(0, 140), pct: 0 }
+    exportState.value = { label: item.label, kind: hud('wall.hud.kindPoster', 'Poster'), phase: 'error',
+      message: errorText(e, (k, p) => hud(k, k, p)).slice(0, 140), pct: 0 }
   }
 }
 
@@ -446,12 +672,24 @@ const stockOptions = ref([])
 // every consumer, including the ones that show no picker at all. So the options
 // fill in when the module arrives, and until then the <select> simply is not
 // rendered — no flash of unlabelled ids.
+// A stock's name in the page's language: the NOUN translates (wall.stockCard / stockPostcard), the size
+// stays as a printer's box prints it, and a stock without a noun (A6) keeps its international name.
+const stockLabel = (s) => {
+  if (!s.noun) return s.label
+  const key = `wall.stock${s.noun[0].toUpperCase()}${s.noun.slice(1)}`
+  const noun = tCount(key)
+  if (!noun || noun === key) return s.label
+  const dims = `${s.w} × ${s.h} in`
+  return s.side ? `${noun} ${dims} (${tCount('wall.stockLandscape')})` : `${noun} ${dims}`
+}
 if (props.cardStocks) {
   import('@map/packet/card-render.js').then(({ STOCK }) => {
     const want = Array.isArray(props.cardStocks) ? props.cardStocks : Object.keys(STOCK)
     stockOptions.value = want
       .filter((id) => STOCK[id])          // an unknown id is dropped, not rendered blank
-      .map((id) => ({ id, label: STOCK[id].label }))
+      // The STOCK is kept, not a label string: the label is read at render (stockLabel below), so a
+      // locale change re-labels the buttons like every other string on the wall.
+      .map((id) => ({ id, stock: STOCK[id] }))
     // Keep the default honest: if the configured cardStock is not on offer, fall
     // back to the first one that is, rather than printing at a size not listed.
     if (!stockOptions.value.some((s) => s.id === pickedStock.value)) {
@@ -461,7 +699,10 @@ if (props.cardStocks) {
 }
 
 const prints = usePosterPrints({
+  t: (key, params, n) => tCount(key, params, n),
   state: exportState,
+  // This wall's HUD renders phase 'ready' as a Print button (a phone whose tap expired while preparing).
+  tapToPrint: true,
   records: props.records ? (item) => props.records(item) : null,
   // useI18n()'s locale can be a ref or a plain string depending on how the host
   // installed it, so normalise rather than assume.
@@ -479,6 +720,9 @@ const prints = usePosterPrints({
   // guard skips silently and the wall would STILL print a mapless packet — the exact
   // seam-without-supplier failure this change exists to close, one layer down.
   assetsBase: () => props.assetsBase,
+  iso3Names: props.iso3Names ? () => props.iso3Names() : null,
+  mapImage: props.mapImage ? (item) => props.mapImage(item) : null,
+  sheet: props.sheet ? (item, format) => props.sheet(item, format) : null,
   sets: () => fetch(`${props.assetsBase}/tables/near-neighbors.json`)
     .then((r) => (r.ok ? r.json() : null)).catch(() => null),
 })
@@ -489,14 +733,13 @@ const previewIsControl = computed(() => props.previewAction === 'print')
 // Which card currently has its size row revealed, by item id. Holding an ID
 // rather than a boolean-per-card means opening one CLOSES the others for free:
 // two size rows open at once would overlap in the grid gap, and there is no
-// reading of the Driver's request where two are wanted.
-// ★ NOW A COMPOUND KEY, `${id}:${which}` — the Driver, 2026-09-28, asked for the SAME caret on the
-// Prayer List with two entries (Full detail / Lightweight), and explicitly not a merged menu and not
-// a second dropdown component. There is no dropdown COMPONENT here to reuse: this is an inline
+// reading of the request where two are wanted.
+// ★ NOW A COMPOUND KEY, `${id}:${which}` — the Prayer List gets the SAME caret, with two entries
+// (Full detail / Lightweight), and explicitly not a merged menu and not a second dropdown component. There is no dropdown COMPONENT here to reuse: this is an inline
 // disclosure, one ref plus a sibling tape of plain buttons. So the PATTERN is generalized instead of
 // copied — copy/paste would give two independent open-states, and then opening the Prayer List would
 // NOT close the Cards, so two tapes could sit open at once and overlap in the grid gap. That is a
-// visible regression on the Cards row the Driver said to leave exactly as it is.
+// visible regression on the Cards row, which is to stay exactly as it is.
 // Holding ONE key keeps "opening one closes the others" free, which is why it was an id to begin with.
 const deckOpenFor = ref(null)
 const deckKey = (id, which) => `${id}:${which}`
@@ -525,7 +768,7 @@ function downloadPacket(item) {
   // error — unbuilt, not broken. phase:'error' reads to a user as "something went
   // wrong" rather than "not yet".
   if (!canPrintRows.value) {
-    exportState.value = { label: item.label, kind: 'Prayer List', phase: 'soon',
+    exportState.value = { label: item.label, kind: hud('wall.hud.kindPrayerList', 'Prayer List'), phase: 'soon',
       message: props.prayerListSoonMessage, pct: 0 }
     return
   }
@@ -549,8 +792,8 @@ const packetVariants = [
 // entry is picked. Opening a variant closes the row, like printDeckAt.
 // ★ THIS CALLS printPacket, NOT printList — and that difference is a DEFECT FIX, not a refactor.
 // MEASURED: downloadPacket() above calls prints.printList(item), which renders a COLUMNAR TABLE
-// (name / country / population / religion — usePosterPrints.js:150). The PRAYER PACKET the Driver
-// specified — map, life calendar, %-evangelical grid, triangle, profiles, wheel, points — is
+// (name / country / population / religion — usePosterPrints.js:150). The PRAYER PACKET as specified
+// — map, life calendar, %-evangelical grid, triangle, profiles, wheel, points — is
 // prints.printPacket, and this wall never called it. Every OTHER surface does
 // (upg-100-list.vue:1430 and :1671, research-map.vue:1597, countries-map.vue:1360); the poster wall
 // was the sole exception. So the button labelled "Prayer List" here has been printing a list, which
@@ -568,16 +811,31 @@ function printPacketAs(item, variantId) {
 // ONE delivery point for the finished poster, so 'download' and 'print' cannot
 // drift apart or be applied to only one of the two paths (shipped .webp vs
 // browser-rasterised). Both callers in exportPoster() route through here.
+// Print a generated sheet as the document it is (photos load, the page is its own size). Same HUD steps as
+// deliverPoster's print, including the phone's Print button when the tap has expired.
+async function printSheetDocument(html) {
+  exportState.value = { ...exportState.value, phase: 'save', message: hud('wall.hud.openingPrint', 'opening the print dialog'), pct: 80 }
+  const { printDocument } = await import('@map/composables/printInPlace.js')
+  const how = await printDocument(html, { onNeedsTap: (printNow, cancel) => {
+    exportState.value = { ...exportState.value, phase: 'ready', message: hud('wall.hud.readyToPrint', 'ready to print'), pct: 100,
+      action: () => { exportState.value = null; printNow() }, cancel }
+  } })
+  if (how === 'needs-tap') return
+  exportState.value = { ...exportState.value, phase: 'done', message: hud('wall.hud.printOpened', 'print dialog opened'), pct: 100 }
+  setTimeout(() => { exportState.value = null }, 900)
+}
+
 async function deliverPoster(blob, item) {
   if (props.posterAction === 'print') {
-    exportState.value = { ...exportState.value, phase: 'save', message: 'opening the print dialog', pct: 80 }
-    const { openPrintFrame } = await import('@map/composables/printInPlace.js')
+    exportState.value = { ...exportState.value, phase: 'save', message: hud('wall.hud.openingPrint', 'opening the print dialog'), pct: 80 }
+    const { printDocument } = await import('@map/composables/printInPlace.js')
     const url = URL.createObjectURL(blob)
     posterObjectUrls.push(url)
     // A 3ft SQUARE on a PORTRAIT sheet must fit by its SHORTER axis: scaling to the
     // full page WIDTH makes it taller than the printable height and it overflows onto
     // a second page. Constrain both axes and let object-fit letterbox it.
-    openPrintFrame(
+    // printDocument: the in-place frame as before, or on a phone the PAGE itself (printInPlace.js says why).
+    const how = await printDocument(
       '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'
       + esc(`${props.downloadPrefix} — ${item.label || item.id}`) + '</title>'
       + '<style>@page{size:letter portrait;margin:12mm}'
@@ -587,14 +845,19 @@ async function deliverPoster(blob, item) {
       + '@media print{body{height:auto}'
       + 'img{width:auto;max-width:100%;max-height:100%;object-fit:contain}}</style></head>'
       + `<body><img src="${url}" alt="${esc(item.label || item.id)}"></body></html>`,
-      { autoprint: true },
+      { onNeedsTap: (printNow, cancel) => {
+        exportState.value = { ...exportState.value, phase: 'ready', message: hud('wall.hud.readyToPrint', 'ready to print'), pct: 100,
+          action: () => { exportState.value = null; printNow() }, cancel }
+      } },
     )
+    // The reader now owns the next step: the Print button in the HUD.
+    if (how === 'needs-tap') return
   } else {
-    exportState.value = { ...exportState.value, phase: 'save', message: 'saving', pct: 80 }
+    exportState.value = { ...exportState.value, phase: 'save', message: hud('wall.hud.saving', 'saving'), pct: 80 }
     download(blob, `${props.downloadPrefix}-${item.id}-poster.webp`)
   }
   exportState.value = { ...exportState.value, phase: 'done',
-    message: props.posterAction === 'print' ? 'print dialog opened' : 'saved', pct: 100 }
+    message: props.posterAction === 'print' ? hud('wall.hud.printOpened', 'print dialog opened') : hud('wall.hud.saved', 'saved'), pct: 100 }
   setTimeout(() => { exportState.value = null }, 900)
 }
 
@@ -620,7 +883,13 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000)
 }
 
-function dismissExport() { exportState.value = null }
+// A 'ready' print that the reader walks away from takes its document with it, so the browser's own Print
+// menu prints the page again rather than a poster nobody asked for.
+function dismissExport() {
+  const s = exportState.value
+  exportState.value = null
+  try { if (s && typeof s.cancel === 'function') s.cancel() } catch (_) { /* already gone */ }
+}
 
 useShadowStyles(
   // --wall-pad-top is read back by .sec-head::before to cover the scroll-padding strip
@@ -676,7 +945,9 @@ useShadowStyles(
   // hand-typed 24px would.
   '.card{--card-pad-top:24px;--tape-overlap:16px;position:relative;background:#fff;border:1px solid #e3e6ea;' +
   'border-radius:3px;' +
-  'padding:var(--card-pad-top) 12px 26px;' +
+  // --pfs-room: the extra bottom padding a card needs to CONTAIN its print row once that row wraps
+  // (fitCardToRow in the script). 0 wherever the row fits the 26px, so those cards are unchanged.
+  'padding:var(--card-pad-top) 12px calc(26px + var(--pfs-room,0px));' +
   'box-shadow:0 1px 3px rgba(0,0,0,.10),0 6px 18px rgba(0,0,0,.07);' +
   'transition:transform .16s ease,box-shadow .16s ease}' +
   // ★ THE BLUE OUTLINE IS A HOVER STATE, NOT A MISSING STATIC BORDER. Several reports have asked
@@ -711,9 +982,9 @@ useShadowStyles(
   '.is-dark .tape{background:#1d2b23;color:#cfe9d9;border-color:rgba(255,255,255,.10)}' +
   // ★ THE HEADER STICKER STRADDLES THE BANNER'S TOP EDGE, for the same reason the footer one
   // straddles the bottom. MEASURED before: 35px above the banner's top edge, -1px below — it
-  // floated over the card, touching the banner nowhere. The Driver reads the rounded top
-  // sticker as the one that "looks beautiful and is really well spaced", so this keeps its
-  // size and shape exactly and only corrects WHERE it sits: centred on the edge it is taping.
+  // floated over the card, touching the banner nowhere. The rounded top sticker is the one
+  // that reads as well spaced, so this keeps its size and shape exactly and only corrects
+  // WHERE it sits: centred on the edge it is taping.
   // --banner-pad-top reserves the banner surface it lands on, so it never reaches the map.
   // .tape-h is positioned against .card (it is a direct child), and the banner's top is the
   // card's padding-top — hence top:24px, read from the card rather than restated.
@@ -736,7 +1007,7 @@ useShadowStyles(
   // four controls (Prayer List · Card Deck · stock select · Poster Map) burst the box regardless.
   // MEASURED 2026-09-24 at 1440px: all 27 cards overflowing, worst 110px past a 212px card.
   //
-  // ★ flex-wrap:wrap FIXED THAT AND BROKE THE OTHER AXIS — driver-reported, same day. The row is
+  // ★ flex-wrap:wrap FIXED THAT AND BROKE THE OTHER AXIS — reported the same day. The row is
   // absolutely positioned at bottom:-14px, so wrapping it to three lines grew it 35px -> 78px and
   // pushed its TOP up from 216px to 173px into a 238px card: straight over the preview image and
   // the card's outline. Horizontal overflow traded for vertical. min-width:0 alone lets the
@@ -744,13 +1015,12 @@ useShadowStyles(
   // The gate that passed this only measured horizontal edges; it now measures the row's top too.
   // ⚠ ANCHORED AT THE TOP, NOT THE BOTTOM. This was bottom:-14px, so any growth pushed the row
   // UPWARD over the preview — which is exactly how wrapping it turned a sideways overflow into
-  // a vertical one the driver saw. Anchoring at top:100% pins it just under the card, so the
+  // a vertical one. Anchoring at top:100% pins it just under the card, so the
   // second line grows DOWN into empty space. MEASURED: 92px between the preview's bottom and
   // the next card, of which the single-line row used 35 — 51px spare.
-  // ★ THE FOOTER STICKER STRADDLES THE BANNER'S BOTTOM EDGE (Driver): "see how the header for
-  // show on map is inline on the top of the poster box? but the footer print options are not
-  // inline on the border or outline of the box... we want the footer to imitate the header, by
-  // being inline like a piece of tape".
+  // ★ THE FOOTER STICKER STRADDLES THE BANNER'S BOTTOM EDGE. The header (Show on map) sits on the
+  // top border of the poster box; the footer print options did not sit on the bottom one. The
+  // footer now imitates the header, on the edge like a piece of tape.
   //
   // top:100% + translate(-50%,-50%) centres it on that edge at ANY height, which matters because
   // the row's height is NOT fixed: it holds two to four controls and grows with translated
@@ -857,8 +1127,8 @@ useShadowStyles(
   '.pbtn-deck::before{content:"\\25B8";display:inline-block;margin-right:3px;font-size:8px;' +
   'transition:transform .15s}' +
   '.pbtn-deck[aria-expanded="true"]::before{transform:rotate(90deg)}' +
-  // Size choices. These are BUTTONS, not <option>s — the Driver ruled out a native
-  // dropdown here because it collides with the other dropdowns on the host page.
+  // Size choices. These are BUTTONS, not <option>s — a native dropdown here would
+  // collide with the other dropdowns on the host page.
   // Each one both picks the size and prints, so it is styled as an action.
   // ⚠ NO nowrap HERE, and this is a MEASURED correction rather than a preference. With
   // white-space:nowrap the two landscape labels rendered 161px inside a 169px row and CLIPPED
@@ -875,7 +1145,7 @@ useShadowStyles(
   // wall: .pbtn 76x20, .pstock 188x20, .tape-h 289x22 -- 135 controls under the minimum on one
   // phone screen, and the same components fail on three other maps because they live in library/.
   // SCOPED TO (pointer:coarse) ON PURPOSE: 2.5.8 is a TOUCH ergonomics rule, and these three
-  // controls sit in a row whose height the Driver and I tuned by eye this session -- the tape must
+  // controls sit in a row whose height was tuned by eye -- the tape must
   // straddle the border without reaching the poster's blue outline, with ~9px of artwork clearance
   // left. Growing them for the mouse would spend 2px of that clearance to solve a problem a mouse
   // does not have, on a wall that is another owner's map. A finger gets the bigger target; the
@@ -908,12 +1178,17 @@ useShadowStyles(
   // hand-off is what makes it read as a TreeTable rather than one floating bar.
   // Bottom margin is on a spacer INSIDE the section (not the section itself), or
   // the header would stay pinned over 56px of empty paper.
-  '.sec{max-width:1180px;margin:0 auto;padding-bottom:44px}' +
+  // ★ EACH SECTION IS A STACKING CONTEXT, EARLIER ONES ON TOP (2026-09-30, reported from a phone): the LAST
+  // poster of a section opened its Prayer-List / Card-deck menu UNDER the next section's header, so its
+  // buttons could not be tapped (measured at 390: Card-deck 3/5 and 4/5 tappable). The open card's z-index 5
+  // sits deliberately below its OWN sticky header (6), but the menu hangs past the section's end, where the
+  // NEXT section's header is also 6. The template gives each section a z-index that decreases down the wall:
+  // inside a section nothing changes, and an earlier section's hanging menu paints over the later header.
+  // (A card z-index above 6 would instead paint an open menu over its own pinned header when scrolled.)
+  '.sec{position:relative;max-width:1180px;margin:0 auto;padding-bottom:44px}' +
   // TREETABLE ROW HEADER — STICKY, so it stays visible while its own children
-  // scroll past. design note 2026-08-01: "freezing the header so that when you scroll
-  // down past the row you can still see the row as you're scrolling through all of
-  // the posters, so you can collapse the row if you want to so you don't get stuck
-  // scrolling through all these countries."
+  // scroll past: while a reader scrolls through a section's posters, its header stays
+  // in view, so the section can be collapsed at any point instead of scrolled to its end.
   //
   // WHY position:sticky RATHER THAN A COMPONENT LIBRARY. The reference was
   // PrimeVue's TreeTable, but doxa-maps ships no component framework and this wall
@@ -936,9 +1211,8 @@ useShadowStyles(
   'box-shadow:0 6px 10px -8px rgba(0,0,0,.35);border-radius:4px 4px 0 0}' +
   '.is-dark .sec-head{border-bottom-color:rgba(255,255,255,.12);background:#0a1410;' +
   'box-shadow:0 6px 10px -8px rgba(0,0,0,.7)}' +
-  // ★ THE TRANSPARENT STRIP ABOVE A PINNED HEADER (Driver 2026-09-25): "there is a transparent
-  // section above the header, so when you're scrolling the posters are visible above the header
-  // ... in the white space between the header and the top of the page."
+  // ★ THE TRANSPARENT STRIP ABOVE A PINNED HEADER: while scrolling, the posters showed through a
+  // transparent band between the pinned header and the top of the page.
   //
   // CAUSE, MEASURED at 1440px: `position:sticky; top:0` pins to the scroll container's PADDING
   // BOX, not its border box. .wall has padding-top:22px, so a pinned header comes to rest 22px
@@ -970,7 +1244,10 @@ useShadowStyles(
   // therefore silently won the cascade — so `background:none` here made the sticky
   // header transparent and the poster cards scrolled visibly through the region
   // name. The base rule owns the fill; this rule owns only button chrome.
-  '.sec-head.is-toggle{cursor:pointer;user-select:none;width:100%;text-align:left;' +
+  // ★ calc(100% - 4px), NOT 100%: the head keeps the 2px side margins of .sec-head, so a full-width button
+  // overflowed the wall's content box by 4px. Its full-bleed ::before (left/right -20px) then reached 2px past
+  // the wall on each side, and a collapsible wall scrolled sideways by 4px at any width (scrollWidth 394 in 390).
+  '.sec-head.is-toggle{cursor:pointer;user-select:none;width:calc(100% - 4px);text-align:left;' +
   'border-top:0;border-left:0;border-right:0;font:inherit;color:inherit}' +
   '.sec-head.is-toggle:hover .sec-name{color:#10b981}' +
   '.sec-caret{display:inline-block;width:12px;font-size:10px;opacity:.55;' +
@@ -981,11 +1258,10 @@ useShadowStyles(
   // Poster aspect is 3ft x 3ft SQUARE — the real print ratio, so the wall previews
   // the actual artefact rather than an arbitrary box.
   // ★ THE BANNER IS NOT THE MAP — and until now it effectively was.
-  // Driver 2026-09-25, the sticker/olive-oil-bottle brief: this box is a BANNER that DISPLAYS
-  // the map, the way a label displays a design. A banner taped to a wall gets a sticker at the
-  // top and one at the bottom, each straddling its edge — "slight overlap over the banner, but
-  // not over the content of the banner... if I put a piece of tape over the text it would be
-  // offensive to the map."
+  // This box is a BANNER that DISPLAYS the map, the way a label displays a design. A banner taped
+  // to a wall gets a sticker at the top and one at the bottom, each straddling its edge: a slight
+  // overlap over the banner, never over the banner's content, because tape over the map would
+  // spoil it.
   //
   // MEASURED before this change, and it is the whole problem: banner 240-426, map 241-425.
   // whiteSpaceTopOfBanner 1px, whiteSpaceBottomOfBanner 1px. The map filled the banner edge to
@@ -1057,161 +1333,29 @@ useShadowStyles(
   'font:inherit;font-size:12.5px;padding:6px 18px;border-radius:8px;cursor:pointer}' +
   '.modal-btn:hover{background:rgba(0,0,0,.06)}',
   'doxa-poster-wall',
+
+  + '/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,\n   and no generated leaf ships one anyway (measured: 0 across the whole tree). Additive only. */\n@media (prefers-reduced-motion: reduce) {\n  .pw-card, .pw-grid, .pw-overlay, .pw-btn { transition: none !important; animation: none !important; }\n}\n'
 )
+// ★ EACH SECTION IS A PosterSection (the head + its cards), drawn from THIS wall's state and actions, provided here.
+const { collapsible, columnsControl, headerAction, hidePrayerListWhenSoon, instanceId, previewSrc, sectionHeads, unit, unsupported } = toRefs(props)
+provide(POSTER_WALL_CTX, {
+  collapsible, columnsControl, headerAction, hidePrayerListWhenSoon, instanceId, previewSrc, sectionHeads, unit, unsupported, PER_ROW_AUTO, T, canPrintRows, countOf, deckKey, deckOpenFor, emit, exportPoster, generated, gridStyle, hud, isCollapsed, lastShown, missing, onPreviewError, packetVariants, perRowChoices, perRowShown, pickedStock, previewIsControl, previewUrl, printDeckAt, printPacketAs, sectionCount, setPreviewEl, showOnMap, stockLabel, stockOptions, t, toggleDeck, toggleSection,
+})
 </script>
 
 <template>
   <div ref="wallEl" class="wall" :class="{ 'is-dark': isDark, 'wall--embedded': embedded }">
+    <template v-if="!sectionOnly">
     <h2 class="wall-h">{{ heading }}</h2>
     <div v-if="tag" class="wall-tag">{{ tag }}</div>
     <p v-if="intro" class="wall-sub" v-html="intro"></p>
+    </template>
 
-    <section v-for="sec in sections" :key="sec.name" class="sec">
-      <!-- A <button> when collapsible so the whole head is keyboard-reachable. -->
-      <component v-if="sectionHeads" :is="collapsible ? 'button' : 'div'" class="sec-head"
-        :class="{ 'is-toggle': collapsible, 'is-shut': collapsible && isCollapsed(sec.name) }"
-        :type="collapsible ? 'button' : null"
-        :aria-expanded="collapsible ? String(!isCollapsed(sec.name)) : null"
-        @click="collapsible && toggleSection(sec.name)">
-        <span v-if="collapsible" class="sec-caret" :class="{ 'is-open': !isCollapsed(sec.name) }">▶</span>
-        <h3 class="sec-name">{{ sec.name }}</h3>
-        <span class="sec-count">
-          {{ sec.total.toLocaleString() }} {{ T('gospel.list.peopleGroups', 'people groups') }} ·
-          {{ sec.items.length }} {{ sec.items.length === 1 ? itemNoun : plural }}
-        </span>
-      </component>
+    <!-- Each section stacks ABOVE the ones after it (z-index decreasing down the wall; see .sec), so the LAST
+         poster's open menu, which hangs past its section's end, sits over the next section's header. -->
+    <PosterSection v-for="(sec, i) in sections" :key="sec.name" :sec="sec" :z="sections.length - i" />
 
-      <!-- ★ THE PER-ROW CONTROL. A <select>, not a stepper or a pair of chevrons: it is the control
-           every reader already knows for "choose one of a few", it is keyboard- and
-           screen-reader-operable with no work, and it shows the current value without a second
-           element. Imitating the solved pattern rather than inventing one.
-           Rendered once per section, beside the grid it governs, and only where the caller asked
-           for it — so neither existing pane grows a knob it did not request. -->
-      <div v-if="columnsControl && !isCollapsed(sec.name)" class="perrow">
-        <label class="perrow__label" :for="`perrow-${instanceId}-${sec.name}`">{{ t('buttons.postersPerRow') }}</label>
-        <select :id="`perrow-${instanceId}-${sec.name}`" class="perrow__select" v-model.number="perRow">
-          <option v-for="n in PER_ROW_CHOICES" :key="n" :value="n">{{ n === PER_ROW_AUTO ? t('buttons.postersPerRowAuto') : n }}</option>
-        </select>
-      </div>
-      <div v-show="!isCollapsed(sec.name)" class="grid" :style="gridStyle">
-        <!-- ★ 'has-tape-open' RAISES THE WHOLE CARD while one of its tapes is revealed. Reported
-             from mobile 2026-09-28: the Card deck options tape rendered under the surrounding
-             cards. Cause: .pstocks hangs at top:100%, i.e. BELOW its own card and over the
-             next one, but every .card is position:relative with NO z-index — so they all sit at the
-             same stacking level and LATER cards paint over earlier ones in document order. The
-             tape's own z-index:2 only orders it WITHIN its card, which is why it looked fine on the
-             last card of a row and disappeared under the next one everywhere else. It is worse on a
-             phone because the grid is one column, so the very next card is directly beneath.
-             Raising the CARD lifts its whole stacking context above its siblings. -->
-        <div v-for="item in sec.items" :key="item.id" class="card"
-          :class="{ 'is-last': lastShown === item.id,
-                    'has-tape-open': deckOpenFor === deckKey(item.id, 'deck') || deckOpenFor === deckKey(item.id, 'packet') }"
-          :data-list-id="item.id">
-
-          <!-- A TOGGLE (showOnMap clears the selection on a second press), so it says whether it is on:
-               without aria-pressed a second press sounded identical to the first to a screen reader. -->
-          <button type="button" class="tape tape-h" :aria-pressed="lastShown === item.id ? 'true' : 'false'"
-            :aria-label="t('buttons.showOnMapAria', { label: item.label })" @click="showOnMap(item)">
-            <span class="hcount">{{ item.count }} {{ unit }}</span>
-            <span class="hsep">·</span>
-            <span class="hlabel">{{ t('buttons.showOnMap') }}</span>
-          </button>
-
-          <div class="main">
-            <!-- Unsupported comes FIRST: there is no poster to try to load. -->
-            <div v-if="unsupported(item)" class="ph is-soon">
-              <div class="ph-label">{{ item.label }}</div>
-              <div v-if="item.count" class="ph-count">{{ item.count.toLocaleString() }} people groups</div>
-              <div class="ph-soon">{{ unsupported(item) }}</div>
-            </div>
-            <!-- previewAction='print': the poster preview IS the control. Keyboard-
-                 reachable (role/tabindex/Enter/Space), not click-only. -->
-            <img v-else-if="!missing[item.id]" class="img"
-              :class="{ 'is-clickable': previewIsControl }" :src="previewUrl(item.id)"
-              :alt="previewIsControl
-                ? `${item.label} — prayer poster (click to preview and print)`
-                : `${item.label} — prayer poster`"
-              loading="lazy" decoding="async"
-              :role="previewIsControl ? 'button' : null"
-              :tabindex="previewIsControl ? 0 : null"
-              :title="previewIsControl ? t('buttons.previewPrintPoster', { label: item.label }) : null"
-              @click="previewIsControl && exportPoster(item)"
-              @keydown.enter.prevent="previewIsControl && exportPoster(item)"
-              @keydown.space.prevent="previewIsControl && exportPoster(item)"
-              @error="onPreviewError(item.id)" />
-            <div v-else class="ph">
-              <div class="ph-label">{{ item.label }}</div>
-              <div v-if="item.count" class="ph-count">{{ item.count.toLocaleString() }} people groups</div>
-              <!-- NOT "not generated yet": reaching this branch means the preview IMAGE did
-                   not arrive after both bases were tried, which says nothing about whether a
-                   poster exists. A record with genuinely no poster carries its own
-                   unsupportedReason and renders the branch above. Saying "not generated" of a
-                   poster that is sitting on disk is how the Driver came to report this.
-                   i18n DEBT: this literal predates t() here and is still untranslated, like
-                   the two beside it. -->
-              <div class="ph-note">{{ T('poster.preview_unavailable', 'preview unavailable') }}</div>
-            </div>
-
-            <!-- ★ THE PRINT ROW LIVES INSIDE .main, NOT BESIDE IT (Driver 2026-09-25).
-                 It is `position:absolute; top:100%`, which resolves against the nearest
-                 positioned ANCESTOR. As a SIBLING of .main that ancestor was .card, whose
-                 bottom sits 26px past the frame — measured: frame bottom 426, row top 452.
-                 That 26px of nothing is why it read as a detached row instead of tape.
-                 Moved INSIDE .main, top:100% is the frame's own bottom edge, so the row
-                 starts exactly on the border it is taping over. -->
-            <fieldset class="tape pfs">
-              <legend>{{ t('buttons.printOptions') }}</legend>
-              <!-- ★ PRAYER LIST IS NOW A DISCLOSURE TOO (Driver 2026-09-28), using the SAME
-                   mechanism as Card Deck below — same toggleDeck, same one-open-at-a-time key,
-                   same revealed .tape of plain buttons. NOT a <select> and NOT a new component,
-                   for the reason already given at the Card Deck comment: a native dropdown
-                   collides with other dropdowns on the host page.
-                   It reveals the two PACKETS — Full detail and Lightweight. Clicking the button
-                   no longer prints immediately, because there are now two things it could mean. -->
-              <button v-if="!(hidePrayerListWhenSoon && !canPrintRows)" type="button" class="pbtn"
-                :aria-expanded="String(deckOpenFor === deckKey(item.id, 'packet'))"
-                @click.stop="toggleDeck(item.id, $event, 'packet')">{{ t('buttons.prayerList') }}</button>
-              <button type="button" class="pbtn" @click="exportPoster(item)">{{ t('buttons.posterMap') }}</button>
-              <!-- ★ CARD DECK IS NOT A PEER OPTION, AND ITS SIZE PICKER IS HIDDEN UNTIL ASKED
-                   FOR (Driver 2026-09-25): "card should not be second option, and I don't want
-                   to add the dropdown for the card because it makes it hard for others to have
-                   dropdowns too... only let you click on the dropdown when you click on print
-                   the cards, which will show you a hidden dropdown to let you choose the print
-                   size option you want."
-                   So the deck is a DISCLOSURE, not a sibling button: clicking it reveals this
-                   card's own size row, and the size buttons there are what actually print.
-                   A 162px <select> was the single widest control in a 172px row — removing it
-                   from the default row is most of why the row now fits on one line. -->
-              <button v-if="canPrintRows" type="button" class="pbtn pbtn-deck"
-                :aria-expanded="String(deckOpenFor === deckKey(item.id, 'deck'))"
-                @click.stop="toggleDeck(item.id, $event, 'deck')">{{ t('buttons.cardDeck') }}</button>
-            </fieldset>
-
-            <!-- The revealed PACKET row — deliberately the same markup shape and the same .tape /
-                 .pstock classes as the card-size row below, because to the reader these are the
-                 same gesture. Two entries, both shipped together: a one-item dropdown would be a
-                 caret that explains nothing. -->
-            <div v-if="deckOpenFor === deckKey(item.id, 'packet')"
-              class="tape pstocks" role="group" :aria-label="t('buttons.packetVariantAria')">
-              <button v-for="v in packetVariants" :key="v.id" type="button" class="pstock"
-                @click.stop="printPacketAs(item, v.id)">{{ t(v.labelKey) }}</button>
-            </div>
-
-            <!-- The revealed size row. Rendered as SIBLINGS in a second tape rather than a
-                 <select> so there is no native dropdown to collide with other dropdowns —
-                 which is the constraint the Driver gave, not a styling preference. -->
-            <div v-if="canPrintRows && stockOptions.length && deckOpenFor === deckKey(item.id, 'deck')"
-              class="tape pstocks" role="group" :aria-label="t('buttons.cardStockAria')">
-              <button v-for="s in stockOptions" :key="s.id" type="button" class="pstock"
-                :class="{ 'is-on': pickedStock === s.id }"
-                @click.stop="printDeckAt(item, s.id)">{{ s.label }}</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <div v-if="exportState" ref="scrimRef" :style="scrimStyle" class="modal-scrim" @click.self="exportState.phase === 'error' && dismissExport()">
+    <div v-if="exportState" ref="scrimRef" :style="scrimStyle" class="modal-scrim" @click.self="(exportState.phase === 'error' || exportState.phase === 'ready') && dismissExport()">
       <div class="modal" role="dialog" aria-live="polite">
         <div class="modal-kind">{{ exportState.kind }}</div>
         <div class="modal-title">{{ exportState.label }}</div>
@@ -1219,6 +1363,11 @@ useShadowStyles(
         <template v-if="exportState.phase === 'error'">
           <div class="modal-err">{{ exportState.message }}</div>
           <button type="button" class="modal-btn" @click="dismissExport">{{ t('buttons.close') }}</button>
+        </template>
+
+        <template v-else-if="exportState.phase === 'ready'">
+          <div class="modal-soon">{{ exportState.message }}</div>
+          <button type="button" class="modal-btn" @click="exportState.action && exportState.action()">{{ hud('wall.hud.printNow', 'Print') }}</button>
         </template>
 
         <template v-else-if="exportState.phase === 'soon'">

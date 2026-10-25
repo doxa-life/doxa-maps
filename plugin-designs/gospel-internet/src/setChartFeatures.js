@@ -135,3 +135,51 @@ export function degreesToPixelRadius(degrees, { minZoom = 0, maxZoom = 22 } = {}
   const px = (z) => Number(degrees || 0) * 512 * Math.pow(2, z) / 360
   return ['interpolate', ['exponential', 2], ['zoom'], minZoom, px(minZoom), maxZoom, px(maxZoom)]
 }
+
+export function crossFeature(project, { arm = 13, cx = 0, cy = 0 } = {}) {
+  // ★ +v IS NORTH, NOT DOWN. The projection computes Y = 0.5 - v*K, so a LARGER v is a HIGHER
+  // latitude. An earlier version named its parts "upper" and "lower" on the screen convention
+  // where +y goes down, and therefore drew the LONG arm upward — an inverted cross, which is a
+  // different symbol rather than a cosmetic slip. Named by compass here so the mistake cannot be
+  // made silently again: `north` is toward the top of the drawing.
+  const H = arm * 2.2
+  const north = cy + H * 0.35          // the short arm, above the bar
+  const south = cy - H * 0.65          // the long arm, below it
+  const barV = cy + H * 0.18           // the bar sits high, nearer the top than the middle
+  const barHalf = arm * 0.62
+  const vert = [[cx, north], [cx, south]].map(([u, v]) => project(u, v))
+  const horiz = [[cx - barHalf, barV], [cx + barHalf, barV]].map(([u, v]) => project(u, v))
+  return {
+    type: 'FeatureCollection',
+    features: [
+      { type: 'Feature', properties: { part: 'v' }, geometry: { type: 'LineString', coordinates: vert } },
+      { type: 'Feature', properties: { part: 'h' }, geometry: { type: 'LineString', coordinates: horiz } },
+    ],
+  }
+}
+
+/**
+ * Draw the cross on a whiteboard map, as a LINE layer over the points.
+ *
+ * ★ line-cap AND line-join ARE LAYOUT, NOT PAINT. Put either in `paint` and addLayer THROWS, and if
+ * the call sits inside a silent try/catch the chart simply renders without its cross — which is how
+ * this went missing once already. The failure is reported rather than swallowed for the same reason.
+ */
+export function addCrossLayer(map, project, id, { arm = 13, color = '#3b463d', width = 3 } = {}) {
+  try {
+    if (map.getLayer(id)) map.removeLayer(id)
+    if (map.getSource(id)) map.removeSource(id)
+    map.addSource(id, { type: 'geojson', data: crossFeature(project, { arm }) })
+    map.addLayer({
+      id,
+      type: 'line',
+      source: id,
+      layout: { 'line-cap': 'square', 'line-join': 'miter' },
+      paint: { 'line-color': color, 'line-width': width },
+    })
+    return true
+  } catch (e) {
+    console.warn(`[set-charts] the cross layer "${id}" did not draw:`, e && e.message)
+    return false
+  }
+}

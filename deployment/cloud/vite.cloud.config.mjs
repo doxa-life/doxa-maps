@@ -3,6 +3,7 @@
 import base from '/app/repo/vite.config.js'
 import { mergeConfig } from 'vite'
 import { readFileSync } from 'node:fs'
+import { GATED_PROFILES } from '/app/repo/internal/_tree-name.mjs'
 
 const env = process.env
 const SETUP_STATE = '/tmp/rudder-setup.state'   // written by entry.sh: running -> done | failed
@@ -40,13 +41,40 @@ const rudderStarting = {
   },
 }
 
+// ACCESS=public (entry.sh sets DX_PUBLIC_STUDIO=1): Vite owns the public port with no sign-in in front of it.
+// - The backend's paths go to admin.mjs, whose gates decide: /cdn/ and /api-prod/api/ public, /pb/ records
+//   by PocketBase's own rules, and /pb/_/, _superusers and /admin/ for the admin password.
+// - GATED bundles (gatedProfiles, e.g. key-cities) must never reach a public surface. The Studio already leaves
+//   them out of its list; here their source and dev pages are refused too, so a typed URL can't load them. So is
+//   /__plugin-gallery/registry.json, the raw discovery list for smoke tools: it still names the gated bundles and
+//   their profiles, and the Studio itself reads only manifest.json.
+// - /__open-in-editor (Vite's own) would start an editor process on this server for a visitor: refused.
+const PUBLIC = env.DX_PUBLIC_STUDIO === '1'
+const publicGuard = {
+  name: 'cloud-public-guard',
+  enforce: 'pre',
+  apply: 'serve',
+  configureServer(server) {
+    if (!PUBLIC) return
+    server.middlewares.use((req, res, next) => {
+      let p = (req.url || '').split('?')[0]
+      try { p = decodeURIComponent(p) } catch { /* keep it raw */ }
+      const gated = GATED_PROFILES.some((g) => p.includes(`/plugin-designs/${g}/`) || p === `/__leaf/${g}` || p.startsWith(`/__leaf/${g}/`))
+      if (!gated && !p.startsWith('/__open-in-editor') && p !== '/__plugin-gallery/registry.json') return next()
+      res.statusCode = 404
+      res.setHeader('content-type', 'text/plain; charset=utf-8')
+      res.end('not found\n')
+    })
+  },
+}
+
 export default async (e) => {
   const b = typeof base === 'function' ? await base(e) : base
   const hmr = env.HMR_CLIENT_PORT
     ? { clientPort: Number(env.HMR_CLIENT_PORT), protocol: env.HMR_PROTOCOL || 'wss' }
     : undefined
   return mergeConfig(b, {
-    plugins: [rudderStarting],
+    plugins: [publicGuard, rudderStarting],
     cacheDir: '/tmp/vite-cache',
     server: {
       host: env.VITE_HOST || '0.0.0.0',
@@ -54,6 +82,10 @@ export default async (e) => {
       strictPort: true,
       allowedHosts: true,
       ...(hmr ? { hmr } : {}),
+      ...(PUBLIC ? { proxy: { '^/(cdn|api-prod|pb|admin)/': { target: 'http://127.0.0.1:5175', ws: true } } } : {}),
+      // Public: the checkout's git internals are not served either (the private history, .git/config). Vite's
+      // defaults are restated because setting deny replaces them.
+      ...(PUBLIC ? { fs: { strict: true, deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**'] } } : {}),
     },
   })
 }

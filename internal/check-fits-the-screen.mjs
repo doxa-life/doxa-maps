@@ -4,10 +4,10 @@
  *
  * ★ WHY THIS EXISTS (LL-the-user-found-three-bugs-my-gates-could-not-see, 2026-09-23). The suite
  * was 56/58 green, verify:gate1 13/13, verify:map-paint 11/11, verify:interop 4/4, 363 done cards
- * — and the Driver opened the product and found FIVE real defects in one sitting, several caused
+ * — and opening the product found FIVE real defects in one sitting, several caused
  * by a change a gate had certified. NOT ONE was visible to any gate, because every gate up to this
  * one asserts STATE (does it mount, does it fetch, do the counts agree, does a canvas paint). The
- * Driver assesses FITNESS FOR USE: is it slim, can I see it at once, does the wheel do what I
+ * product is judged on FITNESS FOR USE: is it slim, can I see it at once, does the wheel do what I
  * expect, does it tell me what I'm looking at. A suite of the first kind can be perfectly green
  * while the second kind fails completely. This gate encodes the second kind, as five clauses:
  *
@@ -124,7 +124,7 @@ for (const b of mf.bundles || []) {
 }
 
 // ── 2. SERVE THE BUILT TREE the way production serves it (directories 404) ─────────────────────
-const server = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(PORT), '--directory', 'public'], {
+const server = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(PORT), '--directory', 'public', '--exit-with-parent'], {
   cwd: ROOT, stdio: 'pipe',
 })
 let serverErr = ''
@@ -233,7 +233,7 @@ async function runComposite() {
 
   // ── CLAUSE A — ONE-VIEWPORT RULE ─────────────────────────────────────────────────────────────
   // .stl-sec (StackLayout's own section wrapper, library/layouts/StackLayout.vue:62) is the band
-  // the Driver actually sees stacked above the grid — measuring .rd-shell alone would miss a
+  // a reader actually sees stacked above the grid — measuring .rd-shell alone would miss a
   // regression in the SECTION wrapper around it (exactly what the self-test above pokes).
   //
   // ★ THE CAUSAL TEST, NOT A STATIC SIZE COMPARISON (rewritten 2026-09-23, BUG-DASHBOARD-BAND-
@@ -290,8 +290,8 @@ async function runComposite() {
     record('A', TARGET, fitsViewport, detail)
     if (!fitsViewport) fail('a', `dashboard band is ${band.bandH}px, taller than the ${VIEWPORT_H}px viewport — it sizes to its own content instead of the screen. ` + detail)
 
-    // Driver, verbatim: "the dashboard rendering to the full height of the tree legend" is the
-    // bug — i.e. the band TRACKING the legend's content, not merely being numerically larger
+    // THE BUG: the dashboard rendering to the full height of the tree legend, i.e. the band
+    // TRACKING the legend's content, not merely being numerically larger
     // than it. Test that directly: expand every section (worst case, ~2100px of rows) and assert
     // the band does not grow past the viewport with it. GROWTH_TOLERANCE_PX is generous enough to
     // absorb a scrollbar-width reflow, tight enough that the original 2325px regression (a ~1400px

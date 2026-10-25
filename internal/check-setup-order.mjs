@@ -4,7 +4,7 @@
  *
  * Two arms, one root cause: a line's POSITION in a setup block is not the same as the MOMENT it
  * runs, and both defects below shipped because the author read the file top-to-bottom and assumed
- * the runtime would too. Both were found in the Driver's own console, in a gallery tab, on code
+ * the runtime would too. Both were found in a live console, in a gallery tab, on code
  * that built clean, parsed clean and passed every other gate in this tree.
  *
  * ── ARM A: IMMEDIATE-TDZ ──────────────────────────────────────────────────────────────────────

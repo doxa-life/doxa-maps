@@ -19,7 +19,7 @@ Each bundle is one self-contained `.js` file that registers a custom HTML elemen
 | **See a change on the served site** | rebuild, then refresh (the dev server never writes `public/`) |
 | **Repoint the API without a rebuild** | set `window.MAP_APP_API_URL` before the bundle loads |
 | **Repoint the Mapbox token** | pass `tk` in `profile-config`, or set `window.MAP_TOKEN_URL` / build-config `tokenUrl` |
-| **Run a map without a Mapbox key** | `"provider": "maplibre"` in `profile-config` (or `?provider=maplibre`) |
+| **Run a map without a Mapbox key** | nothing: MapLibre is the default. To force it anyway: `"provider": "maplibre"` in `profile-config` (or `?provider=maplibre`) |
 
 ---
 
@@ -48,7 +48,7 @@ Smallest first. Which bundle is the current example of each: **[reference-capabi
 | 2 | **preset-element** (prop-table) | `parameterized` | one profile + a table of named presets; each row is a ready-made map with its own embed page | the bundle ships `<name>.instances.json` — `{ "instances": [{ "id", "title", "props" }] }`; one page per row at `<bundle>/<profile>/<id>/index.html` |
 | 3 | **multi-view-element** (monolithic) | `monolithic` | one profile holding several screens (tabs or steps), one shown at a time | declared: `<profile>.meta.json` → `{ "type": "monolithic" }` |
 | 4 | **composite-element** (nested elements) | `nested-elements-mfe` | a profile that places other plugins together and ships the set as one new element | declared: `<profile>.meta.json` → `{ "type": "nested-elements-mfe", "composes": [ … ] }` |
-| 5 | **app-shell** (nested SPAs) | `nested-mfe-spa` | the outer frame — rail, header, navigation — that mounts any of the others; e.g. the Research Gallery (`doxa-maps-spa`) and the Plugin Studio | declared the same way; a compiled Vue custom element like every other rung |
+| 5 | **app-shell** (nested SPAs) | `nested-mfe-spa` | the outer frame — rail, header, navigation — that mounts any of the others; e.g. Deep Research (`doxa-maps-spa`) and the Plugin Studio | declared the same way; a compiled Vue custom element like every other rung |
 
 **Tiers 3–5 are always declared, never guessed** (either spelling; see `TYPE_ALIASES` in
 `internal/plugin-gallery/discover.mjs`). A folder's apparent simplicity does not decide its tier: an
@@ -103,7 +103,7 @@ colours or language with **no rebuild**.
 ```html
 <doxa-map profile-config='{
   "profile":    "doxa-simple-map",   // which flat .vue screen to render (required)
-  "tk":         "pk.eyJ...",         // Mapbox token (host-supplied)
+  "tk":         "MAPBOX_PUBLIC_TOKEN",         // Mapbox token (host-supplied)
   "instanceId": "my-map",            // optional; isolates window events between embeds
   "dataSource": "pray-tools",        // or { "type":"rest-api","endpoint":"https://…" }
   "colorSet":   "default",
@@ -145,6 +145,7 @@ i18n, under a **distinct** tag, since `customElements.define()` is one-shot per 
 | `bun run clean` | wipes and recreates the `public/<name>/` output tree |
 | `bun run tree` | writes `manifest.json` + the leaf pages, then copies the tree to every build-config `paths` destination |
 | `bun run verify` · `bun run verify:full` | data-integrity, shipped-bundle and network-policy guards (fast, no browser) · plus rendered posters and live apps in a browser |
+| `bun run dropin` | the one-server drop-in: copies the built tree into your site's `public/` (`dropin.dest`, default `../doxa-life/public`), so the site's own server serves every map. Never prunes; `--prune` into a `public/` folder is refused |
 | `bun run sync:dropin <dest> [--from-config] [--prune]` | mirrors the built `public/` into a host checkout. The allowlist lives in ONE place, `vite.doxa-maps-build-config.json` → `dropin.include`; `dropin.exclude` lists built files no page fetches. Never copies credentials, docs or staging pages; `--dry-run` first |
 | `bun run check:public-hygiene [<dir>] [--strict]` | proves a served folder is fit to publish: no local paths, internal names, dev URLs, token-shaped secrets, source maps or staging pages. Run it on a drop-in before any public push |
 
@@ -346,7 +347,7 @@ The measurements behind the rules above, kept for whoever needs the reasoning.
   one. `verify:map-paint` passes under both tokens (it checks GL + attribution, not tiles), so judge tile
   loading by the tile response count, not a screenshot — the basemap is Mapbox Light, which looks bare.
 - **Share round-trip (2026-09-22).** 8/8 passed with six distinct reopened tags, each matching its plugin
-  (the two UPG-100 profiles share one tag). A pass count alone cannot catch an SPA fallback that renders
+  (the two UPG100 Posters profiles share one tag). A pass count alone cannot catch an SPA fallback that renders
   *a* map for every URL.
 - **Why SRI identity, not HTTP status.** A platform's app URL can return 200 with a sign-in page; comparing
   each live bundle's bytes against the manifest's `integrity` hash is a cryptographic identity proof that
@@ -355,8 +356,6 @@ The measurements behind the rules above, kept for whoever needs the reasoning.
 - **Undocumented gates (2026-09-22).** 26 gates lived outside the build and only nine were listed; two
   unlisted ones had been failing for two sessions. A standalone gate nobody knows about does not run —
   which is why the table above is the list to run before publishing.
-- **`check:dxlife`.** It exits 2 ("clone not found") on any machine without a sibling DX-life clone — a
-  deliberate third value that `bun run` reports as a failure. It is not in the build, so a clone still builds.
 - **Screenshot distinctness.** Two README slots once showed the same view under two captions: the shot
   chased a "Next" control that did not exist inside a `try/catch`, and the PNGs differed by 0.16% render
   noise, so no checksum caught them.

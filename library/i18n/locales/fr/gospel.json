@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file; prose.english is the one translated line that says so.",
   "prose": {
     "english": "Les notes explicatives ci-dessous sont en anglais."
   },
@@ -12,7 +11,8 @@
     "clear": "Effacer la recherche",
     "none": "Rien ne correspond à ce nom, cette langue ou ce code.",
     "placeholderShort": "Peuple, langue ou code ISO",
-    "showingOf": "{shown} résultats affichés sur {total} — continuez à taper pour affiner."
+    "showingOf": "{shown} résultats affichés sur {total} — continuez à taper pour affiner.",
+    "aria": "Rechercher un peuple, une langue ou un code ISO"
   },
   "legend": {
     "title": "Peuples non atteints sans aucune ressource de l'Évangile",
@@ -78,7 +78,17 @@
     "everyResource": "Toutes les ressources en",
     "alsoSpeak": "Parlent aussi",
     "share": "Partager",
-    "linkCopied": "Lien copié"
+    "linkCopied": "Lien copié",
+    "seeLargest": "Voir les {n} plus grands →",
+    "alreadyPraying": "{n} prient déjà",
+    "everyIn": "Toutes les ressources utilisées en {country}",
+    "found": "Ressources de l’Évangile trouvées ({n})",
+    "none": "Aucune ressource trouvée ({n})",
+    "showingOf": "Affichage de {shown} sur {total}.",
+    "popSuffix": "· {pop} personnes",
+    "hasResources": "apparentée : {lang} a des ressources",
+    "loadingTable": "Chargement de {table}…",
+    "popCountries": "{pop} personnes · {countries}"
   },
   "res": {
     "scripture": "Écritures",
@@ -166,7 +176,9 @@
     "allLanguages": "Toutes les langues",
     "peopleGroup": "peuple",
     "peopleGroups": "peuples",
-    "scriptureHere": "Écritures dans cette langue"
+    "scriptureHere": "Écritures dans cette langue",
+    "noTextMeans": "Ce que signifie « sans texte ».",
+    "pageLists": "Cette page répertorie"
   },
   "columns": {
     "People group": "Peuple",
@@ -334,7 +346,9 @@
     "c2Unit": "personnes dans les peuples dont c'est la langue PRINCIPALE — non les locuteurs de la langue",
     "c3Title": "Pays comptant le plus de langues non desservies",
     "c3Sub": "Les {n} pays comptant le plus de langues sans rien de trouvé. La longueur de la barre correspond à chaque langue présente dans ce pays.",
-    "c3Unit": "langues présentes dans le pays (une langue transfrontalière compte dans chacun)"
+    "c3Unit": "langues présentes dans le pays (une langue transfrontalière compte dans chacun)",
+    "noneHero": "{nNone} langues sur {nLang} ont {noScripture} — les langues de {popNone} personnes.",
+    "noneHeroFound": "ni Écriture ni film dans les fonds consultés"
   },
   "filter": {
     "showingOnly": "Affichage limité aux {what}.",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "SUN est déjà enseigné par {organisation} dans : {countries}."
+  },
+  "gap": {
+    "popLine": "{pop} personnes · {iso3}",
+    "wayIn": "voie d’entrée : {via}",
+    "hasNoText": "a {what} — aucun texte trouvé",
+    "showingOnly": "Affichage de {what} uniquement.",
+    "seeLargest": "Voir les {n} plus grands →",
+    "kind": {
+      "none": "peuples sans aucune ressource trouvée",
+      "some": "peuples avec quelques ressources",
+      "hnr": "peuples qui peuvent entendre l’Évangile mais n’ont pas d’Écriture écrite dans les fonds consultés",
+      "all": "peuples avec Écriture et film"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "Écriture, {medium} · {source}",
+    "bibleVideoOf": "Vidéo biblique · {source}",
+    "loading": "Chargement des ressources…",
+    "peopleWord": "personnes",
+    "alreadyPraying": "prient déjà",
+    "exhausted": "épuisé",
+    "together": "avec"
+  },
+  "gapHero": {
+    "hero": "{groups} peuples sont en {growing} {noFound} {pop} personnes, environ {deaths} décès par jour.",
+    "growing": "croissance",
+    "found": "sans Écriture ni film dans les fonds consultés —"
+  },
+  "ui": {
+    "noCode": "sans code",
+    "unnamed": "langue sans nom",
+    "hideKey": "Réduire la légende",
+    "showKey": "Développer la légende",
+    "largest": "Plus grands peuples sans aucune ressource",
+    "nobodyPraying": "Rien trouvé, et personne ne prie",
+    "concentrates": "Où l’écart se concentre",
+    "linkUnchecked": "Ce lien n’a pas été vérifié."
+  },
+  "rows": {
+    "scriptureHere": "Écriture dans cette langue",
+    "audio": "Écriture",
+    "bibleVideo": "Vidéo biblique",
+    "gospelPresentation": "Présentation de l’Évangile",
+    "studyNotes": "notes d’étude",
+    "readOnline": "lire en ligne",
+    "audioScripture": "Écriture audio",
+    "listenBrowser": "Écouter dans le navigateur",
+    "inBrowser": "Dans le navigateur — {media}",
+    "readHere": "Lire dans cette langue",
+    "listenHere": "Écouter dans cette langue",
+    "wordsOfLife": "Paroles de Vie — {name}",
+    "gospelAudio": "Audio de l’Évangile",
+    "discipleship": "formation au discipulat {brand}"
   }
 }

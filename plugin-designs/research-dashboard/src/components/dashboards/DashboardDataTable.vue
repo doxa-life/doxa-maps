@@ -18,6 +18,7 @@ import { useCsvExport } from '@map/composables/useCsvExport.js'
 import { formatCount } from '@map/utils/formatCount.js'
 import { useTreeLegendLabels } from '../../composables/useTreeLegendLabels.js'
 import { tStatic } from '@map/i18n/index.js'
+import { fillParams } from '@map/composables/useOptionalT.js'
 
 // This table's chrome, read out of the catalogue. tStatic and not useI18n, for the reason the rest
 // of this tree gives: these components mount inside custom elements that install no i18n plugin,
@@ -53,7 +54,7 @@ const COLUMNS = computed(() => cfg.columns || [])
 // overflow-x without a floor is a scrollbar that never appears.
 //
 // The floor is per-column and derived from the HEADER, because the header is the thing the
-// Driver asked to stop abbreviating: a column must never be narrower than its own full title.
+// The requirement is to stop abbreviating: a column must never be narrower than its own full title.
 // `col.minW` (dashboard.config.js) overrides; otherwise it is measured from the label's
 // character count. Body cells may still ellipsise — a people-group NAME can be arbitrarily
 // long and sizing columns to the longest cell would push the table to several thousand px.
@@ -75,7 +76,7 @@ const COL_MIN_FALLBACK = 90
 // ★ THAT FLOOR IS BELOW THE 1440px SCROLLPORT ON PURPOSE. At 1440 the eight columns genuinely
 // fit and there is nothing to scroll — forcing a scrollbar there would invent a defect. This
 // floor bites at NARROW widths (1280 and below), which is exactly where the header truncation
-// the Driver objected to was happening.
+// that was objected to was happening.
 const PX_PER_CHAR = 9.9
 const SORT_INDICATOR_PX = 12
 function colMin(col) {
@@ -150,7 +151,7 @@ const filtered = computed(() => {
  * grid and the header tooltip below, which say plainly that sorting orders THIS table. That way a
  * user who sorts does not form an expectation about the grid that the product will not keep.
  *
- * IF A FUTURE DRIVER RULING WANTS SHARED SORT, it needs all three of: a sort channel on
+ * IF A FUTURE RULING WANTS SHARED SORT, it needs all three of: a sort channel on
  * useSelectionBus, a `sort` prop on people-groups-grid, and a row comparator inside that grid.
  * Do not add the bus channel alone — a channel with no subscriber is the "neither" state again,
  * only now with more code.
@@ -454,7 +455,7 @@ function toggleDock() { collapsed.value = !collapsed.value; bus && bus.emit('tog
  * ── FULLSCREEN (card BUILD-TABLE-HORIZONTAL-SCROLL-AND-FULLSCREEN) ──────────────────────────
  *
  * ★ WHY THIS SHIPS WITH THE SEVEN-ROW CAP AND NOT AFTER IT. The table now shows seven data rows
- * by default because the Driver is reclaiming vertical space. A deliberately small table is only
+ * by default to reclaim vertical space. A deliberately small table is only
  * an honest trade if the reader can get a big one on demand; without an escape hatch the cap is
  * just a downgrade. The cap and its release are one change.
  *
@@ -481,8 +482,8 @@ function toggleDock() { collapsed.value = !collapsed.value; bus && bus.emit('tog
  */
 const isFull = ref(false)
 const wrapEl = ref(null)
-// ★ NATIVE FULLSCREEN, NOT A FIXED OVERLAY (Driver 2026-09-23: "there is no way to exit full
-// screen or export csv when you enter full screen"). The bar with BOTH buttons is inside this
+// ★ NATIVE FULLSCREEN, NOT A FIXED OVERLAY: in full screen there was no way to exit it or to export
+// the CSV. The bar with BOTH buttons is inside this
 // wrap, so structurally they should have been visible -- but position:fixed inside a shadow root
 // resolves against any transformed/contained ANCESTOR, not the viewport, and in the cap-5 shell
 // that pinned the "fullscreen" wrap to a pane whose top sat above the visible area: the bar (and
@@ -561,10 +562,16 @@ async function onExport() {
   exporting.value = true
   try {
     const r = await csv.exportCsvAsync()
-    const how = r.downloaded ? 'exported' : r.clipboard ? 'copied to clipboard' : 'ready'
-    exportToast.value = `✓ ${fmt(r.rows)} rows × ${r.fields} fields ${how}`
+    // The counts keep going through fmt(), which groups digits the way the locale does; only the
+    // words around them come from the catalogue. Interpolated rather than concatenated, because the
+    // order of "rows", "fields" and the outcome is not the same in every language.
+    const how = r.downloaded ? T('dashboard.export_done', 'exported')
+      : r.clipboard ? T('dashboard.export_copied', 'copied to clipboard')
+      : T('dashboard.export_ready', 'ready')
+    exportToast.value = fillParams(T('dashboard.export_toast', '✓ {rows} rows × {fields} fields {how}'),
+      { rows: fmt(r.rows), fields: r.fields, how })
   } catch (e) {
-    exportToast.value = '✕ Export failed'
+    exportToast.value = T('dashboard.export_failed', '✕ Export failed')
   } finally {
     exporting.value = false
     clearTimeout(_toastT); _toastT = setTimeout(() => { exportToast.value = '' }, 3200)
@@ -609,7 +616,7 @@ useShadowStyles(`
      controls) and the right cluster (toast/Export CSV) have different widths. Absolute
      positioning at left:50% + translateX(-50%) is relative to the bar itself, so the clusters
      cannot drag it.
-     Out of flow means it adds ZERO height by construction — the Driver's hard constraint.
+     Out of flow means it adds ZERO height by construction — the hard constraint.
      pointer-events:none so it can never intercept a click meant for a control beneath it. */
   .rd-bar-hint{ position:absolute; left:50%; transform:translateX(-50%);
     max-width:38%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -617,14 +624,14 @@ useShadowStyles(`
   /* Hidden where the clusters would collide with it — at narrow widths there is no free middle. */
   @media (max-width: 1100px){ .rd-bar-hint{ display:none; } }
   /* ★ THE BAR IS A SELECTION TOOLBAR WHILE A SELECTION EXISTS (the 1280px flood, measured: with
-     one row selected the bar wrapped to 43px and pushed a control out of it -- the Driver's
+     one row selected the bar wrapped to 43px and pushed a control out of it -- the
      "flooded with buttons that overflow"). The centred hint and the selection cluster cannot both
      fit a 666px middle column, and the hint is the one carrying redundant information there: its
      count already lives in the selection pill. It yields exactly while a selection exists and
      returns the moment the selection clears -- state-scoped, so the resting bar is unchanged.
      (The 1100px media rule above is the same idea keyed on width; this one is keyed on state.) */
   .rd-table-wrap:not([data-sel-count="0"]) .rd-bar-hint{ display:none; }
-  /* ★ MEASURED AT 1280 (the Driver's flood, second cause): hiding the hint was not enough -- the
+  /* ★ MEASURED AT 1280 (the selection flood, second cause): hiding the hint was not enough -- the
      in-flow title and count are separate children, and squeezed to 48px the title wrapped
      INTERNALLY ("People"/"Groups" on two lines), growing the bar to 43px and tumbling the spacer.
      While a selection exists they say nothing the bar does not already say -- the pill carries the
@@ -702,8 +709,8 @@ useShadowStyles(`
      HONEST LIMIT: this IMPROVES 1280, it does not solve it — 8 text columns genuinely do not fit there.
      Closing that gap is a product call (drop a column at narrow widths, or scroll horizontally), not a
      CSS one. At 1440 the table already fits with 0 of 8 truncated. */
-  /* ★ NO ELLIPSIS ON THE HEADER (Driver: "instead of ABBREVIATING the headers, we can have the
-     FULL headers in the table"). text-overflow:ellipsis DESTROYS information with no way to
+  /* ★ NO ELLIPSIS ON THE HEADER: the table shows FULL headers, never abbreviated ones.
+     text-overflow:ellipsis DESTROYS information with no way to
      recover it — the reader cannot widen a truncated word, and 'Engageme…' is not a column name.
      Horizontal scroll PRESERVES it: the full text always exists and is always reachable. This is
      the same trade already applied to the chart legends (nowrap + overflow-x:auto) in the commit
@@ -787,14 +794,14 @@ useShadowStyles(`
   <div ref="wrapEl" class="rd-table-wrap" :class="{ 'is-full': isFull }" :data-sel-count="selCount"
        :data-fullscreen="isFull ? '1' : '0'">
     <!-- Header bar — ALWAYS rendered, collapsed or not. The count + Export CSV are the two
-         controls the Driver asked to keep docked under the map when the grid is hidden. -->
+         controls that must stay docked under the map when the grid is hidden. -->
     <div class="rd-table-bar" :data-collapsed="collapsed ? '1' : '0'">
       <button class="rd-dock" :title="collapsed ? T('dashboard.expand_table', 'Expand table') : T('dashboard.collapse_table', 'Collapse table — grow the map')"
               data-table-dock :aria-expanded="collapsed ? 'false' : 'true'" @click="toggleDock">{{ collapsed ? '▴' : '▾' }}</button>
       <span class="ttl">{{ T('legend.titleBar.peopleGroups', 'People Groups') }}</span>
       <span class="ct" data-table-count>{{ fmt(rowCount) }} {{ rowCount === 1 ? T('dashboard.group', 'group') : T('dashboard.groups', 'groups') }}</span>
       <!-- role=status so assistive tech announces the count as the selection changes. -->
-      <!-- ★ NO CLEAR BUTTON IN THIS BAR (Driver 2026-09-23, on the selection flood: "it does not
+      <!-- ★ NO CLEAR BUTTON IN THIS BAR (on the selection flood, 2026-09-23: "it does not
            need to give me a Clear Selected button in the header because the FOOTER of the page
            already gives me that"). One action, one home; this pill is a status readout only.
            ★ VERIFIED WHAT ACTUALLY CLEARS, rather than repeating the premise: no literal footer
@@ -805,7 +812,7 @@ useShadowStyles(`
            bus and any future caller. This also deletes the one control in the cluster that read
            as "a button that doesn't make sense" -- a bare x with no label. -->
       <span v-if="selCount" class="rd-pill" data-sel-pill role="status">
-        <span>{{ fmt(selCount) }} selected</span>
+        <span>{{ fmt(selCount) }} {{ T('dashboard.selected', 'Selected') }}</span>
       </span>
       <!-- Selection VIEWS — separated from the pill because they mutate the VIEW, not the
            selection. Only meaningful once something is selected, so they appear with it. -->
@@ -819,12 +826,12 @@ useShadowStyles(`
       </template>
       <span class="rd-bar-sp"></span>
       <!--
-        ★ NO EXPLANATORY HINT HERE (Driver, 2026-09-22: "there does not need to be this text in the
+        ★ NO EXPLANATORY HINT HERE (reported, 2026-09-22: "there does not need to be this text in the
         table header / Filtering or selecting above updates this list").
 
         The text read "Filtering or selecting above updates this list". Its history is worth keeping
         because it records a judgement that got REVERSED rather than a mistake: v1 put it in a second
-        header above the grid, the Driver asked for it to ride the EXISTING bar instead, and it was
+        header above the grid, the request was for it to ride the EXISTING bar instead, and it was
         centred by absolute positioning against the bar (flex spacers split the LEFTOVER space, so
         the hint landed 55px off centre at 1440px and 1280px because the left and right clusters
         differ in width). All of that was right, and the text still had to go.
@@ -921,7 +928,7 @@ useShadowStyles(`
         <div class="rd-td chk"></div>
         <div v-for="(col, i) in COLUMNS" :key="'f-' + col.key" class="rd-td"
              :class="{ num: col.type === 'num' }" :style="colFlex(col)">
-          <!-- ★ "groups" WAS THE LAST ENGLISH WORD IN THIS TABLE (rega KA3, ?lang=ar): the footer read
+          <!-- ★ "groups" WAS THE LAST ENGLISH WORD IN THIS TABLE (KA3, ?lang=ar): the footer read
                "Σ 2,107 groups" on an Arabic page. dashboard.groups already ships in all eleven locales
                (ar "مجموعة"), so this is a call site that never read its own catalogue -- no new
                string, no new key. Singular/plural is written the same way as the header count at

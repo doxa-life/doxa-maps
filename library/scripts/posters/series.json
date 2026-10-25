@@ -5,11 +5,11 @@
       "The country posters shipped rendering the UPG-100 packet's framing: the 'UNENGAGED PEOPLE",
       "GROUPS' kicker, 'This packet is 1 of {n} UPG-100 lists', the UPG-100 narrowing funnel, and a",
       "below-map block telling the reader to divide the set among thirty disciples. Coherent for ~30",
-      "UPG-100 zones; incoherent for ~170 countries. Reported by the Driver, 2026-09-28.",
+      "UPG-100 zones; incoherent for ~170 countries.",
       "There was no series parameter anywhere: packet.mjs and packet-render.js knew only one series,",
       "so 'the packet' and 'the UPG-100 packet' were the same thing and nothing could disagree.",
       "",
-      "ONE mechanism for BOTH surfaces (dx-shepherd's call): packet.mjs AND generate.mjs read this",
+      "ONE mechanism for BOTH surfaces: packet.mjs AND generate.mjs read this",
       "file, because the leak was in two independent places -- the packet strings and the poster's",
       "own furniture (generate.mjs NETWORKS), which is not a packet string at all. Fixing only the",
       "first would have left 'Thirty disciples' printing on every country poster."
@@ -29,13 +29,15 @@
       "titleQualifier": "the coloured words before the region name, e.g. 'Unengaged of' (:2427)",
       "seriesName": "the name in quotes on the Series line and in the side box (:1877, :1907, :2115)",
       "sideBoxHeading": "the right-hand explainer's heading (:2097)",
-      "sideBoxBody": "that explainer's first paragraph (:2115)"
+      "sideBoxBody": "that explainer's first paragraph (:2115); in the head-columns band **...** prints a bold run",
+      "strategyBody": "the Jesus column's text: one paragraph, or a list of them; absent = poster-render's STRATEGY_DEFAULT",
+      "sideBoxMore": "the explainer's further paragraphs: one, or a list; [] prints none; absent = poster-render's WHAT_IS_MORE"
     },
     "one_switch": [
-      "SERIES is the ONE switch (dx-shepherd, 2026-09-28). SERIES=country implies the country zone",
+      "SERIES is the ONE switch (2026-09-28). SERIES=country implies the country zone",
       "source, the country series name and the country header strings. COUNTRIES=1 is kept as an",
       "ALIAS that sets SERIES=country, so runs that predate this file keep working AND now get the",
-      "matching packet. Two parameters for one concept is what let rega's country render take the new",
+      "matching packet. Two parameters for one concept is what let a country render take the new",
       "packet path while its header stayed UPG-100."
     ],
     "english_only_note": [
@@ -43,20 +45,20 @@
       "at all: measured zero occurrences of PACKET_LANG, packet-strings or i18n in the file, and its",
       "1,728 non-ASCII characters are entirely typographic (box-drawing, em-dashes, middots) with no",
       "CJK, Arabic, Cyrillic or Devanagari -- so no translated string has ever been in it",
-      "(verified independently by regions-plugin, 2026-09-28). The poster surface is English end to",
+      "(verified independently, 2026-09-28). The poster surface is English end to",
       "end; `strings` below is the half that carries 11 locales."
     ],
     "translation_status": [
-      "The `country` English below is a DRAFT taken from the Driver's dictated shape and is NOT signed",
-      "off -- see _draft_awaiting_driver on that entry. NO translations are to be made from it: a",
-      "paraphrase multiplied by 11 locales is 11 wrong strings. When he signs off the English, the",
-      "strings go to a HUMAN translator via dx-shepherd, which is this file's established practice --",
+      "The `country` English below is a DRAFT, provisional, pending a product decision -- see",
+      "_draft_pending_decision on that entry. NO translations are to be made from it: a",
+      "paraphrase multiplied by 11 locales is 11 wrong strings. Once the English is approved, the",
+      "strings go to a HUMAN translator, which is this file's established practice --",
       "all 11 locales of packet-strings.json carry real translations, never English echoes."
     ]
   },
 
   "upg100": {
-    "label": "UPG-100 — unengaged people groups, ~30 zoned lists",
+    "label": "UPG100 — unengaged people groups, ~30 zoned lists",
     "dataDir": "plugin-designs/my-upg-100-list/data",
     "countryMode": false,
     "funnel": true,
@@ -64,9 +66,12 @@
     "poster": {
       "kicker": "Unengaged People Groups",
       "titleQualifier": "Unengaged of",
-      "seriesName": "List of 100 UPG's",
-      "sideBoxHeading": "What is a Prayer List of 100 UPG?",
-      "sideBoxBody": "This map is one of a {approxLists}-map set called the {seriesName} — a large, overwhelming target in the thousands, organised into clear groupings and displayed on maps and prayer lists."
+      "seriesName": "UPG100 List",
+      "sideBoxHeading": "What is a UPG100 List?",
+      "sideBoxBody": "This map is one of a {approxLists}-map set called the {seriesName} — a large, overwhelming target in the thousands, organised into clear groupings and displayed on maps and prayer lists. Each map comes with a prayer list of its fifty to a hundred people groups — their names, a representative photo, and more detail — to mobilise **informed intercession.**",
+      "strategyBody": "2000 People Groups? Jesus’ disciples were faced with a similar problem, “How can we feed so many with only five loaves and two fish?” Through radical faith and miracle-expectant prayer, He focused on the few in front of Him — dividing the crowd and entrusting faithful men and women to serve the most strategic groups of fifties and hundreds (Mark 6:40).",
+      "sideBoxMore": [],
+      "headColumns": true
     },
     "networks": [
       ["1 · Thirty disciples.",
@@ -91,28 +96,26 @@
       "sideBoxBody": "This map is one of a {approxLists}-map set called the {seriesName} — one sheet for each country, naming the unreached people groups who live there so a reader can pray for them by name."
     },
     "_poster_why": [
-      "THE FOURTH LEAK SITE, found by rega reading the rendered page rather than a checker's verdict:",
+      "THE FOURTH LEAK SITE, found by reading the rendered page rather than a checker's verdict:",
       "a SERIES=country poster still printed 'UNENGAGED PEOPLE GROUPS', 'Unengaged of West Africa',",
       "'Series: List of 100 UPG's · map 11 of 28' and a side box calling it 'one of a 30-map set",
-      "called the List of 100 UPG's'. My check:series-isolation passed because its vocabulary was a",
-      "HAND LIST of the phrases I had already found -- a PASS from it was only ever a lower bound.",
-      "seriesName 'Country Maps' is the Driver's own wording, recorded in a generate.mjs design note",
-      "dated 2026-08-01: 'we'll call this series the Country Map series... inside of the quotes say",
-      "Country Maps. So that series should be a parameterized field.' The kicker says UNREACHED rather",
+      "called the List of 100 UPG's'. check:series-isolation passed because its vocabulary was a",
+      "HAND LIST of the phrases already found -- a PASS from it was only ever a lower bound.",
+      "seriesName 'Country Maps' is the series' agreed name, recorded in a generate.mjs comment",
+      "dated 2026-08-01, which also made the series name a parameterized field. The kicker says UNREACHED rather",
       "than UNENGAGED because a country sheet lists the unreached groups living there, which is a",
-      "wider set than the unengaged -- see _draft_awaiting_driver; this wording is part of that draft."
+      "wider set than the unengaged -- see _draft_pending_decision; this wording is part of that draft."
     ],
     "_funnel_why": [
       "The funnel narrows every people group on earth down to THIS UPG-100 list (Project 2000/7000/",
       "4700/700). That argument does not describe a country poster, and a page of true numbers about",
-      "the wrong thing is worse than no page. Dropped for country by dx-shepherd, 2026-09-28.",
+      "the wrong thing is worse than no page. Dropped for country, 2026-09-28.",
       "Dropping it also removes 12 of the 17 series-specific keys from the translation bill: a page",
       "that does not render needs no locales."
     ],
-    "_draft_awaiting_driver": [
-      "THE ENGLISH BELOW IS A DRAFT, NOT APPROVED. It follows the shape the Driver dictated on",
-      "2026-09-28 but he has not signed off the wording. regions-plugin has asked him to dictate the",
-      "three blocks as he wants them printed. Do not translate, print at scale, or quote as final",
+    "_draft_pending_decision": [
+      "THE ENGLISH BELOW IS A DRAFT, NOT APPROVED: provisional, pending a product decision on how",
+      "the three blocks should print. Do not translate, print at scale, or quote as final",
       "until that lands; replace this key with the approved text when it does."
     ],
     "strings": {
@@ -142,8 +145,52 @@
     "_networks_why": [
       "NOT a find-and-replace of thirty with a hundred and seventy. 'Divide the set among thirty",
       "disciples' is coherent at 30 and incoherent at ~170 (172 countries + China + India, per",
-      "emit-countries.mjs), so the Driver replaced the SHAPE: not 'split the set' but 'ask which one,",
+      "emit-countries.mjs), so the SHAPE was replaced: not 'split the set' but 'ask which one,",
       "then give them that poster'. The numbers are gone from the headings for the same reason."
+    ]
+  },
+  "indiaState": {
+    "label": "India states and union territories — one poster for each of the 34 with people groups listed",
+    "dataDir": "plugin-designs/my-upg-100-list/data",
+    "countryMode": true,
+    "funnel": false,
+    "poster": {
+      "kicker": "Unreached People Groups",
+      "titleQualifier": "Pray for",
+      "seriesName": "India State Maps",
+      "sideBoxHeading": "What is a State Prayer Map?",
+      "sideBoxBody": "This map is one of a {approxLists}-map set called the {seriesName} — one sheet for each state and union territory of India, naming the unreached people groups who live there so a reader can pray for them by name."
+    },
+    "_poster_why": [
+      "A state poster is a country poster one level down: the Country Posters wall prints one for each of India's",
+      "states and union territories that has people groups listed (34 of 36; data/people-groups/india-states.json).",
+      "The country series' text cannot be reused: it would call Gujarāt's poster one of the ~170 'Country Maps',",
+      "one sheet for each country. The term is 'state and union territory', never 'province'. This is the default",
+      "wording and stays editable; a change is a strings-only follow-up."
+    ],
+    "strings": {
+      "map_page_kicker": "PRAY FOR THIS STATE",
+      "map_page_sub": "A prayer list of {count} unreached people groups who live here",
+      "points_intro": "One hour with God, five minutes each. Pray these twelve for the peoples of this state.",
+      "christian_lede": "This is the same grid — one human life in weeks. Now each box is a share of the people in this state. The shaded boxes are the evangelical share of their population; the rest are waiting."
+    },
+    "_strings_why": [
+      "The country series' four keys with 'country' read as 'state'. Used by the Node generator; the browser",
+      "packet reads the localized packet-strings.json, which is series-invariant."
+    ],
+    "networks": [
+      [
+        "1 · Disciples.",
+        "Ask a disciple which state God has put on their heart, then give them that state's poster to print and prepare."
+      ],
+      [
+        "2 · Churches.",
+        "List the churches you know and ask each the same question, so every church has a poster to pray over together."
+      ],
+      [
+        "3 · Indigenous leaders.",
+        "Ask which leaders you know who live in one of these states, and give them their own state's map to pray for it specifically."
+      ]
     ]
   }
 }

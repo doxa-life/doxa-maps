@@ -8,9 +8,8 @@
 // scalar, so it can sort, filter, group and export without the app reshaping data
 // at render time.
 //
-// design note 2026-08-01: "store all your findings into tabulator tables for the list
-// view of these apps… all organized in list format with full granularity… in a
-// format that actually works, a format that is tabulator."
+// Every research finding is stored as a Tabulator table for the apps' list views:
+// organized as lists, at full granularity, in Tabulator's own format.
 //
 // So this is the M and V of IEMV:
 //   I/E  extraction  — done by derive-city-candidates / fetch-* / name-clusters
@@ -33,12 +32,6 @@ import { classify, isComms } from './app-kind.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, 'out');
 const TABLES = join(OUT, 'tables');
-// Tables that must NEVER ship publicly. They are never written inside this repo: set
-// DOXA_PRIVATE_DIR to a folder OUTSIDE the checkout to keep them for internal analysis, or
-// leave it unset and they are skipped. (They used to live in a tracked data-private/ folder;
-// a tracked folder in a public repo is not private.)
-const PRIVATE_TABLES = new Set(['field-access-visas']);
-const PRIVATE_DIR = process.env.DOXA_PRIVATE_DIR ? resolve(process.env.DOXA_PRIVATE_DIR) : null;
 const PROFILES = resolve(__dirname, '..', '..', '..', 'plugin-designs');
 
 const read = (f) => JSON.parse(readFileSync(join(OUT, f), 'utf8'));
@@ -71,19 +64,6 @@ function emit(name, rows, columns, meta, assert) {
     }
   }
   if (assert) assert(rows);
-  // RELEASE GOVERNANCE: tables in PRIVATE_TABLES never land in this repo — only in
-  // DOXA_PRIVATE_DIR (outside the checkout), or nowhere.
-  if (PRIVATE_TABLES.has(name)) {
-    if (!PRIVATE_DIR) {
-      console.log(`[tables] ${name.padEnd(26)} ${String(rows.length).padStart(5)} rows  PRIVATE — skipped (set DOXA_PRIVATE_DIR to keep it outside the repo)`);
-      return { name, rows: rows.length, private: true };
-    }
-    const priv = join(PRIVATE_DIR, 'tables');
-    if (!existsSync(priv)) mkdirSync(priv, { recursive: true });
-    writeFileSync(join(priv, `${name}.json`), JSON.stringify({ meta, columns, rows }, null, 1));
-    console.log(`[tables] ${name.padEnd(26)} ${String(rows.length).padStart(5)} rows  PRIVATE → ${priv}`);
-    return { name, rows: rows.length, private: true };
-  }
   if (!existsSync(TABLES)) mkdirSync(TABLES, { recursive: true });
   writeFileSync(join(TABLES, `${name}.json`), JSON.stringify({ meta, columns, rows }, null, 1));
   console.log(`[tables] ${name.padEnd(26)} ${String(rows.length).padStart(5)} rows  ${columns.length} cols`);
@@ -356,7 +336,7 @@ if (has('city-candidates.json')) {
   ], {
     title: 'Key Cities / Location Clusters',
     grain: 'one row per ~25km location cluster',
-    caveat: 'A cluster is people-group CENTROIDS, not a settlement. place_name comes from a cited gazetteer (Nominatim/OSM, ODbL); an unnamed row is honest, not missing.',
+    caveat: 'A cluster is people-group PINS (each marks a people group, not a town), not a settlement. place_name comes from a cited gazetteer (Nominatim/OSM, ODbL); an unnamed row is honest, not missing.',
     internet_caveat: 'Internet figures are NATIONAL. Per-city connectivity is not publicly available at this scale.',
   }, (r) => {
     const namedRows = r.filter((x) => x.named);
@@ -569,7 +549,7 @@ function messagingWhy(rows) {
 // It has NO WhatsApp, WeChat, Telegram, TikTok, LINE, Viber, imo or Zalo, because
 // messaging apps generate almost no web referrals. Reading "Facebook 91.7%" as
 // "this is where Pakistanis are" would be exactly wrong.
-// Brief: "look for other social media platforms than the typical ones."
+// The research looks beyond the typical Western social platforms.
 if (has('top-apps-by-country.json')) {
   const apps = read('top-apps-by-country.json');
   const spine3 = has('city-candidates.json') ? read('city-candidates.json') : { clusters: [] };
@@ -678,8 +658,8 @@ if (has('trade-languages-by-country.json')) {
 }
 
 // ═══ TABLE 9 — LANGUAGES PER CITY x RESOURCES (the per-city half) ══════════
-// Brief: "trade languages for each country AND CITY… key languages in order of
-// most prevalent, and map that to gospel."
+// The goal: trade languages for each country AND CITY, key languages ordered by
+// prevalence, each mapped to gospel resources.
 // The country-level view (TABLE 8) answers "what is spoken in this country".
 // This answers the sharper question: AT THIS PLACE, which languages are spoken,
 // and does each one already carry a resource — so a city can be read as reachable
@@ -749,7 +729,7 @@ if (has('city-candidates.json') && has('language-resources.json')) {
       title: 'Languages per City x Resources',
       grain: 'one row per location cluster x language spoken there',
       why: '399 of 1,646 clusters are multi-language — a city-level bridge can exist that a country average hides.',
-      place_caveat: 'A location is a cluster of people-group centroids within ~25km, NOT a municipal boundary. An empty place_name is an unnamed cluster, never an invented one.',
+      place_caveat: 'A location is a cluster of people-group pins within ~25km, NOT a municipal boundary. An empty place_name is an unnamed cluster, never an invented one.',
       resolution_caveat: 'resolved:false means the language LABEL did not match an ISO 639-3 record here — its resource status is UNKNOWN, not absent.',
       pools_caveat: 'Resource status is from eBible + JESUS Film only. GRN and FCBH audio are key-blocked.',
     }, (r) => {
@@ -1138,9 +1118,8 @@ if (has('language-resources.json')) {
 }
 
 // ═══ TABLE 14 — PLATFORM REACHABILITY: is it walled off, or open here? ═════
-// design note 2026-08-01: "we don't only need to track social media platforms but top
-// websites and apps like WeChat or WhatsApp ... so we can know whether they are
-// closed off or globally accessible."
+// Beyond social platforms, the top websites and messaging apps (WeChat, WhatsApp, …)
+// are tracked for whether each is closed off or globally accessible.
 //
 // This is the ONLY table that answers REACHABILITY. social-platforms answers
 // POPULARITY (StatCounter web referrals — WhatsApp/WeChat are invisible to it) and
@@ -1152,10 +1131,8 @@ if (has('language-resources.json')) {
     console.log('[tables] SKIP platform-reachability — run fetch-reachability.mjs first');
   } else {
     const reach = JSON.parse(readFileSync(f, 'utf8')).countries || {};
-    // Build country metadata LOCALLY. `groups` is defined further down the file
-    // (the visa table), so referencing it here is a temporal-dead-zone error — the
-    // build threw ReferenceError on first run. Derive from the same spine instead of
-    // depending on declaration order.
+    // Build country metadata LOCALLY, from the same spine, rather than from a later declaration: an earlier
+    // version read one and threw a temporal-dead-zone ReferenceError on its first run.
     const spineR = JSON.parse(readFileSync(join(OUT, 'city-candidates.json'), 'utf8'));
     const groups = {};
     for (const c of spineR.clusters) {
@@ -1216,112 +1193,6 @@ if (has('language-resources.json')) {
   }
 }
 
-// ═══ TABLE 12 — FIELD ACCESS: visa requirements into DX countries ══════════
-// design note (via the reverse-engineer-1 template): "laws · VISA restrictions
-// (nomadic travelers + tourists)" per place.
-//
-// SOURCE: the passport-index open dataset (ilyankou/passport-index-dataset on
-// GitHub) — 39,601 passport x destination rows, PUBLIC, no key. A numeric value is
-// the visa-free stay in DAYS; the rest are visa-required / e-visa / visa-on-arrival
-// / eta / visa-free.
-//
-// WHY THIS IS SHAPED AROUND A FEW PASSPORTS AND NOT ALL 199:
-// The question is not "the full 199x199 matrix" — that is 39,601 rows of mostly
-// irrelevance. It is "can a labourer holding a common sending passport REACH the
-// places where these people groups live?" So this emits one row per
-// DX-COUNTRY x SENDING-PASSPORT for a small set of widely-held passports, which is
-// the shape the question actually has.
-//
-// ═══ WHAT THIS IS NOT — READ BEFORE ACTING ═════════════════════════════════
-// This is TOURIST/VISITOR entry policy. It is NOT permission to do religious work,
-// NOT residency, and NOT a safety assessment. A country can be visa-free and still
-// be somewhere this work carries real risk — those are orthogonal facts and this
-// table only carries the first. Anyone reading "visa free" as "open" would be
-// making exactly the inference this dataset cannot support.
-//
-// LAWS per city remain NOT DONE. No free, keyless, machine-readable source for
-// religious-freedom or assembly law was found; the honest sources (USCIRF, Open
-// Doors, Freedom House) publish PDF/HTML reports requiring a cited human pass.
-if (existsSync(join(OUT, 'passport-index.csv'))) {
-  const csv = readFileSync(join(OUT, 'passport-index.csv'), 'utf8').trim().split('\n');
-  const iso2to3 = {};
-  try {
-    const m = JSON.parse(readFileSync(join(OUT, 'iso3-to-iso2.json'), 'utf8'));
-    for (const [i3, i2] of Object.entries(m)) iso2to3[i2] = i3;
-  } catch (_) { /* no map = no table */ }
-
-  // Widely-held sending passports. Named explicitly so the choice is visible and
-  // arguable, rather than an unexplained subset.
-  const SENDING = { US: 'United States', GB: 'United Kingdom', BR: 'Brazil', KR: 'South Korea',
-                    NG: 'Nigeria', IN: 'India', PH: 'Philippines', ZA: 'South Africa' };
-
-  const spine5 = has('city-candidates.json') ? read('city-candidates.json') : { clusters: [] };
-  const dxIso3 = new Set(spine5.clusters.map((c) => c.iso3));
-  const groups = {};
-  for (const c of spine5.clusters) {
-    groups[c.iso3] = groups[c.iso3] || { g: 0, country: c.country, region: c.region };
-    groups[c.iso3].g += c.people_group_count;
-  }
-
-  const rows = [];
-  for (let i = 1; i < csv.length; i++) {
-    const [pass, dest, req] = csv[i].split(',').map((x) => x.trim());
-    if (!SENDING[pass]) continue;
-    const dIso3 = iso2to3[dest];
-    if (!dIso3 || !dxIso3.has(dIso3)) continue;
-    const meta = groups[dIso3] || {};
-    // "-1" is passport-index's sentinel for SAME COUNTRY — a national entering their
-    // own country. It is not a visa requirement and there is no field-access question
-    // to answer, but it was rendering in the table as though "-1" were a requirement
-    // (6 rows: India<-India, Brazil<-Brazil, Nigeria<-Nigeria, USA, South Africa,
-    // Philippines). Same class as a wrong-but-populated row: a meaningless value
-    // presented as a real one gets read as one. Drop the row rather than surface it.
-    if (req === '-1' || req === -1) continue;
-    const days = /^\d+$/.test(req) ? Number(req) : null;
-    rows.push({
-      destination: meta.country || dIso3,
-      dest_iso3: dIso3,
-      region: meta.region || '',
-      passport: SENDING[pass],
-      passport_iso2: pass,
-      requirement: days != null ? `visa free ${days} days` : req,
-      visa_free: days != null || req === 'visa free',
-      visa_free_days: days,
-      needs_visa_in_advance: req === 'visa required',
-      on_arrival_or_evisa: req === 'visa on arrival' || req === 'e-visa' || req === 'eta',
-      people_groups: meta.g || 0,
-      scope_note: 'TOURIST/VISITOR entry only — NOT permission for religious work, NOT residency, NOT a safety assessment',
-      source: 'passport-index open dataset (public, no key)',
-    });
-  }
-  if (rows.length) {
-    rows.sort((a, b) => b.people_groups - a.people_groups || a.destination.localeCompare(b.destination));
-    built.push(emit('field-access-visas', rows, [
-      { title: 'Destination', field: 'destination', type: 'string' },
-      { title: 'ISO3', field: 'dest_iso3', type: 'string' },
-      { title: 'Region', field: 'region', type: 'string' },
-      { title: 'Passport', field: 'passport', type: 'string' },
-      { title: 'Requirement', field: 'requirement', type: 'string' },
-      { title: 'Visa free', field: 'visa_free', type: 'boolean' },
-      { title: 'Visa-free days', field: 'visa_free_days', type: 'number' },
-      { title: 'Visa in advance', field: 'needs_visa_in_advance', type: 'boolean' },
-      { title: 'On arrival / e-visa', field: 'on_arrival_or_evisa', type: 'boolean' },
-      { title: 'People groups', field: 'people_groups', type: 'number' },
-      { title: 'Scope', field: 'scope_note', type: 'string' },
-    ], {
-      title: 'Field Access — Visa Requirements',
-      grain: 'one row per DX destination x sending passport',
-      passports_chosen: Object.values(SENDING).join(', ') + ' — a deliberate subset of widely-held sending passports, not the full 199x199 matrix (39,601 rows of mostly irrelevance).',
-      HARD_SCOPE_LIMIT: 'TOURIST/VISITOR entry policy ONLY. NOT permission to do religious work, NOT residency, and NOT a safety assessment. A country can be visa-free AND a place where this work carries real risk — orthogonal facts, and only the first is here.',
-      laws_not_done: 'Religious-freedom / assembly LAW per country is NOT in this corpus. No free keyless machine-readable source was found; USCIRF, Open Doors and Freedom House publish reports that need a cited human pass.',
-      source: 'https://github.com/ilyankou/passport-index-dataset (public, no key)',
-    }, (r) => {
-      const bad = r.find((x) => x.visa_free && x.needs_visa_in_advance);
-      if (bad) throw new Error('validation: a row is both visa-free and visa-required');
-    }));
-  }
-}
-
 // ── Distribute to the apps that read them ───────────────────────────────────
 const ROUTE = {
   'people-group-resources': 'gospel-resources',
@@ -1335,18 +1206,10 @@ const ROUTE = {
   'languages-per-city': 'key-cities',
   'city-bridge-opportunities': 'gospel-resources',
   'deaf-gap': 'gospel-resources',
-  'field-access-visas': 'key-cities',
 };
 for (const b of built) {
   const app = ROUTE[b.name];
   if (!app) continue;
-  // ★ THE LEAK THIS LOOP CAUSED (found live 2026-09-24, Driver-critical): emit() already
-  // respects PRIVATE_TABLES and keeps those out of the repo -- but THIS loop copied from
-  // out/tables into the BUNDLE's data dir without the same check, so field-access-visas.json
-  // landed in plugin-designs/key-cities/data/tables/, flowed into the public snapshot AND the
-  // served catalog, and was fetchable by anonymous clone + live 200. A privacy rule enforced
-  // at ONE of two writers is not a rule. Same check, both writers:
-  if (PRIVATE_TABLES.has(b.name)) continue;
   const dir = join(PROFILES, app, 'data', 'tables');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${b.name}.json`), readFileSync(join(TABLES, `${b.name}.json`)));

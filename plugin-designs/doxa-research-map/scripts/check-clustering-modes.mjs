@@ -4,7 +4,7 @@
  * different. A control that does nothing is worse than a control that is absent: it tells the
  * reader the map cannot do what it can.
  *
- * THE DEFECT, MEASURED BY exp-shepherd AND CONFIRMED HERE. The side menu offers four clustering
+ * THE DEFECT, MEASURED AND CONFIRMED HERE. The side menu offers four clustering
  * options; choosing "Native" changed nothing on the map. Two separate reasons, and only fixing both
  * makes the control real:
  *

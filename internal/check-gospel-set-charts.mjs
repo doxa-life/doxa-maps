@@ -88,11 +88,18 @@ ok('centered: a reached group reaches NO ring', [...st.counts.values()].reduce((
 const { readFileSync: rf } = await import('node:fs')
 const { fileURLToPath: f2u } = await import('node:url')
 const { dirname: dn, join: jn } = await import('node:path')
-const CH = jn(dn(f2u(import.meta.url)), '..', 'library', 'components', 'charts')
+// ⚠ THE SEED ARM MUST READ WHAT SHIPS. It used to read library/components/charts/BoundedSet.vue and
+// CenteredSetTarget.vue — two files NOTHING RENDERS. The guarantee was therefore asserted against
+// dead code: a `seed` prop could appear in the components that actually draw the sets and this gate
+// would stay green. regions found it while removing the dead library components (their import census
+// could not see the reference, because a FILENAME IN A GATE is not an import), and retargeting is
+// what makes the assertion true of the artefact rather than merely true.
+const ROOT = jn(dn(f2u(import.meta.url)), '..')
+const GI = jn(ROOT, 'plugin-designs', 'gospel-internet', 'src', 'components')
 const { parse: parseSfc2 } = await import('@vue/compiler-sfc')
 const { parse: parseJs2 } = await import('@babel/parser')
 const propKeys = (file) => {
-  const sfc = parseSfc2(rf(jn(CH, file), 'utf8'))
+  const sfc = parseSfc2(rf(jn(GI, file), 'utf8'))
   const ast = parseJs2((sfc.descriptor.scriptSetup || sfc.descriptor.script).content, { sourceType: 'module' })
   const out = []
   const walk = (n) => {
@@ -114,12 +121,15 @@ const propKeys = (file) => {
 // reader comparing sheets sees real movement rather than reshuffling. A seed would silently
 // rescramble every dot while the data was unchanged, which on a printed artefact is unrecoverable.
 // I specced one; gospel caught it before a line was written.
-for (const f of ['BoundedSet.vue', 'CenteredSetTarget.vue']) {
+// The prop-bearing pair is the two whiteboard MAPS. Their parents (GiBoundedSet/GiCenteredSet) take
+// no props at all — they read useBoardState() — so a seed could only ever arrive here, which is why
+// these are the files the arm reads.
+for (const f of ['GiBoundedSetMap.vue', 'GiCenteredSetMap.vue']) {
   const keys = propKeys(f)
   ok(`${f}: no seed prop — identity IS the seed`, keys.length > 0 && !keys.includes('seed'), keys.join(','))
 }
 // NEG CONTROL: the parser really does see props, so the arm above is not vacuous.
-ok('the prop reader is not vacuous', propKeys('BoundedSet.vue').includes('groups'))
+ok('the prop reader is not vacuous', propKeys('GiBoundedSetMap.vue').includes('groups'))
 
 // ★ EVERY RING IS REPORTED, INCLUDING EMPTY ONES. Under a filter several of the nine legitimately
 // go to zero, and a decoder that omits its empty rows stops being a decoder: a reader cannot tell

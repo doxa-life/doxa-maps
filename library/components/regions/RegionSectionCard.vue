@@ -3,9 +3,8 @@
  * RegionSectionCard.vue — one region as a card: a heading, a summary line, a grid of its countries,
  * and a footer link. The DX-life /regions card, made reusable.
  *
- * WHY THIS IS IN library/. The Driver, verbatim: "let's say we want to reuse that on future plugins.
- * We make it a reusable component, parameterized — you can set the region titles wherever you want
- * them to be, fill in the countries to whatever you want them to be." The design is the point as much
+ * WHY THIS IS IN library/. So future plugins can reuse it: a parameterized component where a caller
+ * sets the region titles and fills in the countries. The design is the point as much
  * as the markup: the 156 lines of CSS below are lifted UNCHANGED from the regions plugin, so a caller
  * gets the look, not a lookalike.
  *
@@ -34,6 +33,7 @@
  * feature into every consumer's API. The `extra` slot keeps it where it belongs.
  */
 import { useShadowStyles } from '../../composables/useShadowStyles.js'
+import { cyrillicHeading } from '../../styles/portedGlobals.js'
 
 const props = defineProps({
   /** The region's display name. Already localized by the caller. */
@@ -129,19 +129,15 @@ useShadowStyles(
   '  margin-inline-start:10px; }' +
   // .region-card__summary: --font-size-md (var(--font-size-md)), 0.85 opacity, on the header band.
   '.region-card__summary{ font-size:var(--font-size-md); opacity:0.85; margin:0; }' +
-  // ★ CYRILLIC HEADINGS SWITCH FACE, as theirs do. base/_globals.scss:35-44:
-  //     h1,h2,h3 { [lang="ru-RU"] & { font-family: var(--font-family-cyrillic); letter-spacing: -0.02em } }
-  // and --font-family-cyrillic is Oswald. The switch is not decoration: BEBAS NEUE HAS NO CYRILLIC
-  // GLYPHS, so a Russian heading in it leaves the family entirely and lands on whatever condensed
-  // system face the browser picks. We ship a `ru` locale and had neither the rule nor the font.
+  // ★ CYRILLIC HEADINGS SWITCH FACE, as theirs do. base/_globals.scss:35-44. The declaration and the
+  // reasons it is load-bearing live at ../../styles/portedGlobals.js; this card supplies its two
+  // heading classes.
+  // ★ BOTH CLASSES IN ONE CALL, not two, because they were ONE grouped rule and the extraction had to
+  // stay byte-identical: two calls emit two rules, which a browser renders the same and the gate
+  // reports as a change. Equivalent CSS is not the bar here; unchanged CSS is.
   // ONLY the headings, exactly as theirs — their .region-stat__value is a <p> and keeps Bebas even in
   // Russian, which is their behaviour and so is ours.
-  // BOTH TAG FORMS, deliberately: their site tags the document ru-RU while our i18n locale is `ru`,
-  // and a host page embedding this element may set either. A selector that matched only one would
-  // work on their site and fail on ours, or the reverse, depending on who set the attribute.
-  '[lang="ru"] .rl-title, [lang="ru-RU"] .rl-title,' +
-  '[lang="ru"] .region-card__title, [lang="ru-RU"] .region-card__title{ font-family:"Oswald","Arial Narrow",BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;' +
-  '  letter-spacing:-0.02em; }' +
+  cyrillicHeading('.rl-title', '.region-card__title') +
   // .region-card__body: padding --spacing-lg / clamp(...) / --spacing-xl -> var(--spacing-lg) / clamp / var(--spacing-xl)
   '.region-card__body{ padding:var(--spacing-lg) clamp(var(--spacing-md), 4cqw, var(--spacing-2xl)) var(--spacing-xl); }' +
   // .countries-grid: DX-life's track is minmax(220px,1fr). Gap --spacing-xs / --spacing-xl
@@ -168,12 +164,12 @@ useShadowStyles(
   // inset-inline-start, NOT left: the bullet hangs off the text's starting edge, which is the
   // RIGHT edge in Arabic. With `left:-16px` it stayed on the physical left in RTL — measured
   // at locale=ar, computed right was 256.938px instead of the -16px near-edge overhang.
-  // ★ THEIR BULLET, COPIED — not a dot of my own. base/_globals.scss:117-131 paints the list
+  // ★ THEIR BULLET, COPIED — not an invented dot. base/_globals.scss:117-131 paints the list
   // marker with a 16x16 data-URI SVG circle in #92b195 sized to 1.5em, hung off the text's start
   // edge by margin-inline-start:-1.3em (-2em in RTL), top .3em, line-height .9. Their
   // .countries-grid comment is explicit that keeping it is deliberate ("Keeps the site's list
   // bullets (global ul padding + ::before dot)").
-  // I had re-created it as a 6px border-radius:50% square, and MEASURED against live it was wrong
+  // An earlier port re-created it as a 6px border-radius:50% square, and MEASURED against live it was wrong
   // in 9 of 11 properties: 6px vs 29.2969px box, solid fill vs a transparent box carrying the
   // image, top 11.72px vs 5.86px, and positioned with inset-inline-start:-16px instead of their
   // negative margin. Not a near-miss — a different bullet.
@@ -215,8 +211,16 @@ useShadowStyles(
   '  display:inline-flex; align-items:baseline; gap:10px; text-decoration:underline; text-decoration-thickness:2px; }' +
   '.region-card__footer-link:hover{ color:var(--dx-header-bg); }' +
   '.region-card__footer-link:focus-visible{ outline:2px solid var(--dx-link); outline-offset:2px; border-radius:4px; }',
-  'regions-list'
-, 'region-section-card')
+  // ★ THIS LABEL MUST NOT BE 'regions-list'. useShadowStyles keys its <style> by the label, and on a
+  // COLLISION it OVERWRITES the existing tag's text rather than adding one (useShadowStyles.js:60-61).
+  // This card is a CHILD of regions-list, so they share one shadow root: with both keyed
+  // 'regions-list' the cards mount second, find the list's tag and replace the .rl-* rules with the
+  // card CSS. Measured in the running page: .rl-root went position:static, .rl-scroll overflow-y:
+  // visible, 3 style tags where a working tree has 4, and no 'rl-root{' anywhere in the root -- so
+  // the regions list could not scroll and its lower regions were unreachable.
+  // The stray extra argument was the whole bug: useShadowStyles takes (css, label), so the SECOND
+  // argument was the key and 'region-section-card' was silently ignored.
+  'region-section-card')
 </script>
 
 <template>

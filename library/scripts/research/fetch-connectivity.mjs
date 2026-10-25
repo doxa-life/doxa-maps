@@ -19,7 +19,7 @@
 // labelled `resolution: "country"`. A consumer can see it is not a city
 // measurement. When per-city data is later sourced, it overwrites with
 // `resolution: "city"` and its own citation.
-// design note constraint: "cite sources; mark unknowns as unknown, never guess."
+// Constraint: every value cites its source; unknowns are marked unknown, never guessed.
 //
 // NOT FETCHED HERE: censorship / shutdown history. Those live in reports
 // (OONI, Access Now #KeepItOn, Freedom on the Net) that are not machine-readable

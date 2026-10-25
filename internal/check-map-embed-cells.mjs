@@ -70,7 +70,7 @@ const TREE_PORT = await freePort()
 const HOST_PORT = await freePort()
 const TREE = `http://127.0.0.1:${TREE_PORT}/${TREE_NAME}`
 let pageHtml = '<!doctype html><title>host</title><body>nothing</body>'
-const tree = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(TREE_PORT)], { cwd: ROOT, stdio: 'ignore' })
+const tree = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(TREE_PORT), '--exit-with-parent'], { cwd: ROOT, stdio: 'ignore' })
 const host = createServer((_, r) => { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); r.end(pageHtml) }).listen(HOST_PORT, 'localhost')
 const cleanup = () => { try { tree.kill() } catch (_) {} try { host.close() } catch (_) {} }
 await new Promise((r) => setTimeout(r, 900))

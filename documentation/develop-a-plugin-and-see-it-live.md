@@ -104,7 +104,7 @@ rsync -a --delete public/dx-maps/ <your-host-checkout>/dx-maps/
 it can see and whether it finds itself. To check that what you published is *current*, run
 `bun run check:catalog-currency`.
 
-**Your plugin surfaces itself.** The Research Gallery (`doxa-maps-spa`) reads the built `manifest.json`
+**Your plugin surfaces itself.** Deep Research (`doxa-maps-spa`) reads the built `manifest.json`
 and puts every bundle it doesn't already curate into its folded **Experimental** shelf, with the label and
 description from the manifest — no code edit. Promoting it to a curated tab is an optional edit to
 `TAB_DEFS` and `NAV_MODEL` in `plugin-designs/doxa-maps-spa/`. One row per bundle: a bundle's extra

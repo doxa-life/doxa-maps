@@ -91,20 +91,10 @@
       after a resize back to desktop — the previous broken-restore bug.
 -->
 <template>
-  <!-- ★ THE FAB'S FOOTPRINT IS PUBLISHED, NOT GUESSED. .vtl-fab is a 44px circle pinned to the
-       bottom-left, and it lives in the LAYOUT — outside every plugin's shadow root — so it paints
-       over plugin content whatever z-index the plugin uses internally (the mobile legend sheet is
-       z-index:1000 and still loses, because they are different stacking contexts). A scrolled-to-
-       the-end legend therefore ends UNDER the circle.
-       A plugin cannot know whether the circle is there, so the layout says so: --map-fab-clearance
-       is set ONLY while the button is actually rendered, and custom properties inherit through the
-       flattened tree, so it reaches into each shadow root. No circle, no reserved space.
-       --map-fab-beside is the same fact for the OTHER axis: where a sibling control must start to
-       sit NEXT TO the circle rather than on top of it (12px inset + 44px button + 8px gap). A
-       consumer that hardcoded 64px would silently overlap the day the circle resizes; reading it
-       means the circle's geometry is stated once, here, by the component that owns it. -->
-  <div class="vtl" :class="{ 'nav-open': navOpen, 'rail-collapsed': railCollapsed, 'no-header': !header }"
-       :style="fabShown ? { '--map-fab-clearance': 'calc(56px + env(safe-area-inset-bottom))', '--map-fab-beside': 'calc(64px + env(safe-area-inset-left))' } : null">
+  <!-- ★ NO CORNER CIRCLE. On a phone the ☰ lives in the phone bar ABOVE the pane, in both shell modes, so nothing
+       covers plugin content and --map-fab-clearance / --map-fab-beside are not set: every reader of them
+       (BackToTopButton, PinHint, LegendMobile, the grid) takes its own fallback. -->
+  <div class="vtl" :class="{ 'nav-open': navOpen, 'rail-collapsed': railCollapsed, 'no-header': !header, 'has-phone-bar': phoneBarShown }">
     <header class="vtl-top" v-if="header">
       <button class="vtl-menu" type="button" :aria-expanded="String(navOpen)" @click="navOpen = !navOpen"
         :aria-label="label('toggleList')">☰</button>
@@ -113,25 +103,30 @@
       <span class="vtl-meta"><slot name="meta" /></span>
     </header>
 
-    <!-- ★ HEADERLESS MOBILE ESCAPE HATCH — the ONLY way to reach the rail when there is no header.
-         FOUND 2026-09-22 by resizing the cap-5 SPA to a phone width. That SPA is header-OFF by
-         default (the Driver's no-stacked-headers rule), so the toggle above — which lives inside
-         `v-if="header"` — does not exist. On mobile the rail is an off-canvas drawer at
-         translateX(-100%) with `navOpen` starting false, and the only other toggle (.vtl-collapse)
-         sits INSIDE the drawer, measured off-screen at x:-244. Net effect: every tab except the one
-         that happened to open was UNREACHABLE. Measured, not inferred.
+    <!-- ★ THE PHONE BAR — the way to the rail AND to the language when there is no header.
+         Header-off shells (the Research Gallery, Posterverse) have no .vtl-top, so on a phone this slim
+         bar is their only chrome: ☰ at the inline START (right in ar, the edge the drawer opens from)
+         and a #phone-end slot at the inline END, which the shell fills with its own language menu
+         (library/components/ShellLanguageMenu.vue). It is a real grid row (.has-phone-bar), so the
+         drawer and the pane both start below it and it never covers plugin content.
+         44px: the ☰ and the menu ARE the bar's tap targets; a 40px bar would push their 44px hit
+         areas into the pane. Rendered ONLY when narrow AND header-off (phoneBarShown), so desktop and
+         every header-on consumer (plugin-studio) render exactly as before. It replaced the floating
+         corner circle that did this job before (found 2026-09-22: header-off on a phone, every tab
+         but the first was unreachable), and check:nav-reachable still presses it. -->
+    <div v-if="phoneBarShown" class="vtl-pbar" :class="{ 'is-web': mode === 'web' }">
+      <button class="vtl-phone-menu" type="button" :aria-expanded="String(navOpen)"
+        @click="navOpen = !navOpen" :aria-label="label('toggleList')">☰</button>
+      <span class="vtl-pbar-end"><slot name="phone-end" /></span>
+    </div>
 
-         Rendered ONLY when narrow AND headerless, so no existing consumer can see a change: every
-         other case is desktop (rail always visible) or header-on (the toggle above already works).
-         It hides itself while the drawer is open — tapping a tab closes the drawer anyway, and a
-         floating button over an open drawer would just cover a row. -->
-    <button v-if="fabShown"
-      class="vtl-fab" type="button" :aria-expanded="String(navOpen)"
-      @click="navOpen = true" :aria-label="label('openViews')">☰</button>
+    <!-- ★ WEB MODE (shellMode, below) IS THE SAME BAR, minus the camera inset. Inside a website (DX Life) the shell
+         is not at the top of the screen, so the bar takes no env(safe-area-inset-top) padding (.is-web); in an
+         app it may sit under the notch, so it keeps it. One header either way, with the ☰ at its start and the
+         language at its end. (A corner ☰ with no header was tried for web mode and rejected on a real phone.) -->
 
-    <!-- Beside the circle, driving the shell's own scroller. Reads --map-fab-beside, which this
-         layout publishes only while the circle is up, so with no circle it falls back to the
-         plain inset instead of leaving a gap where a button used to be. -->
+    <!-- Driving the shell's own scroller. It reads --map-fab-beside, which nothing sets now that there is no corner
+         circle, so it sits at its plain inset. -->
     <BackToTopButton v-if="narrow" :target="activeHostEl"
       :labels="{ backToTop: T('actions.backToTop', 'Back to top') }" />
 
@@ -142,8 +137,18 @@
            an off-canvas drawer parked at translateX(-100%) and slid in by the `nav-open` class. Because it
            is never display:none, a mobile-closed drawer can no longer strand the rail after a resize back
            to desktop (the old cross-breakpoint bug). `aria-hidden` mirrors real visibility for a11y. -->
-      <nav class="vtl-nav" :aria-label="navLabel" :aria-hidden="String(!railShown)"
+      <nav class="vtl-nav" :class="{ 'has-rail-end': railEndShown && !!$slots['rail-end'] }" :aria-label="navLabel" :aria-hidden="String(!railShown)"
         :role="$slots.rail ? null : 'tablist'" :aria-orientation="$slots.rail ? null : 'vertical'">
+        <!-- THE HOST'S WAY HOME (optional). A host page that embeds this layout full-page (DX Life's
+             /deep-research) has no header of its own there, so it hands in its homepage URL and label
+             (homeHref / homeLabel) and the link sits here: directly above Collapse, the same box, in the
+             rail on a desktop and at the top of the drawer on a phone. The URL is the HOST's, never a
+             default, so an embed that passes none shows nothing and the layout stays embeddable anywhere. -->
+        <a v-if="homeLink" class="vtl-home" :href="homeLink" target="_top" :aria-label="homeText"
+          :title="railCollapsed && !narrow ? homeText : null">
+          <span class="vtl-home-ic" aria-hidden="true" v-html="iconSvg('home')"></span>
+          <span class="vtl-home-tx">{{ homeText }}</span>
+        </a>
         <!-- Rail toggle: always visible, collapses the rail (slim icon rail on desktop; off-canvas
              drawer on mobile). The chevron points the way the click will move the rail. -->
         <button
@@ -168,7 +173,7 @@
               v-if="grp.folder" type="button" class="vtl-tier vtl-tier-btn"
               :aria-expanded="String(!isFolderClosed(grp))"
               @click="toggleFolder(grp.key)">
-              <!-- NO section-header logo (Driver rule: logos only on the vertical TAB rows, never on the
+              <!-- NO section-header logo (the rule: logos only on the vertical TAB rows, never on the
                    section dividers). The folder chevron below is an affordance, not a logo, so it stays. -->
               <span class="vtl-cap" v-if="grp.badge">{{ grp.badge }}</span>
               <span class="vtl-tl">{{ grp.label }}</span>
@@ -176,7 +181,7 @@
               <span class="vtl-chev" :class="{ open: !isFolderClosed(grp) }" aria-hidden="true" v-html="iconSvg('chevron')"></span>
             </button>
             <!-- SECTION heading = a static always-visible label (with optional badge/count). No logo here
-                 either — section dividers are text-only (Driver rule); row icons live on the tabs below. -->
+                 either — section dividers are text-only; row icons live on the tabs below. -->
             <div v-else class="vtl-tier">
               <span class="vtl-cap" v-if="grp.badge">{{ grp.badge }}</span>
               <span class="vtl-tl">{{ grp.label }}</span>
@@ -186,8 +191,9 @@
             <div class="vtl-rows" v-show="!grp.folder || !isFolderClosed(grp)">
               <button
                 v-for="row in grp.rows" :key="row.key" type="button" role="tab"
-                class="vtl-tab" :class="{ active: row.key === active }"
+                class="vtl-tab" :class="{ active: row.key === active, disabled: row.disabled }"
                 :aria-selected="String(row.key === active)"
+                :aria-disabled="row.disabled ? 'true' : null"
                 :tabindex="row.key === active ? 0 : -1"
                 :ref="el => registerTab(row.key, el)"
                 @click="pick(row.key)" @keydown="onKey($event)">
@@ -210,8 +216,9 @@
         <template v-else>
           <button
             v-for="row in items" :key="row.key" type="button" role="tab"
-            class="vtl-tab" :class="{ active: row.key === active }"
+            class="vtl-tab" :class="{ active: row.key === active, disabled: row.disabled }"
             :aria-selected="String(row.key === active)"
+            :aria-disabled="row.disabled ? 'true' : null"
             :tabindex="row.key === active ? 0 : -1"
             :ref="el => registerTab(row.key, el)"
             @click="pick(row.key)" @keydown="onKey($event)">
@@ -224,11 +231,21 @@
             </span>
           </button>
         </template>
+
+        <!-- #rail-end: pinned to the BOTTOM of the desktop rail, where apps put account details. A
+             header-off shell puts its language menu here (the same ShellLanguageMenu as the phone bar),
+             so a desktop reader can change language with no header above the pane. Rendered only when
+             WIDE AND header-off: a header-on consumer keeps its #toolbar menu (never two), and on a
+             phone the bar's #phone-end carries it. `collapsed` tells the filler the rail is the 72px
+             icon strip, so it shows the language code instead of its name. -->
+        <div v-if="railEndShown && $slots['rail-end']" class="vtl-rail-end">
+          <slot name="rail-end" :collapsed="railCollapsed" />
+        </div>
       </nav>
 
       <main class="vtl-main">
         <!-- The #toolbar strip (locale switcher etc.) is part of the header chrome, so it renders ONLY
-             when header is on. Driver rule: a header-off, sidebar-only element (doxa-maps-spa) inherits
+             when header is on. The rule: a header-off, sidebar-only element (doxa-maps-spa) inherits
              its language from the PARENT via the `language` prop and shows NO standalone locale dropdown;
              a header-on host (plugin-studio) DOES get the toolbar/locale dropdown. -->
         <slot name="toolbar" v-if="header" />
@@ -279,7 +296,7 @@ import { tStatic } from '../i18n/index.js'
 const tr = (key, en) => tStatic(key) || en
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { icon as localIcon } from '@map/layouts/app-wrapper-material/icons.js'
-import { loadScriptOnce } from '@map/utils/embedScript.js'
+import { loadScriptOnce, claimTag } from '@map/utils/embedScript.js'
 
 // Inject a bundle script exactly once per URL, through the ONE shared loader (library/utils/embedScript.js).
 // This layout's private copy lacked the dev-server ES-module rule, so a bundle nested through it under
@@ -315,6 +332,8 @@ const VTL_SHADOW_CSS = `
    content to size it and collapses to 0 (the 1fr row sits empty) → the same 0-height black screen.
    With no header there is only one region, so declare a single 1fr row and the body fills. */
 .vtl.no-header { grid-template-rows:1fr; }
+/* ...except on a phone, where the header-off layout has its slim bar (.vtl-pbar) as a real first row. */
+.vtl.no-header.has-phone-bar { grid-template-rows:auto 1fr; }
 /* MATERIAL APP BAR = 64px desktop / 56px mobile (2026-09-21), was 51px from 11px padding.
    Stated as an explicit min-height rather than left to padding arithmetic, so the number a
    reader sees is the number that renders. min-height keeps a wrapping title from clipping.
@@ -325,14 +344,19 @@ const VTL_SHADOW_CSS = `
    THIS RULE EXISTS TWICE (VTL_SHADOW_CSS and the scoped style block); keep them identical. */
 .vtl-top { flex:0 0 auto; display:flex; align-items:center; gap:10px; box-sizing:border-box; min-height:64px; padding:8px 16px; border-bottom:1px solid var(--vtl-border); background:#ffffff; }
 .vtl-menu { display:none; font:16px/1 system-ui; color:#3b463d; background:#d1d4cd; border:1px solid #d1d4cd; border-radius:8px; padding:5px 10px; cursor:pointer; }
-/* Headerless-mobile drawer opener. Only ever rendered when narrow AND header-off AND the drawer is
-   shut, so it cannot appear in any layout that already has a working toggle. z-index sits ABOVE the
-   content but BELOW the drawer (.vtl-nav is z-index:20) so the drawer covers it when it slides in.
-   44px is the minimum comfortable touch target; the safe-area insets keep it clear of an iOS home
-   indicator and a notch in landscape. */
-.vtl-fab { position:absolute; z-index:15; left:calc(12px + env(safe-area-inset-left)); bottom:calc(12px + env(safe-area-inset-bottom)); width:44px; height:44px; display:flex; align-items:center; justify-content:center; font:18px/1 system-ui; color:#3b463d; background:#ffffff; border:1px solid var(--vtl-border); border-radius:50%; box-shadow:0 2px 10px rgba(0,0,0,.18); cursor:pointer; }
-.vtl-fab:hover { background:#d1d4cd; }
-.vtl-fab:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:2px; }
+/* THE PHONE BAR (phoneBarShown = narrow AND header-off; it replaced the floating corner circle).
+   A real grid row above .vtl-body (.has-phone-bar below), so the drawer and the pane both start under
+   it and it never covers plugin content. 44px + the top safe area; the rule line is an INSET SHADOW,
+   not a border, so the 44px is the whole bar and the ☰ is a full 44×44 target. Flex follows the
+   writing direction, so in ar the ☰ sits at the right (where the drawer opens) and the #phone-end
+   menu at the left, with no :dir override. THIS RULE EXISTS TWICE; keep the copies identical. */
+.vtl-pbar { display:flex; align-items:center; gap:8px; box-sizing:border-box; height:calc(44px + env(safe-area-inset-top)); padding:env(safe-area-inset-top) calc(4px + env(safe-area-inset-right)) 0 calc(4px + env(safe-area-inset-left)); background:#ffffff; box-shadow:inset 0 -1px 0 var(--vtl-border); }
+.vtl-phone-menu { flex:0 0 auto; width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0; margin:0; font:20px/1 system-ui; color:#3b463d; background:transparent; border:0; border-radius:8px; cursor:pointer; }
+.vtl-phone-menu:hover { background:var(--vtl-accented); }
+.vtl-phone-menu:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
+/* WEB MODE: the same bar, without the camera inset (the shell is not at the top of the screen in a website). */
+.vtl-pbar.is-web { height:44px; padding-top:0; }
+.vtl-pbar-end { margin-inline-start:auto; display:inline-flex; align-items:center; min-width:0; }
 .vtl-menu:hover { background:#d1d4cd; }
 .vtl-brand { display:inline-flex; align-items:center; }
 .vtl-brand:empty { display:none; }
@@ -354,12 +378,25 @@ const VTL_SHADOW_CSS = `
 .vtl-nav::-webkit-scrollbar-track { background:transparent; }
 .vtl-nav::-webkit-scrollbar-thumb { background:#c4c8c0; border-radius:8px; }
 .vtl-nav::-webkit-scrollbar-thumb:hover { background:#9aa197; }
-.vtl-collapse { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; margin:0 0 8px; padding:7px 10px; border:1px solid var(--vtl-border); border-radius:8px; background:#d1d4cd; color:var(--vtl-muted); font:inherit; font-size:12px; cursor:pointer; }
-.vtl-collapse:hover { background:var(--vtl-accented); color:#3b463d; }
-.vtl-collapse:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
+.vtl-collapse, .vtl-home { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; margin:0 0 8px; padding:7px 10px; border:1px solid var(--vtl-border); border-radius:8px; background:#d1d4cd; color:var(--vtl-muted); font:inherit; font-size:12px; cursor:pointer; }
+.vtl-collapse:hover, .vtl-home:hover { background:var(--vtl-accented); color:#3b463d; }
+.vtl-collapse:focus-visible, .vtl-home:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
 .vtl-collapse-ic { flex:0 0 auto; display:inline-flex; transition:transform .16s ease; transform:rotate(180deg); }
 .vtl-collapse-ic svg { width:16px; height:16px; }
 .vtl-collapse-tx { white-space:nowrap; }
+/* The host’s home link (homeHref) shares Collapse’s box through the selector lists above and below, so the
+   two are the same size by construction and cannot drift apart. The house does not rotate or mirror. */
+.vtl-home { text-decoration:none; }
+.vtl-home-ic { flex:0 0 auto; display:inline-flex; }
+.vtl-home-ic svg { width:16px; height:16px; }
+.vtl-home-tx { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* THE RAIL'S BOTTOM SLOT (#rail-end: railEndShown = wide AND header-off, and a filler present). The nav
+   becomes a column ONLY then, so every other rail lays out exactly as before. margin-top:auto parks the
+   slot at the bottom while the tabs are short; sticky keeps it in view once they scroll. The nav's own
+   bottom padding moves into the slot, so the sticky row sits flush with the rail's bottom edge. */
+.vtl-nav.has-rail-end { display:flex; flex-direction:column; padding-bottom:0; }
+.vtl-nav.has-rail-end > * { flex-shrink:0; }
+.vtl-rail-end { margin-top:auto; position:sticky; bottom:0; padding:8px 0 12px; background:#ffffff; border-top:1px solid var(--vtl-border); }
 .vtl-grp { margin-bottom:2px; }
 .vtl-grp + .vtl-grp { margin-top:8px; padding-top:8px; border-top:1px solid var(--vtl-border); }
 .vtl-tier { width:100%; padding:8px 8px 6px; display:flex; align-items:center; gap:8px; box-sizing:border-box; }
@@ -381,18 +418,14 @@ const VTL_SHADOW_CSS = `
      min-height:48px     the Material list-item height. min-height, not height, so a wrapping
                          label still grows instead of clipping.
      border-radius         var(--vtl-radius,8px) — SUPERSEDED THE FULL PILL (2026-09-23).
-                         The 999px stadium above was a real instruction ("imitate the YouTube
-                         active row") and it shipped. It was then measured against the
-                         rest of the product and reversed it: "the roundedness of the tabs is a
-                         little bit too round because there is nowhere else in the app that has
-                         that same roundedness. Even the collapse button is not that round...
-                         it looks more material UI to have a more rounded tab than a less
-                         circular tab." He is right on the facts — .vtl-collapse is 8px, the
+                         A 999px stadium (modelled on YouTube's active row) shipped first. It
+                         was reversed after it was compared with the rest of the product:
+                         nothing else in the app is that round. .vtl-collapse is 8px, the
                          filter toggles in @map/components/search are 8px, and 8px is already
                          the most common radius in this file. A 999px radius on a 48px row is a
                          stadium, which is why it reads as foreign beside everything else.
-                         ★ DO NOT "RESTORE" THE PILL on the strength of the YouTube rationale
-                         above — that rationale is kept because it is true history, not because
+                         ★ DO NOT "RESTORE" THE PILL on the strength of the YouTube model
+                         above. It is kept because it is true history, not because
                          it is current. The 48px Material row height is unaffected and stays.
    NOT VENDORED: the card's law is to imitate the metrics in our own CSS, never to add Quasar or
    MUI. Same clone-dont-edit rule the library follows everywhere else.
@@ -402,6 +435,10 @@ const VTL_SHADOW_CSS = `
 .vtl-tab:hover { background:var(--vtl-accented); color:#3b463d; }
 .vtl-tab:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
 .vtl-tab.active { background:var(--vtl-accented); color:#3b463d; font-weight:500; }
+/* A DISABLED ROW (row.disabled, e.g. a desktop-only map on a phone) stays in the rail, greyed, with its badge
+   still readable. The click still reaches the consumer, so it can say WHY the row does not open. */
+.vtl-tab.disabled, .vtl-tab.disabled:hover { background:none; color:#a3a8a4; cursor:not-allowed; }
+.vtl-tab.disabled .vtl-tab-ic, .vtl-tab.disabled .vtl-tab-emoji, .vtl-tab.disabled .vtl-tab-fallback { opacity:.45; }
 .vtl-tab.active .vtl-tab-ic { color:var(--vtl-accent); }
 .vtl-tab-ic { flex:0 0 auto; display:inline-flex; color:var(--vtl-muted); }
 .vtl-tab-ic svg { width:20px; height:20px; }
@@ -481,15 +518,17 @@ const VTL_SHADOW_CSS = `
      nav translate  -184px   the 256px rail slides left, leaving 256-184 = 72px visible
      main left       72px    the content pane starts exactly where the rail ends
      collapse pad   184px    pushes the toggle's icon into the 72px strip that stays on screen
+                             (the #rail-end slot takes the same pad, so its menu sits in the strip too)
      tab pad        188px    the same for each row's icon (4px more, matching the old 196/200 pair)
    Change one without the others and the icons drift out of the visible strip or the content
    overlaps the rail. Old values were -196 / 60 / 196 / 200.
    THIS BLOCK EXISTS TWICE (VTL_SHADOW_CSS and the scoped style block); keep them byte-identical. */
 .vtl.rail-collapsed .vtl-nav { transform:translateX(-184px); }
 .vtl.rail-collapsed .vtl-main { left:72px; }
-.vtl.rail-collapsed .vtl-collapse { padding-left:184px; justify-content:flex-start; }
+.vtl.rail-collapsed .vtl-collapse, .vtl.rail-collapsed .vtl-home { padding-left:184px; justify-content:flex-start; }
 .vtl.rail-collapsed .vtl-collapse-ic { transform:rotate(0deg); }
-.vtl.rail-collapsed .vtl-collapse-tx { display:none; }
+.vtl.rail-collapsed .vtl-rail-end { padding-left:184px; }
+.vtl.rail-collapsed .vtl-collapse-tx, .vtl.rail-collapsed .vtl-home-tx { display:none; }
 .vtl.rail-collapsed .vtl-tab { padding-left:188px; gap:0; }
 .vtl.rail-collapsed .vtl-tab-text { display:none; }
 .vtl.rail-collapsed .vtl-tab-emoji { font-size:19px; }
@@ -505,13 +544,18 @@ const VTL_SHADOW_CSS = `
   /* MOBILE = the SAME composited-transform model, taken to its full-off-canvas extreme: a full-width
      drawer that slides in/out via transform (never a layout property), so opening/closing the drawer
      never reflows the content. Content is full-width (left:0) and stays put; the drawer floats over it. */
-  .vtl-nav { z-index:20; width:256px; box-shadow:0 0 28px rgba(0,0,0,.55); transform:translateX(-100%); }
+  /* NO SHADOW WHILE CLOSED: parked at translateX(-100%), a 28px blur still bleeds into the screen along the start
+     edge (measured at 390: the left 30px ~22 luminance levels darker). The shadow belongs to the OPEN drawer only. */
+  .vtl-nav { z-index:20; width:256px; box-shadow:none; transform:translateX(-100%); }
   /* OPEN DRAWER ABOVE THE PLUGIN'S OWN LAYERS. Mounted content shares this stacking context, and
      plugins raise their chrome (the research dashboard's filter bar is z-index:55), so at z-index 20
      the open drawer had a plugin's filter row painted across it — measured 2026-09-25 at 390px.
      Only while OPEN on a phone: that is when the drawer is the one thing you can use, and desktop
-     and plugin modal scrims keep their existing order. */
-  .vtl.nav-open .vtl-nav { transform:translateX(0); z-index:1000; }
+     and plugin modal scrims keep their existing order.
+     100000, not 1000: the phone legend sheet (LegendMobile) is z-index:1000, and a tie left DOM order to decide,
+     so the legend drew over the open drawer. Every plugin layer sits below 100000; a MODAL's scrim (MapInfo,
+     2147483000) still covers the drawer, as a modal should. */
+  .vtl.nav-open .vtl-nav { transform:translateX(0); z-index:100000; box-shadow:0 0 28px rgba(0,0,0,.55); }
   .vtl-main { left:0; }
   /* The desktop slim-rail collapse has no meaning on a phone — reconcileForWidth() clears railCollapsed
      at this width, but neutralize its CSS too (belt-and-suspenders) so a full labelled drawer always
@@ -519,9 +563,9 @@ const VTL_SHADOW_CSS = `
   .vtl.rail-collapsed .vtl-nav { transform:translateX(-100%); }
   .vtl.rail-collapsed.nav-open .vtl-nav { transform:translateX(0); }
   .vtl.rail-collapsed .vtl-main { left:0; }
-  .vtl.rail-collapsed .vtl-collapse { padding-left:10px; justify-content:flex-start; }
+  .vtl.rail-collapsed .vtl-collapse, .vtl.rail-collapsed .vtl-home { padding-left:10px; justify-content:flex-start; }
   .vtl.rail-collapsed .vtl-collapse-ic { transform:rotate(180deg); }
-  .vtl.rail-collapsed .vtl-collapse-tx { display:inline; }
+  .vtl.rail-collapsed .vtl-collapse-tx, .vtl.rail-collapsed .vtl-home-tx { display:inline; }
   .vtl.rail-collapsed .vtl-tab { padding-left:10px; gap:11px; }
   .vtl.rail-collapsed .vtl-tab-text { display:flex; }
   .vtl.rail-collapsed .vtl-tab-fallback { display:none; }
@@ -542,21 +586,26 @@ const VTL_SHADOW_CSS = `
 .vtl:dir(rtl) .vtl-meta, .vtl:dir(rtl) .vtl-td, .vtl:dir(rtl) .vtl-chev { margin-left:0; margin-right:auto; }
 .vtl:dir(rtl) .vtl-chev:not(.open) { transform:scaleX(-1); }
 .vtl:dir(rtl) .vtl-collapse-ic svg { transform:scaleX(-1); }
-.vtl:dir(rtl) .vtl-fab { left:auto; right:calc(12px + env(safe-area-inset-right)); }
 .vtl.rail-collapsed:dir(rtl) .vtl-nav { transform:translateX(184px); }
 .vtl.rail-collapsed:dir(rtl) .vtl-main { left:0; right:72px; }
-.vtl.rail-collapsed:dir(rtl) .vtl-collapse { padding-left:10px; padding-right:184px; }
+.vtl.rail-collapsed:dir(rtl) .vtl-collapse, .vtl.rail-collapsed:dir(rtl) .vtl-home { padding-left:10px; padding-right:184px; }
 .vtl.rail-collapsed:dir(rtl) .vtl-tab { padding-left:12px; padding-right:188px; }
 .vtl.rail-collapsed:dir(rtl) .vtl-tier { padding-left:8px; padding-right:196px; }
+.vtl.rail-collapsed:dir(rtl) .vtl-rail-end { padding-left:0; padding-right:184px; }
 @media (max-width: 760px) {
   .vtl:dir(rtl) .vtl-nav { transform:translateX(100%); }
   .vtl.nav-open:dir(rtl) .vtl-nav { transform:translateX(0); }
   .vtl:dir(rtl) .vtl-main, .vtl.rail-collapsed:dir(rtl) .vtl-main { left:0; right:0; }
   .vtl.rail-collapsed:dir(rtl) .vtl-nav { transform:translateX(100%); }
   .vtl.rail-collapsed.nav-open:dir(rtl) .vtl-nav { transform:translateX(0); }
-  .vtl.rail-collapsed:dir(rtl) .vtl-collapse { padding-left:10px; padding-right:10px; }
+  .vtl.rail-collapsed:dir(rtl) .vtl-collapse, .vtl.rail-collapsed:dir(rtl) .vtl-home { padding-left:10px; padding-right:10px; }
   .vtl.rail-collapsed:dir(rtl) .vtl-tab { padding-left:12px; padding-right:10px; }
   .vtl.rail-collapsed:dir(rtl) .vtl-tier { padding-left:8px; padding-right:8px; }
+}
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree). Additive only. */
+@media (prefers-reduced-motion: reduce) {
+  .vtl-nav, .vtl-collapse-ic, .vtl-tab, .vtl-tier, .vtl-pbar, .vtl-phone-menu, .vtl-rail-end, .vtl-scrim { transition: none !important; animation: none !important; }
 }
 `
 
@@ -574,7 +623,7 @@ export default defineComponent({
     groups: { type: Array, default: () => [] },
     navLabel: { type: String, default: 'Sections' },
     // The shell's own words, for a localised host: { toggleList, openViews, expandList, collapseList,
-    // collapse }. Any key left out keeps its English default, so existing hosts are unchanged.
+    // collapse, home }. Any key left out keeps its English default, so existing hosts are unchanged.
     labels: { type: Object, default: () => ({}) },
     // Start with the rail open (desktop). Auto-collapses on narrow screens after mount.
     initialNavOpen: { type: Boolean, default: true },
@@ -582,7 +631,17 @@ export default defineComponent({
     // (embedded where a host header already exists — stacked headers look bad). #toolbar is unaffected.
     header: { type: Boolean, default: true },
     // Start the desktop rail collapsed (slim icon rail). Off by default so the rail opens expanded.
-    initialRailCollapsed: { type: Boolean, default: false }
+    initialRailCollapsed: { type: Boolean, default: false },
+    // The HOST's homepage, shown as a link above Collapse (see the template). Empty = no link, which is
+    // every existing consumer. homeLabel is the host's own words; unset, labels.home, then English.
+    homeHref: { type: String, default: '' },
+    homeLabel: { type: String, default: '' },
+    // ★ WHERE THIS SHELL LIVES, which decides its phone chrome when header is off:
+    //   'app'  — it owns the screen (a Capacitor/standalone app, or a DX Maps leaf page): the 44px phone bar.
+    //   'web'  — it sits in a website that has its own header: NO second bar; a corner ☰ + the language in the drawer.
+    //   'auto' — the host element's shell-mode attribute if it has one, else app for Capacitor, display-mode
+    //            standalone or a leaf (window.MAP_OWNS_PAGE), else web.
+    shellMode: { type: String, default: 'auto' }
   },
   emits: ['update:active'],
   setup() {
@@ -601,26 +660,35 @@ export default defineComponent({
     // Nested-element hosting (lazy): activatedKeys marks which element-rows have EVER been the active
     // tab (so their pane is rendered + element mounted); hostState/hostError track each pane's load.
     // A row not in activatedKeys is never rendered — the lazy contract (no visit → no cost).
+    // ★ A PHONE STARTS CLOSED FROM THE FIRST RENDER. navOpen used to start as initialNavOpen (true) and only
+    // mounted() closed it, so on a phone the first paint drew the drawer OPEN (.nav-open) and its transform
+    // transition then slid it away (measured: on screen until ~0.75-1.6 s after load, both shells, app and
+    // web). Reading the same media query here makes the first render already the phone's closed state, so
+    // nothing animates; mounted() keeps tracking crossings as before.
+    const narrowNow = (() => {
+      try { return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 760px)').matches } catch (_) { return false }
+    })()
     return {
-      navOpen: this.initialNavOpen, railCollapsed: this.initialRailCollapsed, _tabEls: {}, folderOverride: {},
+      navOpen: this.initialNavOpen && !narrowNow, railCollapsed: narrowNow ? false : this.initialRailCollapsed, _tabEls: {}, folderOverride: {},
       // `narrow` mirrors the (max-width:760px) media query as REACTIVE state, kept current by a resize
       // listener. It lets us reconcile the two boolean state machines (navOpen = mobile drawer,
       // railCollapsed = desktop slim rail) at the breakpoint and drive rail visibility correctly.
-      narrow: false, _mql: null, _onMedia: null,
+      narrow: narrowNow, _mql: null, _onMedia: null,
       activatedKeys: {}, hostState: {}, hostError: {}, _hostSlots: {}, _hostMounted: {},
-      hostEls: {}
+      hostEls: {},
+      // The resolved shellMode ('app' | 'web'), set at mount (it reads the host element and the platform).
+      mode: 'app'
     }
   },
   computed: {
     /**
-     * ★ ONE SOURCE OF TRUTH FOR THE FLOATING CIRCLE, because two copies of this condition is the
-     * bug waiting to happen. The button's v-if and the --map-fab-clearance that reserves room for
-     * it MUST agree: if they drift, you get either a legend whose last row sits under the circle
-     * (the Driver's report) or a strip of dead whitespace with no circle to justify it. Neither
-     * has a symptom a gate can see, so the fix is to make disagreement impossible rather than to
-     * test for it.
+     * ★ ONE SOURCE OF TRUTH FOR EACH SLOT'S PLACE. The phone bar and the rail's bottom slot are the
+     * same control in two places, and exactly one of them may show: the bar on a phone, the rail-end
+     * on a desktop, and neither when a header is on (its #toolbar carries the menu). The template,
+     * the grid row (.has-phone-bar) and check:shell-header all read these two, never a copy.
      */
-    fabShown() { return this.narrow && !this.header && !this.navOpen },
+    phoneBarShown() { return this.narrow && !this.header },
+    railEndShown() { return !this.narrow && !this.header },
     /**
      * The element the back-to-top arrow scrolls. .vtl-host is the shell's scroller
      * (overflow-y:auto) and there is one PER TAB, so this follows `active` rather than binding a
@@ -637,6 +705,13 @@ export default defineComponent({
     // only when the off-canvas drawer is open (navOpen). Binding the rail's v-show to THIS (not raw
     // navOpen) prevents a mobile-closed drawer from hiding the rail after a resize back to desktop.
     railShown() { return this.narrow ? this.navOpen : true },
+    // The home link's URL, or '' for none. A script URL is refused: the value can arrive through an
+    // attribute or a JSON config, and a link that runs code is never a way home.
+    homeLink() {
+      const h = String(this.homeHref || '').trim()
+      return (!h || /^(javascript|data|vbscript):/i.test(h.replace(/[\u0000- ]/g, ''))) ? '' : h
+    },
+    homeText() { return this.homeLabel || this.label('home') },
     // Every row/item flattened across whichever shape is in use (groups take precedence over items).
     allRows() {
       if (this.groups && this.groups.length) {
@@ -655,6 +730,7 @@ export default defineComponent({
     mountedElementRows() { return this.elementRows.filter(r => this.activatedKeys[r.key]) }
   },
   watch: {
+    shellMode() { this.resolveShellMode() },
     // Lazily activate an element-hosting tab the FIRST time it becomes active (mount on demand,
     // then keep alive). Non-element tabs are ignored here (the host renders those in #default).
     active: {
@@ -663,6 +739,7 @@ export default defineComponent({
     }
   },
   mounted() {
+    this.resolveShellMode()
     // Track the breakpoint reactively and RECONCILE state whenever we cross it — this is the fix for the
     // "extremely buggy" collapse: without it, `navOpen` (mobile drawer) and `railCollapsed` (desktop slim
     // rail) drifted out of the regime they were set in, and a mobile-closed drawer could hide the whole
@@ -692,6 +769,24 @@ export default defineComponent({
     this._mql = null; this._onMedia = null
   },
   methods: {
+    resolveShellMode() {
+      const pick = (m) => (m === 'web' || m === 'app' ? m : null)
+      let m = pick(this.shellMode)
+      if (!m) {
+        try {
+          const root = this.$el && this.$el.getRootNode ? this.$el.getRootNode() : null
+          const host = root && root.host
+          m = pick(host && host.getAttribute ? host.getAttribute('shell-mode') : null)
+        } catch (_) { /* no host element */ }
+      }
+      if (!m) {
+        try {
+          const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true
+          m = window.Capacitor || standalone || window.MAP_OWNS_PAGE === true ? 'app' : 'web'
+        } catch (_) { m = 'app' }
+      }
+      this.mode = m
+    },
     registerTab(key, el) { if (el) this._tabEls[key] = el },
     // The rail toggle. On a narrow screen the rail is an off-canvas drawer, so the toggle closes the
     // drawer (navOpen). On desktop it collapses/expands the slim icon rail (railCollapsed, persisted
@@ -711,7 +806,7 @@ export default defineComponent({
       }
     },
     label(key) {
-      const EN = { toggleList: 'Toggle list', openViews: 'Open the list of views', expandList: 'Expand list', collapseList: 'Collapse list', collapse: 'Collapse' }
+      const EN = { toggleList: 'Toggle list', openViews: 'Open the list of views', expandList: 'Expand list', collapseList: 'Collapse list', collapse: 'Collapse', home: 'Back to homepage' }
       return (this.labels && this.labels[key]) || EN[key]
     },
     // Open the desktop rail if it is in its slim state (a #rail host calls this when its slim-strip
@@ -786,6 +881,8 @@ export default defineComponent({
       injectScriptOnce(row.src)
         .then(() => waitForDefine(row.element))
         .then(() => {
+          // See StackLayout: name the owning bundle so a duplicate-tag page is audible, not silent.
+          claimTag(row.element, row.src)
           slot.innerHTML = ''
           const el = document.createElement(row.element)
           // props-in-advance: set each attr as BOTH a property (if upgraded) and an attribute, so the
@@ -874,6 +971,8 @@ export default defineComponent({
    content to size it and collapses to 0 (the 1fr row sits empty) → the same 0-height black screen.
    With no header there is only one region, so declare a single 1fr row and the body fills. */
 .vtl.no-header { grid-template-rows:1fr; }
+/* ...except on a phone, where the header-off layout has its slim bar (.vtl-pbar) as a real first row. */
+.vtl.no-header.has-phone-bar { grid-template-rows:auto 1fr; }
 /* MATERIAL APP BAR = 64px desktop / 56px mobile (2026-09-21), was 51px from 11px padding.
    Stated as an explicit min-height rather than left to padding arithmetic, so the number a
    reader sees is the number that renders. min-height keeps a wrapping title from clipping.
@@ -884,14 +983,19 @@ export default defineComponent({
    THIS RULE EXISTS TWICE (VTL_SHADOW_CSS and the scoped style block); keep them identical. */
 .vtl-top { flex:0 0 auto; display:flex; align-items:center; gap:10px; box-sizing:border-box; min-height:64px; padding:8px 16px; border-bottom:1px solid var(--vtl-border); background:#ffffff; }
 .vtl-menu { display:none; font:16px/1 system-ui; color:#3b463d; background:#d1d4cd; border:1px solid #d1d4cd; border-radius:8px; padding:5px 10px; cursor:pointer; }
-/* Headerless-mobile drawer opener. Only ever rendered when narrow AND header-off AND the drawer is
-   shut, so it cannot appear in any layout that already has a working toggle. z-index sits ABOVE the
-   content but BELOW the drawer (.vtl-nav is z-index:20) so the drawer covers it when it slides in.
-   44px is the minimum comfortable touch target; the safe-area insets keep it clear of an iOS home
-   indicator and a notch in landscape. */
-.vtl-fab { position:absolute; z-index:15; left:calc(12px + env(safe-area-inset-left)); bottom:calc(12px + env(safe-area-inset-bottom)); width:44px; height:44px; display:flex; align-items:center; justify-content:center; font:18px/1 system-ui; color:#3b463d; background:#ffffff; border:1px solid var(--vtl-border); border-radius:50%; box-shadow:0 2px 10px rgba(0,0,0,.18); cursor:pointer; }
-.vtl-fab:hover { background:#d1d4cd; }
-.vtl-fab:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:2px; }
+/* THE PHONE BAR (phoneBarShown = narrow AND header-off; it replaced the floating corner circle).
+   A real grid row above .vtl-body (.has-phone-bar below), so the drawer and the pane both start under
+   it and it never covers plugin content. 44px + the top safe area; the rule line is an INSET SHADOW,
+   not a border, so the 44px is the whole bar and the ☰ is a full 44×44 target. Flex follows the
+   writing direction, so in ar the ☰ sits at the right (where the drawer opens) and the #phone-end
+   menu at the left, with no :dir override. THIS RULE EXISTS TWICE; keep the copies identical. */
+.vtl-pbar { display:flex; align-items:center; gap:8px; box-sizing:border-box; height:calc(44px + env(safe-area-inset-top)); padding:env(safe-area-inset-top) calc(4px + env(safe-area-inset-right)) 0 calc(4px + env(safe-area-inset-left)); background:#ffffff; box-shadow:inset 0 -1px 0 var(--vtl-border); }
+.vtl-phone-menu { flex:0 0 auto; width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0; margin:0; font:20px/1 system-ui; color:#3b463d; background:transparent; border:0; border-radius:8px; cursor:pointer; }
+.vtl-phone-menu:hover { background:var(--vtl-accented); }
+.vtl-phone-menu:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
+/* WEB MODE: the same bar, without the camera inset (the shell is not at the top of the screen in a website). */
+.vtl-pbar.is-web { height:44px; padding-top:0; }
+.vtl-pbar-end { margin-inline-start:auto; display:inline-flex; align-items:center; min-width:0; }
 .vtl-menu:hover { background:#d1d4cd; }
 .vtl-brand { display:inline-flex; align-items:center; }
 .vtl-brand:empty { display:none; }
@@ -913,12 +1017,25 @@ export default defineComponent({
 .vtl-nav::-webkit-scrollbar-track { background:transparent; }
 .vtl-nav::-webkit-scrollbar-thumb { background:#c4c8c0; border-radius:8px; }
 .vtl-nav::-webkit-scrollbar-thumb:hover { background:#9aa197; }
-.vtl-collapse { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; margin:0 0 8px; padding:7px 10px; border:1px solid var(--vtl-border); border-radius:8px; background:#d1d4cd; color:var(--vtl-muted); font:inherit; font-size:12px; cursor:pointer; }
-.vtl-collapse:hover { background:var(--vtl-accented); color:#3b463d; }
-.vtl-collapse:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
+.vtl-collapse, .vtl-home { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; margin:0 0 8px; padding:7px 10px; border:1px solid var(--vtl-border); border-radius:8px; background:#d1d4cd; color:var(--vtl-muted); font:inherit; font-size:12px; cursor:pointer; }
+.vtl-collapse:hover, .vtl-home:hover { background:var(--vtl-accented); color:#3b463d; }
+.vtl-collapse:focus-visible, .vtl-home:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
 .vtl-collapse-ic { flex:0 0 auto; display:inline-flex; transition:transform .16s ease; transform:rotate(180deg); }
 .vtl-collapse-ic svg { width:16px; height:16px; }
 .vtl-collapse-tx { white-space:nowrap; }
+/* The host’s home link (homeHref) shares Collapse’s box through the selector lists above and below, so the
+   two are the same size by construction and cannot drift apart. The house does not rotate or mirror. */
+.vtl-home { text-decoration:none; }
+.vtl-home-ic { flex:0 0 auto; display:inline-flex; }
+.vtl-home-ic svg { width:16px; height:16px; }
+.vtl-home-tx { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* THE RAIL'S BOTTOM SLOT (#rail-end: railEndShown = wide AND header-off, and a filler present). The nav
+   becomes a column ONLY then, so every other rail lays out exactly as before. margin-top:auto parks the
+   slot at the bottom while the tabs are short; sticky keeps it in view once they scroll. The nav's own
+   bottom padding moves into the slot, so the sticky row sits flush with the rail's bottom edge. */
+.vtl-nav.has-rail-end { display:flex; flex-direction:column; padding-bottom:0; }
+.vtl-nav.has-rail-end > * { flex-shrink:0; }
+.vtl-rail-end { margin-top:auto; position:sticky; bottom:0; padding:8px 0 12px; background:#ffffff; border-top:1px solid var(--vtl-border); }
 .vtl-grp { margin-bottom:2px; }
 .vtl-grp + .vtl-grp { margin-top:8px; padding-top:8px; border-top:1px solid var(--vtl-border); }
 .vtl-tier { width:100%; padding:8px 8px 6px; display:flex; align-items:center; gap:8px; box-sizing:border-box; }
@@ -940,18 +1057,14 @@ export default defineComponent({
      min-height:48px     the Material list-item height. min-height, not height, so a wrapping
                          label still grows instead of clipping.
      border-radius         var(--vtl-radius,8px) — SUPERSEDED THE FULL PILL (2026-09-23).
-                         The 999px stadium above was a real instruction ("imitate the YouTube
-                         active row") and it shipped. It was then measured against the
-                         rest of the product and reversed it: "the roundedness of the tabs is a
-                         little bit too round because there is nowhere else in the app that has
-                         that same roundedness. Even the collapse button is not that round...
-                         it looks more material UI to have a more rounded tab than a less
-                         circular tab." He is right on the facts — .vtl-collapse is 8px, the
+                         A 999px stadium (modelled on YouTube's active row) shipped first. It
+                         was reversed after it was compared with the rest of the product:
+                         nothing else in the app is that round. .vtl-collapse is 8px, the
                          filter toggles in @map/components/search are 8px, and 8px is already
                          the most common radius in this file. A 999px radius on a 48px row is a
                          stadium, which is why it reads as foreign beside everything else.
-                         ★ DO NOT "RESTORE" THE PILL on the strength of the YouTube rationale
-                         above — that rationale is kept because it is true history, not because
+                         ★ DO NOT "RESTORE" THE PILL on the strength of the YouTube model
+                         above. It is kept because it is true history, not because
                          it is current. The 48px Material row height is unaffected and stays.
    NOT VENDORED: the card's law is to imitate the metrics in our own CSS, never to add Quasar or
    MUI. Same clone-dont-edit rule the library follows everywhere else.
@@ -961,6 +1074,10 @@ export default defineComponent({
 .vtl-tab:hover { background:var(--vtl-accented); color:#3b463d; }
 .vtl-tab:focus-visible { outline:2px solid var(--vtl-accent); outline-offset:-2px; }
 .vtl-tab.active { background:var(--vtl-accented); color:#3b463d; font-weight:500; }
+/* A DISABLED ROW (row.disabled, e.g. a desktop-only map on a phone) stays in the rail, greyed, with its badge
+   still readable. The click still reaches the consumer, so it can say WHY the row does not open. */
+.vtl-tab.disabled, .vtl-tab.disabled:hover { background:none; color:#a3a8a4; cursor:not-allowed; }
+.vtl-tab.disabled .vtl-tab-ic, .vtl-tab.disabled .vtl-tab-emoji, .vtl-tab.disabled .vtl-tab-fallback { opacity:.45; }
 .vtl-tab.active .vtl-tab-ic { color:var(--vtl-accent); }
 .vtl-tab-ic { flex:0 0 auto; display:inline-flex; color:var(--vtl-muted); }
 .vtl-tab-ic svg { width:20px; height:20px; }
@@ -1040,15 +1157,17 @@ export default defineComponent({
      nav translate  -184px   the 256px rail slides left, leaving 256-184 = 72px visible
      main left       72px    the content pane starts exactly where the rail ends
      collapse pad   184px    pushes the toggle's icon into the 72px strip that stays on screen
+                             (the #rail-end slot takes the same pad, so its menu sits in the strip too)
      tab pad        188px    the same for each row's icon (4px more, matching the old 196/200 pair)
    Change one without the others and the icons drift out of the visible strip or the content
    overlaps the rail. Old values were -196 / 60 / 196 / 200.
    THIS BLOCK EXISTS TWICE (VTL_SHADOW_CSS and the scoped style block); keep them byte-identical. */
 .vtl.rail-collapsed .vtl-nav { transform:translateX(-184px); }
 .vtl.rail-collapsed .vtl-main { left:72px; }
-.vtl.rail-collapsed .vtl-collapse { padding-left:184px; justify-content:flex-start; }
+.vtl.rail-collapsed .vtl-collapse, .vtl.rail-collapsed .vtl-home { padding-left:184px; justify-content:flex-start; }
 .vtl.rail-collapsed .vtl-collapse-ic { transform:rotate(0deg); }
-.vtl.rail-collapsed .vtl-collapse-tx { display:none; }
+.vtl.rail-collapsed .vtl-rail-end { padding-left:184px; }
+.vtl.rail-collapsed .vtl-collapse-tx, .vtl.rail-collapsed .vtl-home-tx { display:none; }
 .vtl.rail-collapsed .vtl-tab { padding-left:188px; gap:0; }
 .vtl.rail-collapsed .vtl-tab-text { display:none; }
 .vtl.rail-collapsed .vtl-tab-emoji { font-size:19px; }
@@ -1064,13 +1183,18 @@ export default defineComponent({
   /* MOBILE = the SAME composited-transform model, taken to its full-off-canvas extreme: a full-width
      drawer that slides in/out via transform (never a layout property), so opening/closing the drawer
      never reflows the content. Content is full-width (left:0) and stays put; the drawer floats over it. */
-  .vtl-nav { z-index:20; width:256px; box-shadow:0 0 28px rgba(0,0,0,.55); transform:translateX(-100%); }
+  /* NO SHADOW WHILE CLOSED: parked at translateX(-100%), a 28px blur still bleeds into the screen along the start
+     edge (measured at 390: the left 30px ~22 luminance levels darker). The shadow belongs to the OPEN drawer only. */
+  .vtl-nav { z-index:20; width:256px; box-shadow:none; transform:translateX(-100%); }
   /* OPEN DRAWER ABOVE THE PLUGIN'S OWN LAYERS. Mounted content shares this stacking context, and
      plugins raise their chrome (the research dashboard's filter bar is z-index:55), so at z-index 20
      the open drawer had a plugin's filter row painted across it — measured 2026-09-25 at 390px.
      Only while OPEN on a phone: that is when the drawer is the one thing you can use, and desktop
-     and plugin modal scrims keep their existing order. */
-  .vtl.nav-open .vtl-nav { transform:translateX(0); z-index:1000; }
+     and plugin modal scrims keep their existing order.
+     100000, not 1000: the phone legend sheet (LegendMobile) is z-index:1000, and a tie left DOM order to decide,
+     so the legend drew over the open drawer. Every plugin layer sits below 100000; a MODAL's scrim (MapInfo,
+     2147483000) still covers the drawer, as a modal should. */
+  .vtl.nav-open .vtl-nav { transform:translateX(0); z-index:100000; box-shadow:0 0 28px rgba(0,0,0,.55); }
   .vtl-main { left:0; }
   /* The desktop slim-rail collapse has no meaning on a phone — reconcileForWidth() clears railCollapsed
      at this width, but neutralize its CSS too (belt-and-suspenders) so a full labelled drawer always
@@ -1078,9 +1202,9 @@ export default defineComponent({
   .vtl.rail-collapsed .vtl-nav { transform:translateX(-100%); }
   .vtl.rail-collapsed.nav-open .vtl-nav { transform:translateX(0); }
   .vtl.rail-collapsed .vtl-main { left:0; }
-  .vtl.rail-collapsed .vtl-collapse { padding-left:10px; justify-content:flex-start; }
+  .vtl.rail-collapsed .vtl-collapse, .vtl.rail-collapsed .vtl-home { padding-left:10px; justify-content:flex-start; }
   .vtl.rail-collapsed .vtl-collapse-ic { transform:rotate(180deg); }
-  .vtl.rail-collapsed .vtl-collapse-tx { display:inline; }
+  .vtl.rail-collapsed .vtl-collapse-tx, .vtl.rail-collapsed .vtl-home-tx { display:inline; }
   .vtl.rail-collapsed .vtl-tab { padding-left:10px; gap:11px; }
   .vtl.rail-collapsed .vtl-tab-text { display:flex; }
   .vtl.rail-collapsed .vtl-tab-fallback { display:none; }
@@ -1101,20 +1225,25 @@ export default defineComponent({
 .vtl:dir(rtl) .vtl-meta, .vtl:dir(rtl) .vtl-td, .vtl:dir(rtl) .vtl-chev { margin-left:0; margin-right:auto; }
 .vtl:dir(rtl) .vtl-chev:not(.open) { transform:scaleX(-1); }
 .vtl:dir(rtl) .vtl-collapse-ic svg { transform:scaleX(-1); }
-.vtl:dir(rtl) .vtl-fab { left:auto; right:calc(12px + env(safe-area-inset-right)); }
 .vtl.rail-collapsed:dir(rtl) .vtl-nav { transform:translateX(184px); }
 .vtl.rail-collapsed:dir(rtl) .vtl-main { left:0; right:72px; }
-.vtl.rail-collapsed:dir(rtl) .vtl-collapse { padding-left:10px; padding-right:184px; }
+.vtl.rail-collapsed:dir(rtl) .vtl-collapse, .vtl.rail-collapsed:dir(rtl) .vtl-home { padding-left:10px; padding-right:184px; }
 .vtl.rail-collapsed:dir(rtl) .vtl-tab { padding-left:12px; padding-right:188px; }
 .vtl.rail-collapsed:dir(rtl) .vtl-tier { padding-left:8px; padding-right:196px; }
+.vtl.rail-collapsed:dir(rtl) .vtl-rail-end { padding-left:0; padding-right:184px; }
 @media (max-width: 760px) {
   .vtl:dir(rtl) .vtl-nav { transform:translateX(100%); }
   .vtl.nav-open:dir(rtl) .vtl-nav { transform:translateX(0); }
   .vtl:dir(rtl) .vtl-main, .vtl.rail-collapsed:dir(rtl) .vtl-main { left:0; right:0; }
   .vtl.rail-collapsed:dir(rtl) .vtl-nav { transform:translateX(100%); }
   .vtl.rail-collapsed.nav-open:dir(rtl) .vtl-nav { transform:translateX(0); }
-  .vtl.rail-collapsed:dir(rtl) .vtl-collapse { padding-left:10px; padding-right:10px; }
+  .vtl.rail-collapsed:dir(rtl) .vtl-collapse, .vtl.rail-collapsed:dir(rtl) .vtl-home { padding-left:10px; padding-right:10px; }
   .vtl.rail-collapsed:dir(rtl) .vtl-tab { padding-left:12px; padding-right:10px; }
   .vtl.rail-collapsed:dir(rtl) .vtl-tier { padding-left:8px; padding-right:8px; }
+}
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree). Additive only. */
+@media (prefers-reduced-motion: reduce) {
+  .vtl-nav, .vtl-collapse-ic, .vtl-tab, .vtl-tier, .vtl-pbar, .vtl-phone-menu, .vtl-rail-end, .vtl-scrim { transition: none !important; animation: none !important; }
 }
 </style>

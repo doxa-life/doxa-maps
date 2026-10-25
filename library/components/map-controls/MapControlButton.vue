@@ -68,6 +68,19 @@ useShadowStyles(`
 /* shape="square" on a STANDALONE button: their 4px corners, our fill and shadow kept.
    A button inside .map-toolbar--square is overridden back to 0 by the toolbar's rules. */
 .mcb--square{ border-radius:4px; }
+/* shape="rounded-square" — the HEADER-BAR button form (design rule, 2026-09-30): map controls stay ROUND,
+   but a button in a dashboard HEADER is a rounded square at the SAME radius as the gallery's vertical
+   tabs. --vtl-radius is that ONE shared variable (VerticalTabsLayout .vtl-tab), so the header button
+   and the tabs can never drift; 8px is only the fallback for a context that never set it. */
+.mcb--rounded-square{ border-radius:var(--vtl-radius,8px); }
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .mcb-btn { transition: none !important; animation: none !important; }
+}
 `, 'map-control-button')
 
 defineProps({
@@ -115,7 +128,7 @@ defineEmits(['click'])
   -->
   <button
     class="mcb"
-    :class="{ dark: isDark, active, 'mcb--square': shape === 'square' }"
+    :class="{ dark: isDark, active, 'mcb--square': shape === 'square', 'mcb--rounded-square': shape === 'rounded-square' }"
     :title="title"
     :aria-label="title || undefined"
     :disabled="disabled"

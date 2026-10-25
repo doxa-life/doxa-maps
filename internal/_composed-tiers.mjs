@@ -17,7 +17,7 @@
 /**
  * Derive the composition tier from the `composes` edges, and refuse to disagree with an author.
  *
- * ★ WHY DERIVE AT ALL (Driver, 2026-09-27). Tiers 3-5 were AUTHORED ONLY — discover.mjs infers just
+ * ★ WHY DERIVE AT ALL (2026-09-27). Tiers 3-5 were AUTHORED ONLY — discover.mjs infers just
  * `single` and `parameterized`, so a composite with no meta.json shipped as capability 1. That is not
  * hypothetical: research-dashboard did exactly that while nesting ten views, and the warning in
  * detectProfileType exists because of it. A missing file is indistinguishable from a deliberate choice.

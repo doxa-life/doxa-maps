@@ -28,7 +28,7 @@ import { useSelectionCamera } from '@map/composables/useSelectionCamera.js'
 import MapToolbar from '@map/components/map-controls/MapToolbar.vue'
 import ZoomInButton from '@map/components/map-controls/ZoomInButton.vue'
 import ZoomOutButton from '@map/components/map-controls/ZoomOutButton.vue'
-import { lbl } from '../../composables/useDashboardAggregations.js'
+import { lbl } from '@map/composables/useFacetAggregation.js'
 import { buildSearchAccessors, makeSearchMatcher, filterRowsBySearch } from '@map/composables/useDashboardSearch.js'
 // ── THE PRAYER COLOUR STRATEGY, REUSED NOT RE-DERIVED ──
 // applyColor() returns the SAME 3-tier expression the prayer map paints with, keyed off the
@@ -37,6 +37,7 @@ import { buildSearchAccessors, makeSearchMatcher, filterRowsBySearch } from '@ma
 // one threshold, one owner. (The dashboard facet already reuses getPrayerLevel for the same reason.)
 import { applyColor as prayerColorExpr } from '@map/colors/prayer-progress.js'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
+import { findScrollportAncestor } from '@map/utils/scrollport.js'
 
 const dash = inject('dashboardData', null)
 const bus = inject('selectionBus', null)
@@ -79,9 +80,8 @@ const countryCounts = computed(() => {
 
 const mapContainer = ref(null)
 // ── MAP PROVIDER: choosable, Mapbox by default ──────────────────────────────
-// Driver 2026-09-22: "keep every Mapbox component working so we don't break Mapbox
-// compatibility — we just want interoperability with MapLibre... start on the unified research
-// dashboard MapLibre swap while maintaining Mapbox dependencies so that both work."
+// The aim is interoperability: every Mapbox component keeps working, so Mapbox compatibility never
+// breaks, while the unified research dashboard also runs on MapLibre. Both engines must work.
 //
 // So this is DUAL-SUPPORT, not a migration, and the change is deliberately ADDITIVE: `provider`
 // defaults to 'mapbox', so with no config the behaviour is byte-for-byte what it was. Nothing
@@ -111,13 +111,13 @@ const mapContainer = ref(null)
 // This used to be `cfg.provider === 'maplibre' ? 'maplibre' : 'mapbox'`, which collapsed every
 // other answer to Mapbox and therefore silently OUTRANKED the page-level switch that the rest of
 // the tree honours: a partner flipping one value watched this dashboard stay on Mapbox with no
-// indication why. But dashboard.config.js pins provider:'mapbox' DELIBERATELY — the Driver's own
-// 2026-09-23 ruling, for Mapbox Standard's native starfield globe — so that default must survive
+// indication why. But dashboard.config.js pins provider:'mapbox' DELIBERATELY — for
+// Mapbox Standard's native starfield globe — so that default must survive
 // untouched. Both hold if the page switch sits BETWEEN the per-element config and the bundle's
 // shipped preference:
 //   1. profile-config.provider — this embed, decided by whoever mounted the element
 //   2. ?provider= / window.MAP_PROVIDER — the page, i.e. "swap every map on this site"
-//   3. dashboard.config.js — this bundle's shipped default (Mapbox, by the ruling above)
+//   3. dashboard.config.js — this bundle's shipped default (Mapbox, as set above)
 // With no switch set, resolveMapProvider decides 'auto': with a token step 2 does not fire and the
 // shipped default holds; with NO token it answers 'maplibre', because Mapbox cannot draw without one.
 const mapProvider = computed(() => {
@@ -133,7 +133,7 @@ const isMaplibreProvider = computed(() => mapProvider.value === 'maplibre')
 
 // The country boundaries (384 KB) are fetched as soon as the panel exists, not from the style-load
 // handler: there the download waited for the whole basemap style and so ran after it, not beside it
-// (rega's waterfall: requested at 10.4 s of a 12.5 s load). The handler awaits this same promise.
+// (the network waterfall: requested at 10.4 s of a 12.5 s load). The handler awaits this same promise.
 let boundariesPromise = null
 function countryBoundaries() {
   if (!boundariesPromise) {
@@ -152,9 +152,8 @@ function countryBoundaries() {
 
 const { map, isMapReady, initializeMap, destroy } = useMapInstance({
   containerRef: mapContainer, accessToken: unref(mapboxToken) || (mapboxToken && mapboxToken.value) || '',
-  // ★ ZOOMED OUT BY DEFAULT, WITH REAL ZOOM-OUT RANGE (Driver 2026-09-23: "I don't want the map
-  // zoomed in by default but zoomed out... the edges of the map need to be truly around the edges
-  // so you have more zoom control and zoom function distance"). zoom 1.45 -> 1.1 opens on the
+  // ★ ZOOMED OUT BY DEFAULT, WITH REAL ZOOM-OUT RANGE: the map opens zoomed out, with its edges truly
+  // at the edges, so there is more zoom-out distance to work with. zoom 1.45 -> 1.1 opens on the
   // whole sphere; minZoom 1 -> 0.5 plus skipWorldFloor gives the zoom-out gesture somewhere to
   // go. The floor being skipped is the mercator "no duplicate world" rule, which is meaningless
   // on a globe -- a sphere HAS no second world to show. Flat mercator keeps the floor.
@@ -174,7 +173,7 @@ const mapFly = useMapFly({
   defaultCenter: [28, 18],
   defaultZoom: 1.45,
 })
-// ── Table selection -> camera (the Driver's ask: "select in the table, the map zooms there") ──
+// ── Table selection -> camera (selecting a row in the table zooms the map there) ──
 // Frames the selection off the FULL row store, not filteredRows — matching selectedGeo()
 // below, so the camera always frames exactly the pins the selection pen draws (a row can be
 // selected and then filtered out of scope; the pen deliberately keeps showing it).
@@ -204,6 +203,15 @@ let containerRO = null
 let scrollRO = null
 let scrollResync = null
 let offToggleTable = null
+// Holders for the three verify hooks planted on window when the map is built, so the unmount path
+// can release ONLY the ones this instance installed. Two dashboards can share a page (the Big
+// Picture composite beside a gallery instance); B overwrites A's hooks, then A unmounts, and an
+// unconditional delete would strip the hooks of the dashboard still on screen — a browser check would see a
+// missing hook on a healthy map. Declared here because the assignments live inside the map-build
+// function and a const there is invisible to onBeforeUnmount.
+let _hookRdashMap = null
+let _hookClickAt = null
+let _hookPinAt = null
 let offLayoutResizing = null
 let _resizeRaf = 0
 // BUG-RESIZE-STROBE (photosensitive-seizure risk): while a section divider is being DRAGGED the
@@ -239,8 +247,8 @@ function setLiveResize(on) {
 // ── THE CHOROPLETH RAMP — why it is PALE and no longer grey→black ──────────────────────────
 // (card BUILD-MAP-STYLE-MUST-BE-BEAUTIFUL-AND-MATCH-THE-PALETTE)
 //
-// DRIVER: "it is really hard to see the pins, really hard to see the actual dots, because they
-// are blue and then the grey on blue just makes it really hard to see."
+// Reported: it is hard to see the pins, hard to see the actual dots, because they
+// are blue, and grey on blue makes them really hard to see.
 //
 // THAT IS A PINCER, AND MEASURING IT IS WHAT LOCATES THE FIX. The two layers that make a dot
 // visible fail at OPPOSITE ends of the OLD grey→black ramp. Measured 2026-09-22 against each
@@ -270,7 +278,7 @@ function setLiveResize(on) {
 // ── ★ THE HUE IS NOT GREEN, AND THAT IS THE POINT ─────────────────────────────────────────
 // (card DECIDE-THE-MAP-MUST-NOT-MAKE-LOSTNESS-LOOK-GOOD)
 //
-// DRIVER: "it does not make sense for the tiles to be green because green means good while it
+// Reported: it does not make sense for the tiles to be green, because green means good while it
 // is not good to be lost, and the darkest spots are where the most lost people are at... it
 // should not make it look green and nice that these nations are so lost."
 //
@@ -288,8 +296,9 @@ function setLiveResize(on) {
 // response the map exists to provoke. Beautiful is still the goal: the artwork of a LAMENT,
 // not of a garden. Cartography agrees and names the trap — lightness carries ORDER while hue
 // carries MEANING, so green is a statement rather than a default, and PolicyViz documents the
-// value-judgement problem directly ("more/darker is better"). Sources + full write-up:
-// _qa-cycle/01-ideation-research/RESEARCH-the-map-must-not-make-lostness-look-good.md
+// value-judgement problem directly ("more/darker is better").
+// THE FINDING THIS ENCODES: a palette tuned for comfort anaesthetises the very response the
+// map exists to provoke, so the dark end must read as lament rather than as achievement.
 //
 // ── ★ WHY THIS RAMP AND NOT THE TWO THAT WERE HANDED OVER ────────────────────────────────
 // Two candidates arrived pre-measured: EMBER (worst pin 7.04) and CLAY (7.03), both said to
@@ -314,8 +323,8 @@ function setLiveResize(on) {
 // ── ★ SHADES OF RED — SO INDIA READS AS A HEART ───────────────────────────────────────────
 // (card BUILD-SHADES-OF-RED-FOR-THE-DARKEST-PLACES)
 //
-// DRIVER: "the darkest spots might be RED. We might do SHADES OF RED. God's heart beats loudest
-// for the darkest places... shades of red might really capture what I'm trying to say about
+// Asked: the darkest spots should be RED, in SHADES OF RED. God's heart beats loudest
+// for the darkest places, and shades of red capture what the ramp is meant to say about
 // God's heart, because THAT WILL CAUSE INDIA TO LOOK LIKE A HEART."
 //
 // THE IMAGE IS THE SPEC. India holds the densest concentration of unreached peoples on earth, so
@@ -366,7 +375,7 @@ function setLiveResize(on) {
 //   #f8e0da 10.80 · #fccec4 9.82 · #febbad 8.85 · #ffa797 7.92 · #ff9380 7.07
 //
 // WORST DATA BIN WAS 7.07, below the 7.20 the ashen-clay ramp reached; that regression was
-// deliberate and bought the hue the Driver asked for while still clearing the 7:1 floor that was
+// deliberate and bought the hue that was asked for while still clearing the 7:1 floor that was
 // the constraint AT THE TIME. It remained well above the green this replaced (1.13).
 //
 // REJECTED, each measured rather than argued:
@@ -390,7 +399,7 @@ function setLiveResize(on) {
 //      it got REPLACED by one that matches the two-band pin that actually ships: effective
 //      visibility = max(orange disc, white stroke) on every bin, worst 1.83 at bin2. Anyone
 //      tempted to "restore 7:1" should read the BIN_COLORS note first — doing so means either
-//      giving the Driver back a navy pin or giving up the label red.
+//      giving back a navy pin or giving up the label red.
 //   2. no red-vs-green dependence (8% of men have that deficiency, and red-green is exactly the
 //      bad-good pairing a designer reaches for here). ★ THIS CONSTRAINT BINDS HARDEST NOW THAT
 //      THE RAMP IS ACTUALLY RED — a red ramp that ordered by HUE would be unreadable for those
@@ -405,8 +414,10 @@ function setLiveResize(on) {
 //      DISTANCE, not just an exact-hex match — a near-miss reads as a rendering artefact, which
 //      is worse than an obvious clash because nobody files it.
 //
-// Re-measure with _qa-cycle/01-ideation-research/scratch-lament-ramp-contrast.mjs (all four
-// ramps, three targets, both CVD simulations) and re-solve with scratch-lament-ramp-solve.mjs.
+// TO RE-MEASURE: contrast every ramp stop against all three pin targets under both CVD
+// simulations, and re-solve for the darkest stop that still clears 7:1 COMPOSITED OVER THE
+// REAL BASEMAP. Compositing over pure white is what made the two handed-over candidates
+// look like they passed.
 //
 // Still fully config-driven via cfg.map.bins — a host can restore any ramp it wants.
 //
@@ -421,8 +432,8 @@ function setLiveResize(on) {
 // ── ★ THE HEARTBEAT RED, AND WHY THE RAMP COULD FINALLY DARKEN ────────────────────────────
 // (card BUILD-HEARTBEAT-ZONES-IN-LABEL-RED)
 //
-// DRIVER: "I like a darker red, like a brighter red... that red that people use on labels to make
-// it look like that brand, the brand colour red that people put on peanut butter jars... Like that
+// Asked: a darker red, a brighter red — the red people use on labels to make
+// it look like a brand — the brand red people put on peanut butter jars. Like that
 // heart red, because those are the HEARTBEAT ZONES."
 //
 // THE SPEC IS A REAL, MEASURABLE COLOUR FAMILY, not a vibe. Sampled in OKLCh, the reds actually
@@ -431,13 +442,13 @@ function setLiveResize(on) {
 //     fire-engine #ce2029 L.548 C.206 H25.5 · classic label red #c8102e L.530 C.207 H22.3
 // So "label red" = L 0.53-0.57, C ~0.20, H 22-27. The new top bin '#cd2027' lands at
 // L 0.546 / C 0.205 / H 26.0 — inside that cluster, between Heinz and fire-engine. That is the
-// whole derivation: the Driver named a brand family, and the family has coordinates.
+// whole derivation: the spec named a brand family, and the family has coordinates.
 //
 // ★ WHY THIS DARKENING IS NOW LEGAL WHEN THE NOTE ABOVE FORBADE IT. The paragraph above says the
 // ramp "may not be darkened to look more serious" because darkness kills the navy pin — and that
 // was TRUE WHILE THE PIN WAS NAVY. Contrast is driven by relative luminance, so a DARK pin needs a
 // LIGHT ground. The pin is now ORANGE (see the pin note below), which is a LIGHT symbol, and a
-// light symbol wants a DARK ground. The constraint did not get violated, it INVERTED. The Driver's
+// light symbol wants a DARK ground. The constraint did not get violated, it INVERTED. The report's
 // two asks — a deeper red and an orange pin — are not in tension; each is what makes the other
 // affordable. This is why both changed in one commit: splitting them would have shipped a broken
 // intermediate state in either order.
@@ -450,7 +461,7 @@ function setLiveResize(on) {
 // every orange has it, merely shifted, because the ramp must sweep THROUGH the pin's own luminance
 // somewhere. Swept across all true oranges and all plausible ramps, the worst case saturates at
 // 1.92-1.98 and will not move. Tuning stopped there rather than spending more darkness on a number
-// that does not respond; the remaining budget went to the Driver's actual spec, the label red.
+// that does not respond; the remaining budget went to the actual spec, the label red.
 //
 // THE ORDER IS STILL CARRIED BY LIGHTNESS ALONE, which is what keeps the red honest:
 //     0.849 > 0.774 > 0.697 > 0.621 > 0.546   (every step >= 0.05, so no two bins look alike)
@@ -461,10 +472,10 @@ function setLiveResize(on) {
 // Re-measure/re-solve: the solver used here is reproduced in the card's notes (OKLab ramp build +
 // WCAG contrast over the composited Positron ground + Machado CVD matrices).
 //
-// ── ★ WIDENED 2026-09-23 (card P0 DRIVER-REPORTED) + NAMED RAMP REGISTRY ──────────────────────
-// DRIVER: "60-149 red is the same red as the heartbeat zone, the red shades need to be more
-// spaced out so it is more easy to tell the distinction — and i need to have grey scale as a
-// backdrop from grey to black, just in case i need to swap from red to black scale."
+// ── ★ WIDENED 2026-09-23 (card P0, reported) + NAMED RAMP REGISTRY ────────────────────────────
+// The 60-149 red was the same red as the heartbeat zone, so the red shades are spaced further
+// apart to tell the bands apart, and a grey-to-black scale is registered as a backdrop so the
+// ramp can swap from red to black.
 //
 // ★ THE RAMP WAS ALREADY MATHEMATICALLY EVEN, AND HE WAS STILL RIGHT — that tension is the
 // finding, not a contradiction to argue with. Measured in plain sRGB Euclidean distance, the old
@@ -477,7 +488,7 @@ function setLiveResize(on) {
 // repeats another.
 //
 // THE FIX: widen the total range (paler start, darker end) and re-map the five stops onto
-// NON-UNIFORM lightness steps, so the TOP of the ramp — where the Driver's complaint actually
+// NON-UNIFORM lightness steps, so the TOP of the ramp — where the reported complaint actually
 // lives — gets more separation than a linear spread would give it. Hue drifts slightly toward
 // the label-red family's lower end (H 35 -> 27, still inside the jar-label cluster this ramp was
 // built to match) and chroma rises further at the dark end, both legal moves per the "chroma is
@@ -486,7 +497,7 @@ function setLiveResize(on) {
 //   OLD (dE2000)   #f6beb3->#ef9d8e 8.57 · #ef9d8e->#e57a6c 8.74 · #e57a6c->#da544a 9.28 · #da544a->#cd2027 9.96
 //   NEW (dE2000)   #f4cec4->#ecaea1 8.83 · #ecaea1->#e08678 10.37 · #e08678->#ce544b 13.14 · #ce544b->#b10010 15.17
 //
-// ★ THE BIN THE DRIVER NAMED (bin4->bin5, "60-149" vs the heartbeat zone) GOES FROM dE2000=9.96 TO
+// ★ THE BIN NAMED IN THAT REPORT (bin4->bin5, 60-149 vs the heartbeat zone) GOES FROM dE2000=9.96 TO
 // 15.17 — a 52% larger perceptual step, and now the LARGEST step in the ramp (as it should be: the
 // heartbeat zone is the one bin that must never be mistaken for its neighbour). Every other step
 // grew too, so nothing else got relatively worse.
@@ -504,11 +515,11 @@ function setLiveResize(on) {
 //
 // ★ THE HONEST LIMIT: this is a NUMERICAL widening, verified by CIEDE2000/WCAG/CVD math, not a
 // human looking at a painted map (this box has no WebGL — see the report). The numbers say the
-// separation is real and larger; whether it now READS as "clearly distinct" is the Driver's call.
+// separation is real and larger; whether it now READS as "clearly distinct" is a product decision.
 //
 // ── ★ GREYSCALE — A SWAPPABLE BACKDROP, NOT A DEFAULT ─────────────────────────────────────────
-// DRIVER: "grey scale as a backdrop from grey to black, just in case I need to swap from red to
-// black scale" — an OPTION he can reach for, not a reversal of the red decision above
+// Asked: a grey scale backdrop from grey to black, in case the ramp swaps from red to
+// black scale — an OPTION to reach for, not a reversal of the red decision above
 // (BUILD-SHADES-OF-RED-FOR-THE-DARKEST-PLACES) or of the earlier grey->black rejection (see the
 // "why it is PALE and no longer grey->black" note at the top of this file — that history is
 // about the OLD pale-coral ramp fighting a NAVY pin; it does not bind here, because greyscale is
@@ -539,8 +550,7 @@ function setLiveResize(on) {
 const BIN_COLORS = (() => {
   const RAMP_PRESETS = {
     'heartbeat-red': ['#f4cec4', '#ecaea1', '#e08678', '#ce544b', '#b10010'],
-    // ★ BIN 1 DARKENED #e8e8e8 -> #c9c9c9 (Driver 2026-09-23: "bangladesh is not showing up as a
-    // polygon"). It WAS rendering -- queryRenderedFeatures returned the BGD polygon painted
+    // ★ BIN 1 DARKENED #e8e8e8 -> #c9c9c9: Bangladesh appeared not to show as a polygon. It WAS rendering -- queryRenderedFeatures returned the BGD polygon painted
     // #e8e8e8 -- but against the #f3f3f1 no-data surface that is a 1.06 contrast ratio at 0.78
     // opacity: a 1-4-group country was pixel-identical to an empty one. The ramp's first step
     // must be separated from NO-DATA at least as clearly as from bin 2, or the lowest bin
@@ -561,7 +571,7 @@ const HEARTBEAT_DEFAULTS = { heartbeatThreshold: 150, binThresholds: [5, 20, 60]
 // label set was the second half of the same bug: change the edge and the legend keeps saying
 // '150+' while the map bins at 40, which is worse than no legend because it is confidently wrong.
 // ★ THE TOP BIN IS NAMED, NOT JUST NUMBERED. The unbounded bin is the HEARTBEAT ZONE — the
-// Driver's own word for it ("those are the heartbeat zones", "God's heart beats loudest for the
+// the word used for it ("those are the heartbeat zones", "God's heart beats loudest for the
 // darkest places"). It gets the name appended to its count so the legend teaches what the deepest
 // red MEANS rather than only how many people groups it takes to get there; the number stays first
 // because the number is what the swatch actually encodes. Derived here, at the only place a label
@@ -672,7 +682,7 @@ function colorFor(count) {
 // ★ THE ERROR GROWS WITH THE BIN, AND AT THE TOP IT IS THE SIZE OF A WHOLE BIN STEP. The gap
 // between the top two bins is 25.45 as painted; the legend's own error on the heartbeat bin is
 // 21.14. So a reader comparing the two darkest swatches was comparing two colours neither of which
-// was on the map — which is a strong candidate for the Driver's report that "60-149 red is the same
+// was on the map — which is a strong candidate for the report that "60-149 red is the same
 // red as the heartbeat zone", independent of the ramp itself.
 //
 // Compositing here rather than dropping the opacity on the map: 0.78 is deliberate (it lets the
@@ -726,8 +736,8 @@ function buildPaint() {
   return { fillColor, fillOpacity }
 }
 // ── ★ THE DOT MUST SAY WHICH ONES HAVE PRAYER (card BUG-PRAYER-FILTER-NOT-APPLYING-TO-THE-MAP) ──
-// DRIVER: "when I sort by has prayer it needs to show me which ones have prayer and which one…
-// The dots are not changing based on that filter."
+// Reported: sorting by has-prayer needs to show which ones have prayer and which one…
+// The dots were not changing based on that filter.
 //
 // MEASURED FIRST, and the measurement moved the fix. The filter was NOT broken: selecting
 // "Has Prayer" already narrowed the rd-bubbles source 2107 -> 689 features, exactly matching the
@@ -735,11 +745,11 @@ function buildPaint() {
 // broken is that `circle-color` was the flat literal '#ef6c00' — read back off the LIVE layer with
 // getPaintProperty, which returned the bare string, not an expression. So every dot was the same
 // orange whether it had prayer or not: the map answered a prayer question with no prayer
-// information in it, and the remaining dots looked identical to the ones he started with. That is
+// information in it, and the remaining dots looked identical to the ones shown before. That is
 // why a working filter reads as "not applying".
 //
 // ★ WHY THIS IS CONDITIONAL AND NOT A GLOBAL RECOLOUR. The orange is not arbitrary — it is a
-// Driver decision with a contrast analysis attached (see the long note on the layer's paint block:
+// a product decision with a contrast analysis attached (see the long note on the layer's paint block:
 // hue 48.1°, the darkest true orange, chosen to survive the pale choropleth bins, with the white
 // stroke load-bearing beneath it). Painting every dot by prayer at all times would silently discard
 // that work and change every OTHER view of this map. So: orange remains the pin's identity, and the
@@ -898,9 +908,8 @@ function addLayers() {
   // longer ships. Kept only so the NAVY-ERA rejections stay readable:
   //   '#0d47a1' (Blue 900) - too light.
   //   Tinting the pin per bin - reintroduces the original alpha fault. ★ STILL BINDING.
-  //   "Reverting to orange - the Driver ruled explicitly against it." ★ NO LONGER TRUE. That
-  //     ruling was given while the ramp was PALE and the pin navy; the Driver has since asked for
-  //     orange against the new red ramp ("I think it might be better orange"), which supersedes it.
+  //   Reverting to orange (once ruled out) - ★ NO LONGER TRUE. That held while the ramp was PALE
+  //     and the pin navy; against the new red ramp the pin moved to orange, which supersedes it.
   //     Navy did not lose on contrast - it was freed to become the SELECTION ring, which had to
   //     move because an orange ring on an orange pin measured 1.07. See SEL_COLOR.
   //
@@ -910,7 +919,7 @@ function addLayers() {
   // ── ★ WHITE RING + A SMALLER ZOOMED-OUT FOOTPRINT ──
   // (card BUG-ALL-PINS-TURNED-NAVY-ONLY-DEAF-SHOULD-BE)
   //
-  // DRIVER: "I like the blue dots. Do not revert it to orange, just add WHITE RINGS around
+  // Asked: keep the blue dots. Do not revert to orange; add WHITE RINGS around
   // the blue dots so that they do not look like a heat map. The white ring should not
   // underlap each other — ALL the white rings should be visible when you zoom out. And the
   // dots [could] be a little bit smaller when you zoom out... That way we will not have a
@@ -927,14 +936,14 @@ function addLayers() {
   // z1:  navy r=1.6 (+0 ring) inside a white r=3.4  -> band 1.8px, footprint 6.8px (was 9)
   // z6:  navy r=5.0 (+0 ring) inside a white r=7.4  -> band 2.4px, footprint 14.8px
   // The band is now ABOVE 1px at every zoom in the ramp, so it survives rasterisation at the
-  // zoomed-out view where the Driver saw the heat map. The footprint at z1 drops 24%, which
-  // is the "a little bit smaller when you zoom out" spread he asked for.
+  // zoomed-out view where the heat map was seen. The footprint at z1 drops 24%, which
+  // gives the pins a slightly smaller spread when zoomed out.
   //
   // The dark 1px ring on the navy dot is REMOVED: its job was to separate navy from the
   // near-white halo, but a true white ring already does that at 13.2:1, and at r=1.6 a 1px
   // dark ring was over half the dot's visible area — that is what made a zoomed-out pin look
   // muddy rather than navy. Halo colour moves from '#f3f3f1' (Material surface) to a literal
-  // '#fff' at full opacity, because the Driver asked for WHITE rings and 0.95 alpha over a
+  // '#fff' at full opacity, because WHITE rings were asked for and 0.95 alpha over a
   // grey choropleth bin was rendering them off-white.
   //
   // HIT-TESTING is unchanged: 'rd-bubble-layer' keeps its id — onBubbleClick, onMapClick's
@@ -946,7 +955,7 @@ function addLayers() {
   // ── ★ THE PIN IS NOW SELF-CONTAINED (card BUILD-MAP-STYLE-MUST-BE-BEAUTIFUL) ──────────
   // The white ring used to depend on the GROUND for its visibility, and measured only
   // 1.09–1.24 against the light bins — so on pale countries the ring vanished and the dots
-  // merged into the "heat map" look the Driver reported. Paling the ramp (above) fixes the
+  // merged into the "heat map" look that was reported. Paling the ramp (above) fixes the
   // DOT but makes that worse, not better: the ring's contrast vs the current ramp is 1.11–1.87.
   //
   // THE RESOLUTION IS TO STOP ASKING THE GROUND TO DO THE RING'S JOB. The ring's real job is
@@ -957,15 +966,14 @@ function addLayers() {
   // palest and the darkest bin, and on any basemap a host swaps in. Nothing about the pin
   // depends on the choropleth any more, which is what ends the recurring pin-colour argument.
   //
-  // Blue dots + white rings are the Driver's own settled ruling ("I like the blue dots. Do not
-  // revert it to orange, just add WHITE RINGS") — unchanged here. Radii are unchanged too, so
-  // the zoomed-out spacing he asked for is preserved: z1 navy r=1.6 inside white r=3.4
+  // Blue dots + white rings are the settled design (blue dots, not orange, each with a WHITE RING) —
+  // unchanged here. Radii are unchanged too, so the zoomed-out spacing is preserved: z1 navy r=1.6 inside white r=3.4
   // (1.8px band), z6 navy r=5.0 inside white r=7.4 (2.4px band).
   //
   // HIT-TESTING unchanged: 'rd-bubble-layer' keeps its id and stays the TOP layer; the halo
   // is a separate NON-interactive layer beneath it and must not be queried.
   // ── ★ ONE CIRCLE WITH A WHITE STROKE — NOT A NAVY/WHITE/NAVY SANDWICH ──────────────────────
-  // (Driver 2026-09-22: "the pins look like eyes, they look kind of creepy")
+  // (the symptom: the pins looked like eyes, which read as unsettling)
   //
   // THE SANDWICH WAS THE BUG, and the comment above described it accurately without noticing what
   // it draws. Read outward from the centre at z1 the old construction was:
@@ -987,10 +995,11 @@ function addLayers() {
   // swallowing the fill when circles are small and dense at low zoom. Cartographic practice agrees:
   // Axis Maps and the ICA Commission both call for casings on symbols that OVERLAP rather than a
   // global opaque halo, and Esri names halos the single biggest cost in marker drawing performance
-  // — we were paying that on a second full circle layer across every point. Research + sources:
-  // _qa-cycle/01-ideation-research/RESEARCH-pin-design-why-they-read-as-eyes.md
+  // — we were paying that on a second full circle layer across every point. THE FINDING: a
+  // casing that SCALES WITH ZOOM is what stops dense low-zoom rings swallowing their own fill,
+  // and a global opaque halo costs more than it buys.
   //
-  // ★ THE TWO DRIVER RULINGS THIS PRESERVES — do not undo either:
+  // ★ THE TWO RULINGS THIS PRESERVES — do not undo either:
   //   1. ONE FIXED COLOUR AT FULL OPACITY. Pins were once '#e67e22' at circle-opacity 0.6; the
   //      alpha was the real fault, compositing each pin with whatever bin sat beneath it so it
   //      rendered a different colour per country at 1.18–1.22 contrast. Never reintroduce pin
@@ -1024,13 +1033,13 @@ function addLayers() {
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2.2, 6, 5.5],
       // ── ★ THE PIN IS ORANGE (Material Orange 800 '#ef6c00') ──────────────────────────────
-      // DRIVER: "The pin colour... It's currently blue. I think it might be better orange... I
-      // really like the orange colour." Stated as a preference he was unsure of, so it was
+      // Asked: the pin colour is currently blue and might be better orange —
+      // the orange colour was preferred. Stated as a preference held with some doubt, so it was
       // MEASURED rather than simply applied — and the measurement changed what shipped with it.
       //
       // WHY '#ef6c00' AND NOT A BRIGHTER ORANGE. The optimiser's literal top answer was '#bf360c',
       // which scores best by NOT BEING ORANGE: at OKLCh hue 35.4° it sits in the ramp's own red
-      // family and reads as brown. Rejected on spec, not on score — the Driver asked for orange.
+      // family and reads as brown. Rejected on spec, not on score — orange was asked for.
       // True oranges are hue 48-64°; '#ef6c00' is hue 48.1°, the DARKEST end of that range, which
       // is what buys contrast against the pale bins while still reading unmistakably orange.
       // Lighter oranges ('#ff9800' h64, '#ffa000') lose the pale end: worst effective 1.55 vs 1.83.
@@ -1039,9 +1048,9 @@ function addLayers() {
       // note above says pins "were once '#e67e22' at circle-opacity 0.6" and that the alpha, not
       // the hue, was the fault: at 0.6 the pin composited with whatever bin sat beneath it and
       // rendered a different colour per country at 1.18-1.22. That rule stands and is honoured
-      // here — this pin is ONE fixed colour at FULL opacity, never tinted per bin. The Driver's
+      // here — this pin is ONE fixed colour at FULL opacity, never tinted per bin. The
       // later "do not revert it to orange" was given while the ramp was pale and the pin navy;
-      // he has now explicitly asked for orange against the new red ramp, which supersedes it.
+      // orange has now been explicitly asked for against the new red ramp, which supersedes it.
       //
       // WORST CASE IS bin2 AT 1.83 (see the BIN_COLORS note for the full table and why the V is
       // structural). The white stroke below is LOAD-BEARING, not decoration: it carries the pin on
@@ -1065,16 +1074,16 @@ function addLayers() {
   m.on('mouseenter', 'rd-bubble-layer', () => { m.getCanvas().style.cursor = 'pointer' })
   m.on('mouseleave', 'rd-bubble-layer', () => { m.getCanvas().style.cursor = '' })
   try {
-    window.__rdashMap = m
+    window.__rdashMap = _hookRdashMap = m
     // verify hook: simulate a country click at a lng/lat (query the choropleth at that point)
-    window.__rdashClickAt = (lng, lat) => {
+    window.__rdashClickAt = _hookClickAt = (lng, lat) => {
       const pt = m.project([lng, lat])
       const feats = m.queryRenderedFeatures(pt, { layers: ['rd-choropleth'] })
       if (feats && feats[0]) { onMapClick({ features: feats }); return feats[0].properties && feats[0].properties.iso_3166_1_alpha_3 }
       return null
     }
     // verify hook: select the PG pin nearest a lng/lat (small bbox query around the projected point)
-    window.__rdashPinAt = (lng, lat) => {
+    window.__rdashPinAt = _hookPinAt = (lng, lat) => {
       const pt = m.project([lng, lat])
       const feats = m.queryRenderedFeatures([[pt.x - 7, pt.y - 7], [pt.x + 7, pt.y + 7]], { layers: ['rd-bubble-layer'] })
       if (feats && feats[0]) { onBubbleClick({ features: [feats[0]] }); return feats[0].properties && feats[0].properties.slug }
@@ -1082,11 +1091,10 @@ function addLayers() {
     }
   } catch (_) { /* verify hook */ }
   applyProjection()
-  // ★ THE GALAXY, THE WAY MAPBOX DOES IT (Driver: "find out how Mapbox does the galaxy stars and
-  // see if we can use that"). Mapbox GL renders space and the starfield ENGINE-SIDE via the fog
+  // ★ THE GALAXY, THE WAY MAPBOX DOES IT: the starfield follows Mapbox's own method. Mapbox GL renders space and the starfield ENGINE-SIDE via the fog
   // API -- documented at docs.mapbox.com/mapbox-gl-js/guides/globe/ ("stars and atmosphere are
   // customized with the fog property"). These are their documented example values with one
-  // change: space-color is pure black on the Driver's instruction ("not grey"). star-intensity
+  // change: space-color is pure black, not grey. star-intensity
   // 0..1 is the engine's own star layer -- no canvas, no custom code, the actual Mapbox stars.
   // Guarded: MapLibre has no setFog (its equivalent is the sky spec), so on that provider this is
   // a silent no-op and the plain black container behind the transparent sphere carries the void.
@@ -1181,23 +1189,7 @@ function onBubbleClick(e) {
 //
 // The honest discriminator is therefore "is there a scrollable ANCESTOR?", not "does the document
 // scroll?" — the document is just one possible answer, and in an embedded host it is the wrong one.
-function findScrollportAncestor(el) {
-  // Walk the COMPOSED tree: `parentElement` stops at a shadow boundary, so hop to the host when it
-  // does. Every plugin here is a compiled custom element, so a flat walk exits early and reports
-  // "no scrollport" for a chain that has one.
-  let node = el && el.parentNode
-  while (node) {
-    if (node.nodeType === 1) {
-      const cs = getComputedStyle(node)
-      if (/auto|scroll/.test(cs.overflowY) && node.scrollHeight > node.clientHeight + 4) return node
-    }
-    node = node.parentElement || node.parentNode?.host || (node.parentNode !== node ? node.parentNode : null)
-    if (node && node.nodeType === 9) break // reached the document; handled separately below
-  }
-  return null
-}
-
-// ★ SUPERSEDED BY --rd-map-h (BUG-MAP-ZOOM-BROKEN-BY-THE-SCROLL-FIX, Driver-reported 2026-09-23).
+// ★ SUPERSEDED BY --rd-map-h (BUG-MAP-ZOOM-BROKEN-BY-THE-SCROLL-FIX, reported from use 2026-09-23).
 // The blanket disable above was written when a scroll-stack composite pinned this band to ONE
 // SCREEN (88svh, then a bare 100%) — under THAT layout the map row filled the whole scrollable
 // pane, so ANY wheel over the map was, structurally, the ONLY wheel gesture available in the
@@ -1211,8 +1203,8 @@ function findScrollportAncestor(el) {
 // map is a REGION of the page now, not the whole scrollable surface. So the two goals that used
 // to conflict (zoom over the map, scroll to reach the grid) no longer compete for the same input.
 //
-// DRIVER, VERBATIM 2026-09-23: "I can't zoom in and out on the map. The scrolling is causing
-// that to change." He wants exactly fixed-viewport semantics inside the bounded map region:
+// Reported 2026-09-23: zooming in and out on the map does not work. The scrolling is causing
+// that to change. The requirement is fixed-viewport semantics inside the bounded map region:
 // wheel OVER the map zooms; wheel BELOW it (outside the map's own box) scrolls. MEASURED: with
 // scrollZoom force-disabled, a wheel over the canvas landed as a no-op in BOTH directions —
 // defaultPrevented stayed false (so Mapbox never intercepted it) AND the ancestor pane's
@@ -1289,6 +1281,21 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => {
+  // These hooks are closures over this component (and one is the Map itself), so leaving any of them
+  // on window pins the whole app after unmount — measured exactly that (leak-722ac7789).
+  // Released as a set: __rdashPinAt was the one that showed up in the snapshot, but __rdashMap holds
+  // the map and retains strictly more, and clearing only the reported one would have left the larger
+  // retainer in place and looked fixed.
+  // Identity-checked, and one key per line rather than a loop, so check-window-globals-released can
+  // read both the delete and the comparison. Releasing only what this instance installed is what
+  // keeps a two-dashboard page from losing the live one's hooks when the other unmounts.
+  try {
+    if (typeof window !== 'undefined') {
+      if (window.__rdashPinAt === _hookPinAt) delete window.__rdashPinAt
+      if (window.__rdashClickAt === _hookClickAt) delete window.__rdashClickAt
+      if (window.__rdashMap === _hookRdashMap) delete window.__rdashMap
+    }
+  } catch (_) { /* a locked-down window is not worth failing an unmount over */ }
   // Drop the pending selection fly FIRST: its debounce timer outlives the component, and a
   // camera call against a destroyed map throws. Same discipline as _clearSnap in useMapInstance.
   try { stopSelectionCamera && stopSelectionCamera() } catch (_) {} stopSelectionCamera = null
@@ -1384,8 +1391,8 @@ function syncAttribClearance() {
 
 // ── RDASH-ENHANCE: GLOBE (default) <-> MERCATOR projection toggle ──
 const projection = ref('globe')
-// ★ THE TWO ENGINES DISAGREE ON THIS ONE CALL, AND THE CATCH HID IT (Driver 2026-09-23: "the map
-// style is not a globe"). Mapbox GL takes setProjection('globe') -- a bare string. MapLibre v5 takes
+// ★ THE TWO ENGINES DISAGREE ON THIS ONE CALL, AND THE CATCH HID IT: the symptom was a flat map where
+// a globe was expected. Mapbox GL takes setProjection('globe') -- a bare string. MapLibre v5 takes
 // setProjection({ type: 'globe' }) -- an object. Passing a string to MapLibre throws, the empty
 // catch below swallowed it, and the map silently fell back to flat mercator with NO console error.
 // That is why this appeared the moment the dashboard moved to provider:'maplibre': the default was
@@ -1411,7 +1418,7 @@ function toggleProjection() { projection.value = projection.value === 'globe' ? 
 // ── RDASH-ENHANCE: fly-to on selection. Any facet brush (tree node / chart slice / region / row)
 //    flies the map to fit the in-scope people groups; a pin focus flies to that PG (deeper drill). ──
 //
-// ╔═ BUG-CAMERA-FLIES-TO-NORTH-POLE-ON-FLAT-FACETS (Driver, 2026-09-22) ════════════════════╗
+// ╔═ BUG-CAMERA-FLIES-TO-NORTH-POLE-ON-FLAT-FACETS (reported, 2026-09-22) ════════════════════╗
 // "when I click unengaged status it just goes to the north pole. Deaf people, it just goes to
 // the north pole... it needs to take you to the highest concentration location geographically,
 // not to the North Pole."
@@ -1424,7 +1431,7 @@ function toggleProjection() { projection.value = projection.value === 'globe' ? 
 //     center [1.15, 41.15]  zoom 2.06   (globe projection; identical center under mercator)
 // and map.project([lng, 90]) put the NORTH POLE at screen y=99 in an 800px-tall viewport —
 // i.e. the pole is genuinely in frame, occupying the top third, which is precisely what the
-// Driver is describing. The densest data cell (75E/15N) was shoved to x=939, onto the right
+// the report describes. The densest data cell (75E/15N) was shoved to x=939, onto the right
 // limb of the globe where the sphere foreshortens it into an unreadable sliver.
 //
 // ── WHAT THE BUG IS *NOT* (both hypotheses tested and DISPROVED) ──
@@ -1443,7 +1450,7 @@ function toggleProjection() { projection.value = projection.value === 'globe' ? 
 //     north of the box's own midpoint (20.69). On the GLOBE projection — which is the panel's
 //     default (see `projection` above, initialised to 'globe') — that northward tilt is what
 //     swings the pole into view and rolls the equatorial data mass off to the limb. This is
-//     why the Driver tied it to the globe/flat setting: flat shows the same bad center, but a
+//     why it is tied to the globe/flat setting: flat shows the same bad center, but a
 //     sphere makes it look like you flew to the Arctic.
 //
 // ── THE FIX: frame the CONCENTRATION, and make a pole unreachable by construction ──
@@ -1587,19 +1594,19 @@ watch(() => JSON.stringify(filterSet), () => { clearTimeout(_flyT); _flyT = setT
 
 useShadowStyles(`
   .rd-mapwrap{ position:relative; width:100%; height:100%; min-height:0; background:var(--dx-line, #d1d4cd); }
-  /* ★ THE GALAXY IS THE CONTAINER, NOT THE TILES (Driver 2026-09-23, correcting the first attempt:
-     "I asked for a spherical globe with a black background — the galaxy — with blue oceans like the
-     Mapbox map, and the land was NOT to be black"). On a globe projection the sphere does not fill
+  /* ★ THE GALAXY IS THE CONTAINER, NOT THE TILES (correcting the first attempt): the target is a
+     spherical globe on a black background — the galaxy — with blue oceans like the Mapbox map, and
+     land that is NOT black. On a globe projection the sphere does not fill
      the canvas; the corners show the CONTAINER's background. So space lives here: a deep radial
      wash behind the sphere, while the tiles keep their normal daylight colours. Scoped to
      [data-projection="globe"] so flat mercator keeps the neutral ground — space behind a flat
      rectangle would read as a mistake. */
-  /* Plain BLACK behind the sphere (Driver: "if not, then just do black background, not grey").
+  /* Plain BLACK behind the sphere, not grey.
      On Mapbox the engine paints its own space + stars over the whole canvas via fog, so this only
      shows on engines without fog support (MapLibre), where black is the honest fallback. */
   .rd-mapwrap[data-projection="globe"]{ background:#000; }
   .rd-mapwrap .rd-mapc{ position:absolute; inset:0; }
-  .rd-proj{ position:absolute; inset-inline-end:8px; top:8px; z-index:3; font-size:11px; font-weight:700; cursor:pointer; user-select:none;
+  .rd-proj{ position:absolute; inset-inline-end:8px; top:var(--rd-proj-top,8px); z-index:3; font-size:11px; font-weight:700; cursor:pointer; user-select:none;
     background:#1a1a2ecc; color:#fff; border:1px solid #ffffff33; border-radius:6px; padding:4px 9px; backdrop-filter:blur(4px); }
   .rd-proj:hover{ background:#1a1a2e; }
   /* ★ TOUCH TARGET: 24px, STATED, AT EVERY WIDTH. Measured on a phone (390x844) this rendered
@@ -1615,7 +1622,19 @@ useShadowStyles(`
   /* ★ AND min-WIDTH now that the word is gone. The 24 used to come for free from the text
      ("🌐 Globe" measured 74px wide); a glyph-only pill is about 29px with its padding, which passes,
      but only by accident of the font. Stating both axes keeps 2.5.8 AA true if the glyph changes. */
-  .rd-proj{ min-height:24px; min-width:24px; display:inline-flex; align-items:center; justify-content:center; }
+  /* ★ border-box, AND THE TOOLBAR BELOW IS DERIVED FROM THIS HEIGHT RATHER THAN RE-TUNED TO MATCH IT.
+     The 24px touch target above was declared as a CONTENT height, and nothing in this shadow root
+     sets box-sizing globally — it appears exactly once, on .rd-legend-map. So the rendered box was
+     24 + 4+4 padding + 1+1 border = 34px at top:8, ending at y=42, while .rd-zoomtools starts at
+     top:34. The two controls overlapped by 8px, and the toolbar's z-index:10 against this element's
+     z-index:3 drew the zoom button OVER the projection toggle. The measurement in the comment above
+     dates it exactly: at 74x23 this box ended at y=31 and cleared the toolbar, so it was the
+     touch-target fix itself that created the collision.
+     border-box makes 24 mean twenty-four, and --rd-proj-h hands that number to the toolbar so the
+     two cannot drift apart again. An agreement between two rules should be stated once, not tuned
+     in two places that no one thinks to check together. */
+  .rd-proj{ min-height:var(--rd-proj-h,24px); min-width:24px; box-sizing:border-box;
+    display:inline-flex; align-items:center; justify-content:center; }
   /* Zoom cluster. MapToolbar defaults to top:6px on the inline-end edge, which is exactly where
      the Globe/Flat pill already sits, so drop this instance below it. 34px clears the pill
      (top:8px + roughly 22px tall) with a small breathing gap.
@@ -1624,7 +1643,7 @@ useShadowStyles(`
      same shadow root — so a tie would be resolved by injection ORDER, which is not something
      this panel controls. Doubling the class (.rd-zoomtools.rd-zoomtools) raises specificity so
      these win deterministically, without !important and without editing the shared toolbar. */
-  .rd-zoomtools.rd-zoomtools{ top:34px; gap:4px; }
+  .rd-zoomtools.rd-zoomtools{ top:calc(var(--rd-proj-top,8px) + var(--rd-proj-h,24px) + var(--rd-ctl-gap,6px)); gap:4px; }
   /* Economical use of space: 26px instead of the toolbar's standard 32px. The dashboard map is
      one cell among many, so the controls stay present but visually quiet. Also match the light
      dashboard surface/border tokens so the cluster reads as part of this panel. */
@@ -1635,7 +1654,7 @@ useShadowStyles(`
   .rd-zoomtools.rd-zoomtools .mcb:hover:not(:disabled){ background:var(--dx-surface,#f3f3f1); box-shadow:0 1px 4px rgba(0,0,0,0.14); }
   /* MapToolbar's own mobile breakpoint re-asserts top/gap and a 36px button, so restate here. */
   @media(max-width:767px){
-    .rd-zoomtools.rd-zoomtools{ top:34px; gap:4px; }
+    .rd-zoomtools.rd-zoomtools{ top:calc(var(--rd-proj-top,8px) + var(--rd-proj-h,24px) + var(--rd-ctl-gap,6px)); gap:4px; }
     .rd-zoomtools.rd-zoomtools .mcb{ width:26px; height:26px; }
   }
   /* LEGEND vs ATTRIBUTION — a LICENCE constraint, not a taste call.
@@ -1650,8 +1669,8 @@ useShadowStyles(`
      Bottom-LEFT was not available when this was written (a caption held that corner; it has since
      been removed, so the corner is free if a future control needs it).
      Stays on the right so the legend sits beside the choropleth it explains. */
-  .rd-mapwrap{ --rd-attrib-clear:26px; }
-  /* ★ LOGICAL, NOT PHYSICAL (rega's Arabic survey). A physical right:8px pins this to the right
+  .rd-mapwrap{ --rd-attrib-clear:26px; --rd-proj-h:24px; --rd-proj-top:8px; --rd-ctl-gap:6px; }
+  /* ★ LOGICAL, NOT PHYSICAL (the Arabic survey). A physical right:8px pins this to the right
      edge in every locale, so in Arabic the legend stayed where an English reader expects it while
      everything around it mirrored. inset-inline-end puts it at the END of the reading direction —
      right in English, left in Arabic — which is the pattern cities-internet already uses for its
@@ -1684,7 +1703,7 @@ useShadowStyles(`
      dashboard-plus-grid the wheel NEVER reaches the document and the page cannot scroll to the
      grid below. MEASURED 2026-09-22 on the dev leaf: cursor over .kpi scrolled 600px, cursor
      over mapboxgl-canvas scrolled 0px with defaultPrevented=true. The map hero spans the middle
-     of the band, so the Driver's cursor lands on it and scrolling feels completely dead.
+     of the band, so the reader's cursor lands on it and scrolling feels completely dead.
      These are the SAME always-present invisible hit-boxes doxa-simple-map, research-map,
      countries-map and upg-100-list already render; useMapInstance ALREADY calls
      useEdgeScrollAffordance(containerRef.parentElement) with showEdgeBorders defaulting to true,
@@ -1717,7 +1736,7 @@ useShadowStyles(`
       <ZoomOutButton :map="map" :disabled="!canZoomOut" />
     </MapToolbar>
     <!-- ★ THE ICON IS THE LABEL, because the word could not be translated without inventing one.
-         rega saw "🌐 Globe" in Arabic on ?lang=ar (KA3, 3d64bcad): hardcoded English chrome on a
+         a browser check saw "🌐 Globe" in Arabic on ?lang=ar (KA3, 3d64bcad): hardcoded English chrome on a
          localized map. "Globe" has no catalogue entry and "Flat" has none in any of the eleven
          locales, so translating the visible text meant either authoring ten new strings for a
          two-state toggle or leaving nine locales reading English. The catalogue DOES already ship

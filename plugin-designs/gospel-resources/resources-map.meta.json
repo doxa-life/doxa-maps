@@ -1,4 +1,6 @@
 {
+  "stage": "production",
+  "_stage_comment": "Marked production because the Deep Research gallery MOUNTS this profile: doxa-maps-spa.meta.json composes 'gospel-resources/resources-map' and doxa-maps-spa.vue's TAB_DEFS names it as the Gospel Resources tab. The stage was absent here, so the manifest defaulted it to experimental while a production page shipped it — the record disagreed with what ships. This changes the manifest only; nothing a reader sees.",
   "type": "single",
   "label": "Gospel Resources — resources map",
   "config": {

@@ -1,9 +1,9 @@
 /**
  * build-doxa-gospel-access.mjs — the table this whole map is for.
  *
- * ═══ THE QUESTION, IN THE DRIVER'S WORDS ════════════════════════════════════════════════
- * "Which of the Doxa people groups have resources and which don't — that is the key question
- * the map has to answer." And the deliverable is not a picture: they want to export it, hand
+ * ═══ THE QUESTION THIS MAP ANSWERS ════════════════════════════════════════════════
+ * Which of the Doxa people groups have resources and which do not is the key question
+ * the map has to answer. And the deliverable is not a picture: it must export, hand
  * it to a team, and turn it into QR codes, pamphlets and posters on the noticeboards of the
  * key towns. So this is ONE ROW PER DOXA PEOPLE GROUP, every resource it has, every URL
  * openable, and an access status a person can sort on.

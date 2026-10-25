@@ -1,4 +1,4 @@
-# The workflow: empty folder to landed on main
+# The workflow: empty folder to landed on development
 
 ## 1. Develop in the Plugin Studio
 
@@ -43,14 +43,17 @@ Run the gates that cover what you touched. The ones most often relevant:
 
 `package.json` holds the full list; they are all prefixed `check:`.
 
-## 4. Land it on main
+## 4. Land it on development
+
+`development` is where everyone lands; `main` is production and moves only when `development` is merged
+into it, so never push to `main`.
 
 Three commands, in this order, every time:
 
 ```bash
 git add -A && git commit -m "what you changed"
-git pull --rebase origin main
-git push origin HEAD:main
+git pull --rebase origin development
+git push origin HEAD:development
 ```
 
 **A rejected push is normal, not an error.** Someone landed first: run the middle command again and

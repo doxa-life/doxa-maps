@@ -31,7 +31,8 @@
     "readyRosetta": "就绪 · 标记：{pins} · Rosetta 样本：{samples}（金色 ★）",
     "readyPins": "就绪 · 族群标记：{pins} · 点击任一标记",
     "readyLanguage": "就绪 · 标记：{pins} · 语系覆盖率 {coverage}% · 前 25 = {top}%",
-    "readyReligion": "标记：{pins} · 最常见：{religion}（{count}）"
+    "readyReligion": "标记：{pins} · 最常见：{religion}（{count}）",
+    "d3Failed": "无法加载图表库。"
   },
   "ui": {
     "chooseView": "选择视图",
@@ -56,7 +57,8 @@
     "sunburst": "ROP 层级 · 亲缘区块 → 民族群 · 滚动缩放",
     "pins": "全部国家内族群标记 · 点击查看跨系统 ID",
     "coverage": "翻译覆盖率 · 着色 = 各国平均已填语种数 · 点击标记或国家",
-    "rosetta": "跨系统 ID 对照 · 颜色 = 已有哪些 ID · ★ = 示例行"
+    "rosetta": "跨系统 ID 对照 · 颜色 = 已有哪些 ID · ★ = 示例行",
+    "translations": "族群名称 · {n} 种语言 · 点击任意点"
   },
   "legendTitle": {
     "avgLocales": "平均语种数 / {n}",
@@ -88,5 +90,10 @@
   },
   "card": {
     "nameInLocales": "{n} 种语言中的名称"
+  },
+  "title": "PPLR 数据地图",
+  "index": {
+    "title": "PPLR 数据校验",
+    "help": "点击一个卡片，或在上方选择一个视图。"
   }
 }

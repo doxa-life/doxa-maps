@@ -10,7 +10,7 @@
  * ── LIFTED FROM research-dashboard, AND WHY IT IS HERE ────────────────────────────────────────
  * This was a PRIVATE function inside plugin-designs/research-dashboard/src/composables/
  * useDashboardShell.js, so exactly one dashboard in the fleet could produce a shareable link. Every
- * other dashboard built on the kit — go-int's board today, the next one after it — had no way to share
+ * other dashboard built on the kit — the gospel-internet board today, the next one after it — had no way to share
  * a view at all. Nothing about the logic was research-specific; only its address was.
  *
  * ── THE FORMAT, AND THE TWO DECISIONS INSIDE IT (carried over, not reinvented) ─────────────────
@@ -36,14 +36,15 @@
  * @param {string} [options.hashKey='f']     the filter param name, for a host that already owns `f`
  * @param {string} [options.searchKey='q']   the search param name, same reason
  * @param {'hash'|'query'} [options.mode='hash']  where the state lives. 'query' writes one param per
- *        facet (?access=…&band=…&q=…) instead of a single #f= blob — go-int's board already shares that
+ *        facet (?access=…&band=…&q=…) instead of a single #f= blob — the gospel-internet board already shares that
  *        way, restored before first render, and a composable that only spoke hash would have given it
  *        TWO URL states rather than replacing its glue. Requested by the consumer, not invented here.
- * @param {boolean} [options.write=true]   whether to WRITE the URL at all. go-int writes only on its own
+ * @param {boolean} [options.write=true]   whether to WRITE the URL at all. The gospel-internet board writes only on its own
  *        leaves (profile-config urlState:'query') so a partner's address bar is never touched; reading
  *        stays unconditional, because restoring a link someone sent must work everywhere.
  */
 import { watch, onMounted } from 'vue'
+import { commitUrl } from './useViewAddress.js'
 
 const slugify = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 // Minimal escaping, maximal legibility: reserve our delimiters + %, keep spaces as `+` (the
@@ -57,7 +58,7 @@ const slugify = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
 const escapeValue = (s) => String(s).replace(/[%;:*+,&|]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase()).replace(/ /g, '+')
 
 /**
- * ★ READ BOTH `,` AND `|`; WRITE `,`. go-int's board has always written `band=yes|partial` and
+ * ★ READ BOTH `,` AND `|`; WRITE `,`. The gospel-internet board has always written `band=yes|partial` and
  * `country=IND|CHN`, and those links are on partner pages now. Splitting only on `,` read that back as the
  * single value "yes|partial", which matches no row — so adopting this composable would have broken every
  * multi-value link they had already shared. Accepting BOTH separators on read costs nothing: escapeValue
@@ -66,7 +67,7 @@ const escapeValue = (s) => String(s).replace(/[%;:*+,&|]/g, (c) => '%' + c.charC
  * Writing stays `,` so there is ONE canonical form going forward rather than two dialects to reason about.
  * The one case this does not cover, stated rather than papered over: an OLD link whose VALUE contained a
  * literal `|` written before `|` was reserved would now be split. No facet vocabulary in the tree contains
- * one (checked religion.js and the region/language codes), and go-int confirms `|` cannot occur in a facet
+ * one (checked religion.js and the region/language codes), and the gospel-internet data confirms `|` cannot occur in a facet
  * code, so the exposure is a value shape that does not exist rather than one we are choosing to risk.
  */
 const LIST_SEP = /[,|]/
@@ -114,7 +115,7 @@ export function parseView(hash, { hashKey = 'f', searchKey = 'q' } = {}) {
 
 /**
  * ★ A PARAM NAME IS NOT ALWAYS THE BUS KEY, AND RENAMING ONE BREAKS LINKS THAT ARE ALREADY OUT.
- * go-int's board has shared `?access=` for a while against a bus key of `access_level` (and detail ->
+ * The gospel-internet board has shared `?access=` for a while against a bus key of `access_level` (and detail ->
  * access_detail, wayin -> way_in, app -> messaging). Those links sit on partner pages today. If this
  * composable insisted that the param equal the key, adopting it would silently rename every param and
  * every one of those links would stop restoring — the exact harm the shareable-view card exists to
@@ -177,17 +178,25 @@ export function parseQuery(search, facetKeys = [], { searchKey = 'q' } = {}) {
   return out
 }
 
+/**
+ * The filter write. It goes through useViewAddress's commitUrl, the page's ONE history write, so it can never undo
+ * a tab/pane/place write and keeps history.state (+ `current`) on a Vue Router host. It used to write
+ * replaceState(null, …) itself, which wiped the router's state there. Query mode replaces only its own params; hash
+ * mode replaces only the hash. Everything else in the URL stays. Exported so check:view-address drives this exact
+ * write. Returns whether it wrote.
+ */
+export function writeFilterView(filterSet, searchTerm, options = {}) {
+  try {
+    if (typeof location === 'undefined') return false
+    return options.mode === 'query'
+      ? commitUrl({ search: serializeQuery(filterSet, searchTerm, location.search, options) })
+      : commitUrl({ hash: serializeView(filterSet, searchTerm, options) })
+  } catch (_) { return false }
+}
+
 export function useShareableView(bus, options = {}) {
   const { mode = 'hash', write: shouldWrite = true, facetKeys } = options
-  const push = () => {
-    try {
-      if (typeof location === 'undefined' || !shouldWrite) return
-      const url = mode === 'query'
-        ? serializeQuery(bus.filterSet, bus.searchTerm?.value, location.search, { ...options, facetKeys }) + location.hash
-        : location.search + serializeView(bus.filterSet, bus.searchTerm?.value, options)
-      history.replaceState(null, '', location.pathname + url)
-    } catch (_) { /* sandboxed */ }
-  }
+  const push = () => { if (shouldWrite) writeFilterView(bus.filterSet, bus.searchTerm?.value, options) }
   watch(() => ({ ...bus.filterSet, __q: bus.searchTerm?.value }), push, { deep: true })
   onMounted(() => {
     try {

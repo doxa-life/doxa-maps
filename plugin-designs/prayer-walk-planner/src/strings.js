@@ -12,7 +12,7 @@ export const STRINGS = {
   en: {
     draw: 'Draw polygon', drawing: 'Drawing… (click map)', finish: 'Finish polygon ({n} pts)',
     deleteSelected: 'Delete selected', deleteSelectedAria: 'Delete selected polygons',
-    more: 'More', selectAll: 'Select all', clearSelection: 'Clear selection', countSelected: '{n} / {total} selected',
+    more: 'More', zones: 'Zones ({n})', closeZones: 'Close the zone list', selectAll: 'Select all', clearSelection: 'Clear selection', countSelected: '{n} / {total} selected',
     printSelected: 'Print selected', printAria: 'Print selected prayer-walking zones',
     emptyList: 'No zones yet — draw a polygon on the map to start a prayer-walking plan.',
     delete: 'Delete', deleteAria: 'Delete {title}', zone: 'Zone {n}',
@@ -31,7 +31,7 @@ export const STRINGS = {
   es: {
     draw: 'Dibujar polígono', drawing: 'Dibujando… (haz clic en el mapa)', finish: 'Terminar polígono ({n} puntos)',
     deleteSelected: 'Eliminar selección', deleteSelectedAria: 'Eliminar los polígonos seleccionados',
-    more: 'Más', selectAll: 'Seleccionar todo', clearSelection: 'Quitar selección', countSelected: '{n} / {total} seleccionadas',
+    more: 'Más', zones: 'Zonas ({n})', closeZones: 'Cerrar la lista de zonas', selectAll: 'Seleccionar todo', clearSelection: 'Quitar selección', countSelected: '{n} / {total} seleccionadas',
     printSelected: 'Imprimir selección', printAria: 'Imprimir las zonas de caminata de oración seleccionadas',
     emptyList: 'Aún no hay zonas: dibuja un polígono en el mapa para empezar un plan de caminata de oración.',
     delete: 'Eliminar', deleteAria: 'Eliminar {title}', zone: 'Zona {n}',
@@ -50,7 +50,7 @@ export const STRINGS = {
   fr: {
     draw: 'Dessiner un polygone', drawing: 'Dessin en cours… (cliquez sur la carte)', finish: 'Terminer le polygone ({n} points)',
     deleteSelected: 'Supprimer la sélection', deleteSelectedAria: 'Supprimer les polygones sélectionnés',
-    more: 'Plus', selectAll: 'Tout sélectionner', clearSelection: 'Effacer la sélection', countSelected: '{n} / {total} sélectionnées',
+    more: 'Plus', zones: 'Zones ({n})', closeZones: 'Fermer la liste des zones', selectAll: 'Tout sélectionner', clearSelection: 'Effacer la sélection', countSelected: '{n} / {total} sélectionnées',
     printSelected: 'Imprimer la sélection', printAria: 'Imprimer les zones de marche de prière sélectionnées',
     emptyList: 'Aucune zone pour l’instant — dessinez un polygone sur la carte pour commencer un plan de marche de prière.',
     delete: 'Supprimer', deleteAria: 'Supprimer {title}', zone: 'Zone {n}',
@@ -69,7 +69,7 @@ export const STRINGS = {
   de: {
     draw: 'Polygon zeichnen', drawing: 'Zeichnen… (auf die Karte klicken)', finish: 'Polygon abschließen ({n} Punkte)',
     deleteSelected: 'Auswahl löschen', deleteSelectedAria: 'Ausgewählte Polygone löschen',
-    more: 'Mehr', selectAll: 'Alle auswählen', clearSelection: 'Auswahl aufheben', countSelected: '{n} / {total} ausgewählt',
+    more: 'Mehr', zones: 'Zonen ({n})', closeZones: 'Zonenliste schließen', selectAll: 'Alle auswählen', clearSelection: 'Auswahl aufheben', countSelected: '{n} / {total} ausgewählt',
     printSelected: 'Auswahl drucken', printAria: 'Ausgewählte Gebetsspaziergang-Zonen drucken',
     emptyList: 'Noch keine Zonen — zeichnen Sie ein Polygon auf der Karte, um einen Gebetsspaziergang zu planen.',
     delete: 'Löschen', deleteAria: '{title} löschen', zone: 'Zone {n}',
@@ -88,7 +88,7 @@ export const STRINGS = {
   pt: {
     draw: 'Desenhar polígono', drawing: 'Desenhando… (clique no mapa)', finish: 'Concluir polígono ({n} pontos)',
     deleteSelected: 'Excluir seleção', deleteSelectedAria: 'Excluir os polígonos selecionados',
-    more: 'Mais', selectAll: 'Selecionar tudo', clearSelection: 'Limpar seleção', countSelected: '{n} / {total} selecionadas',
+    more: 'Mais', zones: 'Zonas ({n})', closeZones: 'Fechar a lista de zonas', selectAll: 'Selecionar tudo', clearSelection: 'Limpar seleção', countSelected: '{n} / {total} selecionadas',
     printSelected: 'Imprimir seleção', printAria: 'Imprimir as zonas de caminhada de oração selecionadas',
     emptyList: 'Ainda não há zonas — desenhe um polígono no mapa para começar um plano de caminhada de oração.',
     delete: 'Excluir', deleteAria: 'Excluir {title}', zone: 'Zona {n}',
@@ -107,7 +107,7 @@ export const STRINGS = {
   it: {
     draw: 'Disegna poligono', drawing: 'Disegno in corso… (clicca sulla mappa)', finish: 'Completa poligono ({n} punti)',
     deleteSelected: 'Elimina selezionati', deleteSelectedAria: 'Elimina i poligoni selezionati',
-    more: 'Altro', selectAll: 'Seleziona tutto', clearSelection: 'Deseleziona', countSelected: '{n} / {total} selezionate',
+    more: 'Altro', zones: 'Zone ({n})', closeZones: 'Chiudi l’elenco delle zone', selectAll: 'Seleziona tutto', clearSelection: 'Deseleziona', countSelected: '{n} / {total} selezionate',
     printSelected: 'Stampa selezionate', printAria: 'Stampa le zone di passeggiata di preghiera selezionate',
     emptyList: 'Ancora nessuna zona — disegna un poligono sulla mappa per iniziare un piano di passeggiata di preghiera.',
     delete: 'Elimina', deleteAria: 'Elimina {title}', zone: 'Zona {n}',
@@ -126,7 +126,7 @@ export const STRINGS = {
   ro: {
     draw: 'Desenează poligon', drawing: 'Se desenează… (dă clic pe hartă)', finish: 'Finalizează poligonul ({n} puncte)',
     deleteSelected: 'Șterge selecția', deleteSelectedAria: 'Șterge poligoanele selectate',
-    more: 'Mai mult', selectAll: 'Selectează tot', clearSelection: 'Anulează selecția', countSelected: '{n} / {total} selectate',
+    more: 'Mai mult', zones: 'Zone ({n})', closeZones: 'Închideți lista zonelor', selectAll: 'Selectează tot', clearSelection: 'Anulează selecția', countSelected: '{n} / {total} selectate',
     printSelected: 'Tipărește selecția', printAria: 'Tipărește zonele de plimbare de rugăciune selectate',
     emptyList: 'Încă nu există zone — desenează un poligon pe hartă pentru a începe un plan de plimbare de rugăciune.',
     delete: 'Șterge', deleteAria: 'Șterge {title}', zone: 'Zona {n}',
@@ -145,7 +145,7 @@ export const STRINGS = {
   ru: {
     draw: 'Нарисовать область', drawing: 'Рисование… (щёлкайте по карте)', finish: 'Завершить область (точек: {n})',
     deleteSelected: 'Удалить выбранные', deleteSelectedAria: 'Удалить выбранные области',
-    more: 'Ещё', selectAll: 'Выбрать все', clearSelection: 'Снять выбор', countSelected: 'Выбрано: {n} из {total}',
+    more: 'Ещё', zones: 'Зоны ({n})', closeZones: 'Закрыть список зон', selectAll: 'Выбрать все', clearSelection: 'Снять выбор', countSelected: 'Выбрано: {n} из {total}',
     printSelected: 'Печать выбранных', printAria: 'Печать выбранных зон молитвенной прогулки',
     emptyList: 'Зон пока нет — нарисуйте область на карте, чтобы начать план молитвенной прогулки.',
     delete: 'Удалить', deleteAria: 'Удалить: {title}', zone: 'Зона {n}',
@@ -164,7 +164,7 @@ export const STRINGS = {
   ar: {
     draw: 'ارسم مضلّعًا', drawing: 'جارٍ الرسم… (انقر على الخريطة)', finish: 'إنهاء المضلّع ({n} نقاط)',
     deleteSelected: 'حذف المحدد', deleteSelectedAria: 'حذف المضلّعات المحددة',
-    more: 'المزيد', selectAll: 'تحديد الكل', clearSelection: 'إلغاء التحديد', countSelected: '{n} / {total} محدد',
+    more: 'المزيد', zones: 'المناطق ({n})', closeZones: 'إغلاق قائمة المناطق', selectAll: 'تحديد الكل', clearSelection: 'إلغاء التحديد', countSelected: '{n} / {total} محدد',
     printSelected: 'طباعة المحدد', printAria: 'طباعة مناطق جولات الصلاة المحددة',
     emptyList: 'لا توجد مناطق بعد — ارسم مضلّعًا على الخريطة لتبدأ خطة جولة صلاة.',
     delete: 'حذف', deleteAria: 'حذف {title}', zone: 'المنطقة {n}',
@@ -183,7 +183,7 @@ export const STRINGS = {
   hi: {
     draw: 'बहुभुज बनाएँ', drawing: 'बनाया जा रहा है… (मानचित्र पर क्लिक करें)', finish: 'बहुभुज पूरा करें ({n} बिंदु)',
     deleteSelected: 'चयनित हटाएँ', deleteSelectedAria: 'चयनित बहुभुज हटाएँ',
-    more: 'और', selectAll: 'सभी चुनें', clearSelection: 'चयन हटाएँ', countSelected: '{n} / {total} चयनित',
+    more: 'और', zones: 'क्षेत्र ({n})', closeZones: 'क्षेत्रों की सूची बंद करें', selectAll: 'सभी चुनें', clearSelection: 'चयन हटाएँ', countSelected: '{n} / {total} चयनित',
     printSelected: 'चयनित प्रिंट करें', printAria: 'चयनित प्रार्थना पदयात्रा क्षेत्र प्रिंट करें',
     emptyList: 'अभी कोई क्षेत्र नहीं — प्रार्थना पदयात्रा की योजना शुरू करने के लिए मानचित्र पर बहुभुज बनाएँ।',
     delete: 'हटाएँ', deleteAria: '{title} हटाएँ', zone: 'क्षेत्र {n}',
@@ -202,7 +202,7 @@ export const STRINGS = {
   zh: {
     draw: '绘制多边形', drawing: '正在绘制…（点击地图）', finish: '完成多边形（{n} 个点）',
     deleteSelected: '删除所选', deleteSelectedAria: '删除所选多边形',
-    more: '更多', selectAll: '全选', clearSelection: '清除选择', countSelected: '已选 {n} / {total}',
+    more: '更多', zones: '区域（{n}）', closeZones: '关闭区域列表', selectAll: '全选', clearSelection: '清除选择', countSelected: '已选 {n} / {total}',
     printSelected: '打印所选', printAria: '打印所选的祷告行走区域',
     emptyList: '还没有区域——在地图上绘制一个多边形，开始制定祷告行走计划。',
     delete: '删除', deleteAria: '删除{title}', zone: '区域 {n}',

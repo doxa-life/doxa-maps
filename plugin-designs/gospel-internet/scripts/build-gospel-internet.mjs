@@ -5,29 +5,29 @@
  * Indian state) is online.
  *
  * No new source. Every column is read from a table another owner already builds:
- *   data/tables/doxa-gospel-access.json    (gospel-plugin)  access ladder, resources, ways in
- *   data/tables/doxa-people-groups.json    (gospel-plugin)  slug, lat/lng, pray link
+ *   data/tables/doxa-gospel-access.json                    access ladder, resources, ways in
+ *   data/tables/doxa-people-groups.json                    slug, lat/lng, pray link
  *   data/tables/country-connectivity.json  (World Bank)     internet %, year, mobile per 100
  *   data/tables/internet-by-country.json   (cities-internet) top platform
- *   data/tables/internet-by-adm1.json      (exp-shepherd)   India by state, NFHS-5
+ *   data/tables/internet-by-adm1.json      (cities-internet) India by state, NFHS-5
  *   data/tables/messaging-channels.json    (cities-internet) top free apps per country (Apple, iOS only)
  *   data/tables/social-platforms.json      (cities-internet) social referral share per country (StatCounter)
- *   data/tables/gospel-by-province-groups.json (gospel-plugin) each IND/CHN group's province (approximate)
- *   data/tables/gospel-by-province.json    (gospel-plugin)  the aggregates that per-group file must sum to
+ *   data/tables/gospel-by-province-groups.json each IND/CHN group's province (approximate)
+ *   data/tables/gospel-by-province.json                    the aggregates that per-group file must sum to
  *
  * ★ IT FAILS, IT NEVER DROPS. Every join is counted, and the build exits non-zero if the output has
  * fewer rows than the access table, if a key is duplicated, or if a group's country has no
  * connectivity row. A board that quietly lost 40 groups would say "nothing here" about real people.
  *
- * ★ THE PROVINCE IS READ, NEVER RE-DERIVED. gospel-plugin publishes each placed group's province
+ * ★ THE PROVINCE IS READ, NEVER RE-DERIVED. The Gospel Resources build publishes each placed group's province
  * (gospel-by-province-groups.json, reconciled with its aggregates before either is written). This build
- * keeps ONE cheap assertion, the one gospel-plugin recommended: sum(aggregate groups) == per-group rows,
+ * keeps ONE cheap assertion, the one recommended: sum(aggregate groups) == per-group rows,
  * which catches a stale copy of one file beside a fresh copy of the other. Every IND/CHN group must be
  * either placed there or listed in the aggregate's `unassigned`, so none is silently province-less.
  * (It replaces this builder's own point-in-polygon, which agreed with theirs group for group.)
  *
  * ★ WHAT IS NEVER READ: doxa-people-groups.rows.engagement, or anything that says who works where
- * (SPEC-GOSPEL-INTERNET-DASHBOARD section 13). Nothing from plugin-designs/key-cities/.
+ * (see ../README.md, "Honesty"). Nothing from plugin-designs/key-cities/.
  *
  * Codes, not labels, cross into the plugin: access_level own|bridge|zero, access_detail
  * read_watch|hear|read|stories|none, internet_band yes|partial|no|nodata. The plugin translates.
@@ -92,7 +92,7 @@ for (const r of adm1.rows) {
   adm1By.set(k, a)
 }
 
-// ── province: gospel-plugin's per-group assignment, keyed like join 1 (name + iso3) ─────────────────
+// ── province: the per-group assignment, keyed like join 1 (name + iso3) ─────────────────
 const PROVINCE_COUNTRIES = new Set(['IND', 'CHN'])
 const provinceBy = new Map()
 for (const g of byGroup.rows || []) {
@@ -240,7 +240,7 @@ if (failures.length) {
       coverage,
       band_rule: bandingText,
       internet_note: 'internet_pct is the COUNTRY\'s figure (World Bank), never the group\'s. state_internet_* is India\'s state figure from NFHS-5 (2019-21): the share of women and of men aged 15-49 who have EVER used the internet, kept apart, never averaged, never on a scale with subscriptions per 100.',
-      province_note: 'province is read from gospel-by-province-groups.json (gospel-plugin): placed by point-in-polygon on the group\'s coordinate, which marks where a PEOPLE is found, not a town. It is approximate, and near a border it can fall on the wrong side; it is never a fact about connectivity in that state.',
+      province_note: 'province is read from gospel-by-province-groups.json: placed by point-in-polygon on the group\'s coordinate, which marks a PEOPLE group, not a town. It is approximate, and near a border it can fall on the wrong side; it is never a fact about connectivity in that state.',
       access_note: 'access_detail says what exists in the group\'s OWN language in the sources checked; "none" means nothing was found there, never that nothing exists. access_level: own = something in their language; bridge = nothing in their language but a bridge, candidate or Deaf way in; zero = neither.',
       platforms: {
         messaging_source: msg.meta?.source?.name || '', messaging_accessed: msg.meta?.source?.accessed || '',

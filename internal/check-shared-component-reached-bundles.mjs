@@ -56,7 +56,7 @@ const MARKERS = [
     id: 'legend-a11y-keys',
     component: 'library/components/legends/SemanticTreeLegend.vue',
     marker: 'legend.a11y',
-    landed: 'regions, c4c60a4 and earlier',
+    landed: 'c4c60a4 and earlier',
     why: 'accessible names + aria-expanded on the legend row caret and clear chip',
   },
   {
@@ -81,7 +81,7 @@ const MARKERS = [
     // if it still compiles ensureEngineCSS without the guard; with neither shape it is NOT AFFECTED.
     staleRe: /const ([\w$]+)=([\w$]+)\.getRootNode\(\);if\(!\(\1 instanceof ShadowRoot\)\)return/g,
     marker: 'if (!element) return (ensureEngineCSS)',
-    landed: 'studio, 2026-09-25',
+    landed: '2026-09-25',
     why: 'a map whose pane unmounts mid-initialise no longer throws "reading getRootNode" (check-map-unmount-mid-init)',
   },
   {
@@ -96,7 +96,7 @@ const MARKERS = [
     builtRe: /cdn\.jsdelivr\.net\/npm\/@mapbox\/mapbox-gl-rtl-text/,
     staleRe: /GL JS script to your page/g,
     marker: 'installRtlTextPlugin(gl) (MapLibre RTL shaping)',
-    landed: 'rega, 2026-09-25',
+    landed: '2026-09-25',
     why: 'Arabic, Hebrew and Persian map labels are shaped on MapLibre (keyless) maps, not drawn as disconnected glyphs',
   },
   {
@@ -110,7 +110,7 @@ const MARKERS = [
     builtRe: /\["coalesce",\["get","name:"/,
     staleRe: /GL JS script to your page/g,
     marker: 'localizeBasemapLabels(map.value, readerLang()) (basemap labels localized)',
-    landed: 'rega, 2026-09-25',
+    landed: '2026-09-25',
     why: 'country, city and street names on the basemap render in the reader\'s language (Mapbox setLanguage, MapLibre name:<lang>)',
   },
 ]

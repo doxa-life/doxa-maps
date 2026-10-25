@@ -8,7 +8,7 @@
     "langCluster": "Language Clusters",
     "flowers": "Flowers",
     "mobilize": "Mobilize",
-    "campaigns": "Campaigns"
+    "campaigns": "Movements"
   },
   "hints": {
     "cockpit": "crossfilter hub",
@@ -180,6 +180,8 @@
     "title": "Mobilizing near neighbors",
     "close": "Close",
     "why": "The believers best placed to reach an unreached people are usually the ones nearest to it in language and culture. This tool finds them for every unreached group, using Ralph D. Winter's E-scale and P-scale, so you can plan whom to mobilize, in which language, and where.",
+    "greenTitle": "For churches: start from a green dot",
+    "green": "Pick a reached (green) group, from the Reached groups list or a green dot, to see the unreached peoples its believers are best placed to reach, one E-level at a time, closest first. Then export the list (CSV), write a letter to its believers or print a prayer packet, for that church or its mission partners.",
     "eTitle": "E-scale: the distance a witness must cross",
     "pTitle": "P-scale: the distance between a people and a church",
     "dataTitle": "Data and limits",
@@ -193,7 +195,7 @@
     "title1": "E-1 · They speak the same language",
     "title2": "E-2 · A near culture",
     "title3": "E-3 · Nearby, a different culture",
-    "long1": "Believers who speak this group's language. They can share the gospel without crossing a language barrier, and a campaign in this language can mobilize them.",
+    "long1": "Believers who speak this group's language. They can share the gospel without crossing a language barrier, and a mobilization movement in this language can reach them.",
     "long2": "Believers from a related people: the same people cluster, or the same language family in the same affinity bloc. A shorter cultural step than starting from scratch.",
     "long3": "Believers living nearby (within 600 km or in the same country) whose culture is different. They share the region, not the language.",
     "rlong1": "Unreached groups who speak this group's language. Its believers can reach them without crossing a language barrier.",
@@ -220,6 +222,11 @@
     "legend": "Map legend",
     "legendUnreached": "Unreached group",
     "searchPlaceholder": "Search an unreached group, country or language",
+    "kind": "Which groups to list",
+    "listUnreached": "Unreached groups",
+    "listReached": "Reached groups",
+    "searchReached": "Search a reached group, country or language",
+    "introReached": "Pick a reached group (most believers first), or click a green dot on the map, to see the unreached groups its believers are nearest to.",
     "pFilter": "Filter by P-level",
     "pAll": "All",
     "loading": "Loading people groups…",
@@ -230,7 +237,7 @@
     "believersNear": "About {n} believers among the neighbors below.",
     "resources": "Resources in its language",
     "export": "Export audience segments (CSV)",
-    "openBridge": "Plan a {lang} campaign",
+    "openBridge": "Plan a {lang} mobilization movement",
     "samePeople": "same people",
     "cardStats": "~{b} believers · {km} km away",
     "noNeighbors": "No reached neighbors in this data.",
@@ -245,10 +252,12 @@
     "showNeighbors": "Show its neighbors",
     "noUnreachedNeighbors": "No unreached group counts this group among its nearest reached neighbors.",
     "showAll": "Show all {n}",
-    "eFilter": "Show neighbours by E-level"
+    "eFilter": "Show neighbours by E-level",
+    "sheetHide": "Hide the list",
+    "sheetShow": "Show the list"
   },
   "camp": {
-    "intro": "Bridge languages: languages spoken by believers and by unreached peoples. One campaign in the language, aimed where the believers live, can mobilize them to reach the unreached in their own language.",
+    "intro": "Bridge languages: languages spoken by believers and by unreached peoples. One mobilization movement in the language, aimed where the believers live, can stir them to reach the unreached in their own language.",
     "searchPlaceholder": "Search a language or country",
     "minBelievers": "At least",
     "exportAll": "Export list (CSV)",
@@ -258,9 +267,27 @@
     "back": "All languages",
     "bigBelievers": "believers to mobilize ({g} groups, {c} countries)",
     "bigUnreached": "unreached people to reach ({g} groups, {c} countries)",
-    "export": "Export this campaign (CSV)",
+    "export": "Export this movement (CSV)",
     "whereToRun": "Where to run it: believers by country",
     "believersInGroups": "~{n} in {g} groups",
     "whoTheyReach": "Whom they can reach"
+  },
+  "letter": {
+    "button": "Write a letter",
+    "title": "A letter to the {group} believers",
+    "greeting": "Dear friends among the {group} believers in {country},",
+    "intro": "These {n} unreached peoples count you among their nearest believers ({level}). Few believers live among them yet.",
+    "item": "{name}, {country}: {pop} people, speaking {language}, {km} km away.",
+    "pray": "Pray for them: {url}",
+    "more": "…and {n} more. The full list is in the CSV export.",
+    "close": "Will you pray for them, and ask God how your church could bless them? Each of these peoples is loved by God.",
+    "sign": "In Jesus' name,",
+    "copy": "Copy the letter",
+    "download": "Download (.txt)"
+  },
+  "packet": {
+    "button": "Prayer packet",
+    "label": "{group}: its unreached neighbours ({level})",
+    "labelCapped": "{group}: the {n} closest of its {total} unreached neighbours ({level})"
   }
 }

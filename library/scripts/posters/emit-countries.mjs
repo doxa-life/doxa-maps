@@ -7,15 +7,15 @@
 //   node emit-countries.mjs
 //     -> ../../data/country-posters.json   (library/data — two consumers)
 //
-// SHEET LADDER (design note 2026-08-01) — the count selects the SHEET SIZE, it does not
+// SHEET LADDER (2026-08-01) — the count selects the SHEET SIZE, it does not
 // exclude a country:
 //   <= OVERSIZE_AT   3ft x 3ft   (172 countries, incl. Sudan 105 + Brazil 103)
 //   <= UNSUPPORTED_AT 3ft x 4ft  (China, 154 — "lengthen it by one foot")
 //   >  UNSUPPORTED_AT none       (India, 855 — a not-yet card printing the EXACT number)
 //
 // EVERY qualifying country gets a sheet, including the 92 with exactly one group.
-// Brief: "if it has a one-people-group on it, we still want a one-people-group map
-// generated… those get sorted to the bottom of the list." The wall's descending
+// A country with a single people group still gets its map, and those sheets sort
+// to the bottom of the list. The wall's descending
 // sort is what handles them — NOT a floor and NOT a sparse template variant.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -106,7 +106,7 @@ for (const [iso, list] of byIso) {
     hasGeometry: haveGeom.has(iso),
     // The not-yet reason is DATA, not UI copy, so the exact number travels with the
     // record and cannot drift from what the wall prints.
-    // Brief: "it should say the exact number… we should say the exact number in our data."
+    // It states the exact number, the one in our data.
     unsupportedReason: sheet ? null
       : `${label} has ${count.toLocaleString()} people groups — too many to fit one poster legibly. A solution is in progress.`,
   });

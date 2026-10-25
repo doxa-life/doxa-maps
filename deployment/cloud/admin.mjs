@@ -1,6 +1,6 @@
 // admin.mjs — the container's internal router (127.0.0.1:5175), behind oauth2-proxy.
 //   /cdn/*       the last good build (/data/cdn/current), PUBLIC (oauth2-proxy skips auth here)
-//   /api-prod/*  PocketBase PROD, PUBLIC; only /api/ passes, never the /_/ dashboard
+//   /api-prod/*  PocketBase PROD, PUBLIC; only /api/ passes, never the /_/ dashboard, _superusers or _system collections
 //   /pb/*        PocketBase DEV, signed-in; its /_/ dashboard only for OIDC_ADMIN_GROUPS. With PB_OIDC_CLIENT_SECRET,
 //                its /api/ is PUBLIC (PocketBase signs people in itself), except _superusers and _system collections
 //   /admin/build POST: build PRODUCTION_BRANCH now (OIDC_ADMIN_GROUPS only); /admin/status GET.
@@ -9,8 +9,9 @@
 //   /admin/pb-signin-check  a page that signs in to the team PocketBase and shows who it thinks you are
 // Groups come from oauth2-proxy's X-Forwarded-Groups, which it sets on signed-in routes only.
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { join, normalize } from 'node:path'
+import { createHash, timingSafeEqual } from 'node:crypto'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { basename, join, normalize } from 'node:path'
 import { serveTreeFile } from './cdn-cache.mjs'
 
 const env = process.env
@@ -19,13 +20,57 @@ const CDN = '/data/cdn/current'
 let last = { state: 'idle' }
 
 const groupsOf = (req) => (req.headers.get('x-forwarded-groups') || '').split(',').map((g) => g.trim())
-const isAdmin = (req) => ADMIN.length > 0 && groupsOf(req).some((g) => ADMIN.includes(g))
+// ACCESS=public (entry.sh): the Plugin Studio is open and nobody signs in, so X-Forwarded-Groups is whatever a
+// visitor sends and is never read. The admin parts (/admin/, PocketBase's dashboard, _superusers) ask for
+// ADMIN_USER / ADMIN_PASSWORD over HTTP Basic instead, compared in constant time.
+const PUBLIC = env.ACCESS === 'public'
+const ADMIN_USER = env.ADMIN_USER || 'admin'
+const same = (a, b) => timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest())
+function passwordOk(req) {
+  const h = req.headers.get('authorization') || ''
+  if (!env.ADMIN_PASSWORD || !h.startsWith('Basic ')) return false
+  const [user, ...rest] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(':')
+  const userOk = same(user, ADMIN_USER), passOk = same(rest.join(':'), env.ADMIN_PASSWORD)
+  return userOk && passOk
+}
+const isAdmin = (req) => (PUBLIC ? passwordOk(req) : ADMIN.length > 0 && groupsOf(req).some((g) => ADMIN.includes(g)))
 const text = (s, status = 200) => new Response(s + '\n', { status, headers: { 'content-type': 'text/plain; charset=utf-8' } })
+// Refusing an admin part: in public mode a 401 that makes the browser ask for the password; with the sign-in, 403.
+const refuse = (msg) => (PUBLIC
+  ? new Response(msg + '\n', { status: 401, headers: { 'content-type': 'text/plain; charset=utf-8', 'www-authenticate': 'Basic realm="dx-maps admin", charset="UTF-8"' } })
+  : text(msg, 403))
+
+// fetch() hands back the body DECOMPRESSED, so the upstream Content-Encoding and Content-Length no longer describe
+// what is sent on: forwarding them made browsers try to gunzip plain HTML, and PocketBase's dashboard never rendered
+// (measured 2026-09-29). And PocketBase redirects to its own root (/_ -> /_/), which is put back under the mount (/pb/_/).
+// A backend path as the backend will read it: percent-decoded, runs of slashes collapsed. The admin gates run on
+// THIS form, so /pb/%5F/ (PocketBase decodes it to /_/) meets the same check as /pb/_/ (studio, 2026-09-29).
+// Encoded slashes or backslashes and undecodable input are refused: nothing legitimate sends them.
+function backendPath(p) {
+  if (/%2f|%5c/i.test(p) || p.includes('\\')) return null
+  try { return decodeURIComponent(p).replace(/\/{2,}/g, '/') } catch { return null }
+}
 
 async function proxy(req, url, prefix, port) {
-  const target = new URL(url.pathname.slice(prefix.length - 1) + url.search, `http://127.0.0.1:${port}`)
+  // The path goes onto a FIXED origin and is never parsed as a URL itself: /pb//evil.example/x made a
+  // protocol-relative URL, and the proxy fetched another host with the visitor's headers (studio, 2026-09-29).
+  const rest = url.pathname.slice(prefix.length - 1)
+  if (!rest.startsWith('/') || rest.startsWith('//') || backendPath(rest) === null) return text('bad path', 400)
+  const target = new URL(`http://127.0.0.1:${port}`)
+  target.pathname = rest
+  target.search = url.search
   const r = await fetch(target, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : req.body, redirect: 'manual' })
-  return new Response(r.body, { status: r.status, headers: r.headers })
+  const headers = new Headers(r.headers)
+  headers.delete('content-encoding')
+  headers.delete('content-length')
+  const loc = headers.get('location')
+  if (loc) {
+    const mount = prefix.slice(0, -1) // '/pb/' -> '/pb'
+    const upstream = `http://127.0.0.1:${port}`
+    const path = loc.startsWith(upstream) ? loc.slice(upstream.length) || '/' : loc
+    if (path.startsWith('/') && !path.startsWith('//') && !path.startsWith(`${mount}/`)) headers.set('location', mount + path)
+  }
+  return new Response(r.body, { status: r.status, headers })
 }
 
 // One public build at a time (build-cdn.sh also holds a lock), started by an admin or by the watcher below.
@@ -41,12 +86,13 @@ function startBuild(by) {
   })
 }
 const publishedCommit = () => (existsSync('/data/cdn/COMMIT') ? readFileSync('/data/cdn/COMMIT', 'utf8').trim() : null)
+// The production PocketBase's schema: the snapshot its migrations came from (pb-prod-migrations.sh), or 'empty'.
+const prodSchema = () => { try { return basename(realpathSync('/data/pb-prod-migrations/current')) } catch { return null } }
 
-// AUTO-BUILD: the public build follows PRODUCTION_BRANCH by itself. main is the shared sandbox; production
-// moves only when someone promotes (git push origin main:production), so rebuilding on every move is
-// the point. Debounced: build once the branch has held the same commit for CDN_AUTOBUILD_MINUTES
+// AUTO-BUILD: the public build follows PRODUCTION_BRANCH by itself (default main). The dev server follows
+// BRANCH, the shared table; main moves only on a publish, so rebuilding on every move is the point. Debounced: build once the branch has held the same commit for CDN_AUTOBUILD_MINUTES
 // (default 2; 0 = off, admin button only). A commit whose build failed is not retried automatically.
-const PROD = env.PRODUCTION_BRANCH || 'production'
+const PROD = env.PRODUCTION_BRANCH || 'main'
 const AUTO_MIN = env.CDN_AUTOBUILD_MINUTES === undefined || env.CDN_AUTOBUILD_MINUTES === '' ? 2 : Number(env.CDN_AUTOBUILD_MINUTES)
 const watch = { seen: null, since: 0, failed: null, error: null }
 async function checkProduction() {
@@ -118,6 +164,8 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url)
     const p = url.pathname
+    // DEV_SERVER=off: there is no Plugin Studio at /, so send people to the public build.
+    if (p === '/' && env.DEV_SERVER === 'off') return Response.redirect(new URL('/cdn/', url), 302)
     if (p.startsWith('/cdn/')) {
       const f = normalize(join(CDN, decodeURIComponent(p.slice(5))))
       if (!f.startsWith(CDN)) return text('bad path', 400)
@@ -128,22 +176,30 @@ Bun.serve({
       return serveTreeFile(req, file, file.slice(CDN.length), { 'access-control-allow-origin': '*' })
     }
     if (p.startsWith('/api-prod/')) {
-      if (!p.startsWith('/api-prod/api/')) return text('only /api/ is public', 403)
+      const bp = backendPath(p)
+      if (bp === null) return text('bad path', 400)
+      if (!p.startsWith('/api-prod/api/') || !bp.startsWith('/api-prod/api/')) return text('only /api/ is public', 403)
+      // As on /pb: the superuser and every _system collection stay closed. No public client uses them (a platform security review).
+      if (bp.startsWith('/api-prod/api/collections/_')) return text('for admins only', 403)
       return proxy(req, url, '/api-prod/', 8091)
     }
     if (p.startsWith('/pb/')) {
-      if (p.startsWith('/pb/_/') && !isAdmin(req)) return text('the PocketBase dashboard is for admins', 403)
+      const bp = backendPath(p)
+      if (bp === null) return text('bad path', 400)
+      if ((bp === '/pb/_' || bp.startsWith('/pb/_/')) && !isAdmin(req)) return refuse('the PocketBase dashboard is for admins')
       // The superuser (and every _system collection) is for admins only. oauth2-proxy never opens these
       // paths to the public (its skip routes exclude names starting with _), so the groups header is its own.
-      if (p.startsWith('/pb/api/collections/_') && !isAdmin(req)) return text('for admins only', 403)
+      if (bp.startsWith('/pb/api/collections/_') && !isAdmin(req)) return refuse('for admins only')
       return proxy(req, url, '/pb/', 8090)
     }
+    // With the sign-in, oauth2-proxy guards every /admin/ path; in public mode the admin password does.
+    if (PUBLIC && p.startsWith('/admin/') && !isAdmin(req)) return refuse('the admin pages ask for the admin password')
     // A one-click check of the team PocketBase sign-in (behind the site sign-in like every /admin/ path).
     if (p === '/admin/pb-signin-check') return new Response(Bun.file('/app/repo/deployment/cloud/pb-signin-check.html'), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } })
-    if (p === '/admin/status') return Response.json({ ...last, production: { branch: PROD, autoBuildMinutes: AUTO_MIN, head: watch.seen, published: publishedCommit(), error: watch.error } })
+    if (p === '/admin/status') return Response.json({ ...last, production: { branch: PROD, autoBuildMinutes: AUTO_MIN, head: watch.seen, published: publishedCommit(), prodSchema: prodSchema(), error: watch.error } })
     if (p === '/admin/build') {
       if (req.method !== 'POST') return text('POST only', 405)
-      if (!isAdmin(req)) return text('builds are for team admins', 403)
+      if (!isAdmin(req)) return refuse('builds are for team admins')
       if (last.state === 'building') return text('a build is already running', 409)
       startBuild('admin')
       return text('build started', 202)

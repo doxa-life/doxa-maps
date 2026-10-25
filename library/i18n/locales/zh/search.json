@@ -23,5 +23,12 @@
     "dialect": "方言",
     "religionKind": "宗教"
   },
-  "upg100Placeholder": "搜索民族、UPG-100 名单或区域…"
+  "upg100Placeholder": "搜索民族、UPG100 名单或区域…",
+  "tabPlaceholder": {
+    "languageFamilies": "搜索语系、语言、方言/变体",
+    "affinityBlocks": "搜索亲缘板块、民族群、民族",
+    "regions": "搜索区域、国家、民族",
+    "religion": "搜索宗教、民族"
+  },
+  "placeholderRegions": "搜索区域、国家或族群"
 }

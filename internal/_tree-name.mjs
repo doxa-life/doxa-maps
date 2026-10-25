@@ -39,6 +39,30 @@ function read() {
 }
 
 export const TREE_NAME = read()
+// GATED profiles (the config's gatedProfiles): bundles that build but must never reach a public surface.
+// generate-tree leaves them out of the manifest and pages; vite.config.js builds them OUTSIDE public/
+// (.gated/<tree>/); check:gated-not-in-tree fails if one appears in the tree anyway.
+function readGated() {
+  try {
+    const cfg = JSON.parse(readFileSync(BUILD_CONFIG_FILE, 'utf8'))
+    return Array.isArray(cfg.gatedProfiles) ? cfg.gatedProfiles.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()) : []
+  } catch { return [] }
+}
+export const GATED_PROFILES = readGated()
+
+// The PUBLIC address of the tree for the Share menu's Embed tab (the config's shareBaseUrl): an https URL with no
+// trailing slash, or '' (unset). vite.config.js bakes it as __DOXA_SHARE_BASE__; library/utils/embedBase.js reads it.
+function readShareBase() {
+  let v = ''
+  try {
+    const cfg = JSON.parse(readFileSync(BUILD_CONFIG_FILE, 'utf8'))
+    v = typeof cfg.shareBaseUrl === 'string' ? cfg.shareBaseUrl.trim().replace(/\/+$/, '') : ''
+  } catch { return '' }
+  if (v && !/^https:\/\/[^\s"'<>]+$/i.test(v)) throw new Error(`[_tree-name] build config "shareBaseUrl" must be an https URL, got ${JSON.stringify(v)}`)
+  return v
+}
+export const SHARE_BASE = readShareBase()
+
 // The name escaped for use inside a RegExp source (a '.' in a future name must not match any char).
 export const TREE_NAME_RE = TREE_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 

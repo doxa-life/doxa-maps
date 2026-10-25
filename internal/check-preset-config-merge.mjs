@@ -3,7 +3,7 @@
  * check-preset-config-merge — a preset page keeps its profile's defaults. Headless.
  *
  * A preset (<bundle>/<profile>/<instance>/index.html) bakes a config made of the profile's
- * <profile>.meta.json `config` with the instance's `props` MERGED over it. It used to REPLACE it: go-int's
+ * <profile>.meta.json `config` with the instance's `props` MERGED over it. It used to REPLACE it: the
  * upg-neighbor presets lost the profile's pinHint:false. For every built preset page this asserts each
  * meta `config` key is present, with the instance's own value where the instance sets one.
  * Rule stated in documentation/PRESET-PLUGIN-STANDARD.md.

@@ -64,5 +64,10 @@
     "rural": "Land",
     "source": "NFHS-5 (2019–21), Personen im Alter von 15–49 Jahren: Anteil derer, die das Internet schon einmal genutzt haben. Eine Befragung von Menschen, keine Zählung von Anschlüssen.",
     "missing": "Noch keine Staatsgrenze für {names}: Ihre Werte stehen in den Daten, nicht auf der Karte."
+  },
+  "loading": "Karte wird gezeichnet…",
+  "ui": {
+    "showKey": "Legende ausklappen",
+    "hideKey": "Legende einklappen"
   }
 }

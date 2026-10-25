@@ -34,8 +34,8 @@ const instance = useInstance()
 const tr = usePplrT()   // not `t`: the names table below is already called t
 const pinData = computed(() => props.pin || instance?.pinDetail.value || null)
 
-// All 17 locale names for this PG (n_en, n_hi, n_bn, …). Per user 2026-05-02:
-// the popup-style display couldn't show all 17, so we render them as their own
+// All 17 locale names for this PG (n_en, n_hi, n_bn, …). The popup-style
+// display couldn't show all 17, so they render as their own
 // scrollable section in the sidebar with "—" placeholders for missing locales.
 // The 17 names no longer ride on every pin (they were two-thirds of the 23 MB points file); they
 // load from pg-names.json the first time a card opens, keyed by PG code in LOCALES order.

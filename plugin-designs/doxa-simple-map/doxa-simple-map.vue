@@ -51,6 +51,11 @@ import HelpButton        from '@map/components/map-controls/HelpButton.vue'
 import HamburgerButton   from '@map/components/map-controls/HamburgerButton.vue'
 import GeocoderComponent from '@map/components/map-controls/GeocoderComponent.vue'
 import ShareButton       from '@map/components/map-controls/ShareButton.vue'
+// By path, not through map-controls/index.js: the barrel would pull the 'mapInfo' catalogue area into
+// every bundle that imports a control.
+import MapInfoButton     from '@map/components/map-controls/MapInfoButton.vue'
+import MapInfo           from '@map/components/info/MapInfo.vue'
+import { mapInfoFor }    from './src/mapInfo.js'
 
 // ─── Shadow DOM style injection ──────────────────────────────────────────────
 useShadowStyles(`
@@ -175,7 +180,7 @@ useShadowStyles(`
 
   /* When the geocoder is disabled (FEATURES.geocoder=false), the legend
      reflows up to fill the freed top slot — matches the geocoder pill
-     position (top:10px) instead of clearing it (top:54px). qa: 2026-05-06. */
+     position (top:10px) instead of clearing it (top:54px). */
   .dsm-root.dsm-no-geocoder .legend-container,
   .dsm-root.dsm-no-geocoder .legend-container.collapsed { top: 10px !important; }
   .dsm-root.dsm-no-geocoder .stl-panel { top: 10px !important; }
@@ -217,7 +222,7 @@ const { t, te, locale } = useI18n()
 // On Mapbox Standard / Streets styles, common label layers carry per-locale
 // name fields (name_ar, name_de, name_en, name_fr, …). Setting the text-field
 // expression to `['get', 'name_' + locale]` switches country/place/state names
-// without reloading the style. See documentation/feedback.md → Section A.
+// without reloading the style.
 const MAPBOX_LABEL_LAYERS = [
   'country-label',
   'state-label',
@@ -255,7 +260,7 @@ const isRTL = computed(() => RTL_LOCALES.has(locale.value))
 //   infoButton         — "About this map" help modal trigger
 //   overlapDensity     — dim non-matched pins to 0.08 when a legend filter is
 //                        active (causes overlap-density bleed that can wash out
-//                        orange pins). OFF here per feedback 2026-04-20.
+//                        orange pins). OFF here.
 //   darkPinBorder      — dark stroke on active pins in light mode. Previously
 //                        needed to compensate for density bleed; irrelevant
 //                        without overlapDensity.
@@ -264,14 +269,14 @@ const FEATURES = {
   infoButton:    false,  // before enabling: the help modal needs role="dialog" + aria-modal + Escape + focus trap/return (A11Y-AUDIT-PRAYER-PROGRESS-CONNECTIVITY.md)
   overlapDensity: false,
   darkPinBorder:  false,
-  // Geocoder search bar feature-flagged OFF on simple-map per user request
-  // (qa: 2026-05-04 — research-map keeps its geocoder; only the simple-map
-  // pages on home/pray/adopt should NOT show search). Flip to true to
-  // restore. Wraps the <GeocoderComponent v-if> in the template.
+  // Geocoder search bar feature-flagged OFF on simple-map: research-map keeps
+  // its geocoder; only the simple-map pages on home/pray/adopt should NOT show
+  // search. Flip to true to restore. Wraps the <GeocoderComponent v-if> in the
+  // template.
   geocoder:      false,
   // Disabled: no thicker stroke / enlarged radius / pulse animation when a
   // legend row is selected. Matched pins stay at base-layer style; non-
-  // matched pins dim via 'case' opacity (qa: 2026-05-06 user feedback).
+  // matched pins dim via 'case' opacity.
   activeOverlayEmphasis: false,
 }
 
@@ -289,12 +294,19 @@ const tabs       = computed(() => profileConfig?.value?.tabs ?? DEFAULT_TABS)
 // profileConfig.tabs is the host's own words and is shown as given.
 const DEFAULT_LABELS = Object.fromEntries(DEFAULT_TABS.map((d) => [d.id, d.label]))
 const tabLabel = (tab) => ((!tab.label || tab.label === DEFAULT_LABELS[tab.id]) && te('tabs.' + tab.id)) ? t('tabs.' + tab.id) : tab.label
-// before giving an instance a 2nd tab: the tab bar needs role="tablist"/"tab" + :aria-selected (the underline already marks the active tab by shape, not only colour)
+// With 2+ tabs (the research page passes three) the bar is a tablist: a screen reader announces each
+// button as a tab and which one is selected. The underline marks the active tab by shape, not only colour.
 const showTabBar = computed(() => tabs.value.length > 1)
 
 // ─── Tab state ────────────────────────────────────────────────────────────────
 const activeTabId = ref(null)
 const activeTab   = computed(() => tabs.value.find(t => t.id === activeTabId.value) ?? tabs.value[0])
+// ─── "What can this map do?" carried by the map ───────────────────────────────
+// The map's own info (src/mapInfo.js, per preset). In the gallery the gallery answers the ⓘ control; on
+// any other page the control asks for the map's own popup ('standalone'), mounted beside the toolbar.
+// A host's profile-config info:false removes the ⓘ.
+const ownInfo   = computed(() => (profileConfig?.value?.info === false ? null : mapInfoFor(tabs.value)))
+const infoLocal = ref(false)
 
 // ─── Share embed path (ID→URL table owned by this profile) ────────────────────
 // This is ONE parameterized profile rendering 3 maps chosen by tab id, so the
@@ -332,8 +344,8 @@ const mapId = (injectedInstanceId?.value || injectedInstanceId) || ('doxa-simple
 // Re-provide mapId so children (LegendComponent, etc.) can inject it for window event scoping
 provide('mapId', mapId)
 // Resolves the active tab's strategy → color for a given feature, used by
-// useSelectedPin.js so the selection-pin matches the underlying dot color
-// (qa: 2026-05-06 user feedback). simple-map tab strategyKeys are 'engagement',
+// useSelectedPin.js so the selection-pin matches the underlying dot color.
+// simple-map tab strategyKeys are 'engagement',
 // 'adoption', 'prayer' — mapping to COLOR_MODES below.
 provide('getActivePinColor', (properties) => {
   const sk = activeTab.value?.colorStrategy
@@ -371,7 +383,7 @@ function _flatItemsToStlNodes(items) {
 }
 const legendNodes = computed(() => _flatItemsToStlNodes(flatLegend.items.value))
 const legendTitle = computed(() => t('legend.titleBar.legend'))
-// Prayer progress bar (header of the prayer legend; Driver 2026-09-16). The payload
+// Prayer progress bar (header of the prayer legend). The payload
 // is null on every non-prayer tab → no bar. Passed as a prop to the desktop STL
 // below AND provide()d so the MOBILE sheet's embedded <SemanticTreeLegend>
 // (LegendMobile.vue, untouched) picks it up via inject('legendProgress') — one
@@ -499,7 +511,7 @@ const { map, isMapReady, initializeMap, destroy } = useMapInstance({
   zoom: 1.8,
   pitch:   profileConfig?.value?.pitch   ?? mapDefaults.pitch,
   bearing: profileConfig?.value?.bearing ?? mapDefaults.bearing,
-  // Per-map zoom constraints (feedback #1 /pray): each map (simple, prayer)
+  // Per-map zoom constraints: each map (simple, prayer)
   // defines its own min/max in profile-config so users don't get lost zooming
   // too far, and precise locations stay obfuscated. Falls back to mapDefaults.
   minZoom: profileConfig?.value?.minZoom ?? mapDefaults.minZoom,
@@ -628,12 +640,12 @@ watch(isDark, (dark) => { pplrInstance.theme.value = dark ? 'dark' : 'light' }, 
 
 // ─── The Prayer look without a key ────────────────────────────────────────────
 // On Mapbox this map is Standard at lightPreset 'night': near-black navy sea, slate land, rose
-// borders — the "dark green" the Driver called our most beautiful map. Without a token the engine
+// borders — the "dark green" look this map must keep. Without a token the engine
 // is MapLibre and the basemap is OpenFreeMap `fiord`, which is slate-blue everywhere (sea #38435c,
 // land #45516e: 13 units apart, and blue-grey borders). These colours are MEASURED from the Mapbox
-// render, not chosen: rega's reference capture of this leaf at its own world view (main 4ca2dcf9,
-// _qa-cycle/rega/prayer-look-ref-4ca2dcf9/): ocean #03112d / #020f2c, land #323f52, forest
-// #2c3e3c / #32403a, a 1px country border #c95d74. Our pins and glow are the same on both engines.
+// render, not chosen: pixels of this leaf at its own world view on Mapbox (main 4ca2dcf9) read ocean
+// #03112d / #020f2c, land #323f52, forest #2c3e3c / #32403a, and a 1px country border #c95d74.
+// Our pins and glow are the same on both engines.
 // ⚠ fiord draws no forest below zoom 10 (landcover_wood minzoom), so the faint green cast Mapbox
 // shows on the Amazon and Congo at world view cannot be reproduced by recolouring; it appears once
 // a reader zooms in.
@@ -651,7 +663,7 @@ const KEYLESS_NIGHT_PAINT = [
   { layer: 'boundary_country_z0-4', prop: 'line-color',       value: '#c95d74' },
   { layer: 'boundary_country_z5-',  prop: 'line-color',       value: '#c95d74' },
   // Crisp and opaque: at 0.75 over fiord's blur the rose read as a faint mauve (#5b4659 against
-  // the reference #934f66, rega's side-by-side).
+  // the reference #934f66, measured side by side).
   { layer: 'boundary_country_z0-4', prop: 'line-opacity',     value: 1 },
   { layer: 'boundary_country_z5-',  prop: 'line-opacity',     value: 1 },
   { layer: 'boundary_country_z0-4', prop: 'line-blur',        value: 0 },
@@ -678,8 +690,8 @@ function paintKeylessNight(m) {
 // reload → pins/glow never wiped, no flash, instant toggle.
 watch(() => uiStore.theme, () => mapTheme.applyTheme(map.value))
 
-// Theme-aware data-pin outline (qa: 2026-05-06 user feedback — Joshua Project
-// uses a thin near-black outline that's barely visible; reverse-engineered).
+// Theme-aware data-pin outline (Joshua Project uses a thin near-black outline
+// that's barely visible; reverse-engineered).
 // In dark mode the outline goes white so pins stay visible against dark
 // basemaps. Boot style is light-v11, so the initial circle-stroke-color
 // in addLanguageFamilyLayer is already 'rgba(0,0,0,0.45)' — this watcher
@@ -838,6 +850,11 @@ function handleAggregateResult(evt) {
   }
 }
 
+// The pins' resting opacity: the value the library creates the layer with (useMapLayers'
+// language-family-pins). Every path that clears a filter restores this, so a cleared map looks
+// exactly like a fresh one.
+const PIN_REST_OPACITY = 1
+
 // Un-apply the aggregate filter so the map returns to normal colors.
 let _aggregateFilterActive = false
 function clearAggregateFilter() {
@@ -845,7 +862,7 @@ function clearAggregateFilter() {
   const m = map.value
   if (!m?.getLayer('language-family-pins')) return
   m.setPaintProperty('language-family-pins', 'circle-color',          getBaseColorExpr())
-  m.setPaintProperty('language-family-pins', 'circle-opacity',        0.9)
+  m.setPaintProperty('language-family-pins', 'circle-opacity',        PIN_REST_OPACITY)
   m.setPaintProperty('language-family-pins', 'circle-stroke-opacity', 1)
   _aggregateFilterActive = false
 }
@@ -1203,7 +1220,7 @@ function applyLegendFilter(filterType, filterKey) {
   if (!filterKey) {
     _currentFilter = { type: null, key: null }
     m.setPaintProperty('language-family-pins', 'circle-color', getBaseColorExpr())
-    m.setPaintProperty('language-family-pins', 'circle-opacity', 0.9)
+    m.setPaintProperty('language-family-pins', 'circle-opacity', PIN_REST_OPACITY)
     m.setPaintProperty('language-family-pins', 'circle-stroke-opacity', 1)
     _syncHitboxFilter(m, null)
     mapLayers.syncGlowFilter(null)
@@ -1215,7 +1232,7 @@ function applyLegendFilter(filterType, filterKey) {
   if (!matchExpr) {
     _currentFilter = { type: null, key: null }
     m.setPaintProperty('language-family-pins', 'circle-color', getBaseColorExpr())
-    m.setPaintProperty('language-family-pins', 'circle-opacity', 0.9)
+    m.setPaintProperty('language-family-pins', 'circle-opacity', PIN_REST_OPACITY)
     m.setPaintProperty('language-family-pins', 'circle-stroke-opacity', 1)
     _syncHitboxFilter(m, null)
     mapLayers.syncGlowFilter(null)
@@ -1311,7 +1328,7 @@ async function onMapReady(normalizedPeopleGroups) {
     // On a DARK boot the theme-watcher (immediate:false) hasn't run — apply the dark
     // ring (white colour + THICK width) now, else black pins are left with the light
     // hairline on the night basemap. _applyPinStroke handles both themes + the prayer
-    // exception. (coder 2026-06-25 reload fix, extended to ring width.)
+    // exception, and sets the ring width as well as the colour.
     _applyPinStroke()
     // SHELVED: idle preloader caused slow startup — re-enable when pray-tools API is active
     // and only for groups that have confirmed valid image URLs
@@ -1342,8 +1359,26 @@ async function onMapReady(normalizedPeopleGroups) {
 // (page usually reloads on Polylang switch, but this keeps things robust).
 watch(locale, (loc) => applyBasemapLocale(loc))
 
+// ─── "What can this map do?" is on its way ────────────────────────────────────
+// The control column (with its ⓘ on top) renders only at appReady, after the style AND the people-group
+// data, which can take tens of seconds on a slow phone. So at mount this map tells the gallery's MapInfo
+// that a control is COMING, and the MapInfo waits for the map rather than a clock, instead of showing its
+// floating ⓘ and swapping it out later. A known failure (mapError) or an unmount withdraws the promise, so
+// the floating ⓘ shows at once: there is always a way to open the popup. With no MapInfo (a standalone
+// page) nothing answers and nothing changes.
+function announceInfoPending(pending) {
+  const el = dsmRoot.value
+  if (!el) return
+  try { el.dispatchEvent(new CustomEvent('dxmaps:mapinfo-pending', { bubbles: true, composed: true, detail: { pending } })) } catch { /* no CustomEvent */ }
+}
+// A MapInfo that mounted after this map asked into the void; it announces itself, and we answer again.
+const reannounceInfoPending = () => { if (!appReady.value && !mapError.value) announceInfoPending(true) }
+watch(mapError, (e) => { if (e) announceInfoPending(false) })
+
 // ─── Lifecycle — cloned from MapComponent.mounted ─────────────────────────────
 onMounted(async () => {
+  announceInfoPending(true)
+  window.addEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
   activeTabId.value = tabs.value[0]?.id ?? 'prayer'
   // Initial breakpoint — will be refined immediately by ResizeObserver below
   uiStore.updateBreakpoint(window.innerWidth)
@@ -1355,9 +1390,18 @@ onMounted(async () => {
   })
 
   // 2. Initialize map (returns before 'load' fires)
+  // ★ A PANE RELEASED WHILE ITS MAP IS STILL STARTING IS A CANCEL, NOT A FAILURE. This map is a heavy
+  // gallery tab: switching away empties its slot. initializeMap then returns SILENTLY (useMapInstance's
+  // liveness checks) and leaves map.value null, which this reported as "Map failed to initialize —
+  // check token and container": a console ERROR blaming the token for a tab switch (measured on
+  // a phone in Arabic, switched away 150 and 500 ms in: 2 runs in 10; 0 when the map was
+  // left to start). Nobody is waiting for this map any more, so return quietly. A mounted pane that
+  // really fails still logs.
+  const released = () => !mapContainer.value || !mapContainer.value.isConnected
   try {
     await initializeMap()
   } catch (err) {
+    if (released()) return
     // `new mapboxgl.Map()` throws outright when the device has no WebGL context.
     console.error('[doxa-simple-map] Map failed to initialize —', err)
     mapError.value = String(err?.message || err)
@@ -1366,6 +1410,7 @@ onMounted(async () => {
   unwrapMap()
 
   if (!map.value) {
+    if (released()) return
     console.error('[doxa-simple-map] Map failed to initialize — check token and container')
     mapError.value = t('simpleMap.initFailed')
     return
@@ -1389,6 +1434,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
+  if (!appReady.value) announceInfoPending(false)
   mapLayers.stopPrayerGlow()
   clearActiveLayer()
   mapStore.unregisterMap(mapId)
@@ -1406,12 +1453,15 @@ onBeforeUnmount(() => {
   >
 
     <!-- In-map tab bar (only when 2+ tabs) -->
-    <div v-if="showTabBar" class="dsm-tab-bar">
+    <div v-if="showTabBar" class="dsm-tab-bar" role="tablist">
       <button
         v-for="tab in tabs"
         :key="tab.id"
+        type="button"
+        role="tab"
         class="dsm-tab"
         :class="{ active: activeTabId === tab.id }"
+        :aria-selected="activeTabId === tab.id ? 'true' : 'false'"
         @click="switchTab(tab.id)"
       >
         {{ tabLabel(tab) }}
@@ -1512,7 +1562,13 @@ onBeforeUnmount(() => {
            collapses its mobile top offset when no search pill is rendered.
            When the flag is flipped back on, the toolbar reserves space
            below the geocoder again with no further changes here. -->
+      <!-- Round, spaced controls (the library default) at every width: the grouped square card reads
+           too compact, on phones most of all.
+           The TOP control is "What can this map do?": it opens the gallery's MapInfo for this tab,
+           which then hides its own floating button. It renders only where a MapInfo answers it, so a
+           standalone page (DX Life's home, the leaf) has no dead button. -->
       <MapToolbar v-if="appReady" :has-geocoder="FEATURES.geocoder">
+        <MapInfoButton     :is-dark="isDark" :standalone="!!ownInfo" @standalone="(on) => (infoLocal = on)" />
         <ZoomInButton      :map="map"          :is-dark="isDark" />
         <ZoomOutButton     :map="map"          :is-dark="isDark" />
         <LocationButton    :map="map"          :is-dark="isDark" />
@@ -1525,6 +1581,9 @@ onBeforeUnmount(() => {
         <!-- "About this map" info button — feature-flagged off on this profile -->
         <HelpButton v-if="FEATURES.infoButton" :is-dark="isDark" @open-help="showHelpPopup = true" />
       </MapToolbar>
+      <!-- The map's own "What can this map do?" popup, only where no host answers its ⓘ control (an embed, a
+           standalone preset page). A sibling of the toolbar, so the control's announce reaches it. -->
+      <MapInfo v-if="infoLocal && ownInfo" trigger="control" popup-only v-bind="ownInfo" :locale="locale" />
 
       <!-- Help popup modal -->
       <div v-if="showHelpPopup" class="dsm-help-overlay" @click.self="showHelpPopup = false">

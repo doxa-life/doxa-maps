@@ -57,6 +57,12 @@ const UA = 'Mozilla/5.0 (compatible; doxa-maps-gate/1.0)'
 // figure was also confirmed INDEPENDENTLY against the live endpoint (2107 rows) rather than
 // taken from this gate's own reading.
 //
+// Re-measured 2026-09-30 (FOURTH reading). One more group crossed from Unengaged to Engaged: 2079/28 ->
+// 2078/29, the total still 2107. The same order as before, the baseline LAST: the live endpoint was read
+// independently (this gate: 2107 = 2078 + 29), a grep found no shipping code hardcoding the totals (the only
+// 2078 hits are SVG path coordinates in static poster snapshots), and a reader confirmed the maps DISPLAY
+// the new split (Prayer Progress's engagement legend read Unengaged 2,078 / Engaged 29 on development).
+//
 // ⚠ THIS DRIFTS, AND THAT IS THE POINT. Three readings in two days, moving in both directions.
 // A failure here is normally UPSTREAM DATA MOVING, not a regression — but it must still be seen,
 // because the one thing it would also catch is a legend that stopped computing and started
@@ -64,7 +70,7 @@ const UA = 'Mozilla/5.0 (compatible; doxa-maps-gate/1.0)'
 // numbers on the page are live.
 const EXPECT = {
   total: 2107,
-  engagement: { Unengaged: 2079, Engaged: 28 },
+  engagement: { Unengaged: 2078, Engaged: 29 },
   adoptedPct: 1,
 }
 
@@ -87,8 +93,8 @@ const EXPECT = {
 // and 5 have FOUR each. The "or Resources" clause is not literally true in the data, so that phrase
 // must never be repeated to a mission team as fact.
 //
-// NOT asserted as a gate condition here, deliberately: which figure is OFFICIAL is a Driver decision
-// (DRIVER-DECISIONS-gospel-resources.md, Decision 1), and a gate must not quietly canonise one answer
+// NOT asserted as a gate condition here, deliberately: which figure is OFFICIAL is provisional,
+// pending a product decision, and a gate must not quietly canonise one answer
 // to a question that is still open. Recorded so the next reader inherits the measurement, not the
 // task of re-deriving it.
 

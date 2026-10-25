@@ -6,8 +6,8 @@
  * Vue. Same split as library/composables/host-token-url.js and library/packets/describeGroup.js.
  *
  * ★ WHY SHADOWING IS CORRECT HERE. Vue's CE layer lets a nested custom element inherit its parent
- * element's provides, and app.provide() warns on any key already reachable — 24 of those in the
- * Driver's console (2026-09-28), 8 each for profileModules, appI18n and pinia's symbol. All three must
+ * element's provides, and app.provide() warns on any key already reachable — 24 of those in a live
+ * console (2026-09-28), 8 each for profileModules, appI18n and pinia's symbol. All three must
  * be the child's OWN: profileModules is the plugin's own .vue glob, pinia is per-instance so two embeds
  * never bleed state, and the i18n instance is what ProfileLoader drives from THIS element's
  * profile-config. Inheriting any of them would be the bug. The warning is Vue reporting an intentional

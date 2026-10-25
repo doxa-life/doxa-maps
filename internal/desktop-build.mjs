@@ -15,6 +15,7 @@
  * See documentation/HOWTO-build-the-desktop-app.md for prerequisites and what is still unproven.
  */
 import { spawnSync } from 'node:child_process'
+import os from 'node:os'
 import { existsSync, mkdirSync, rmSync, writeFileSync, readdirSync } from 'node:fs'
 import { join, resolve, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,9 +25,32 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const TAURI_DIR = join(ROOT, 'deployment', 'src-tauri')
 const plugin = process.argv[2]
 const die = (m) => { console.error('desktop:build: ' + m); process.exit(1) }
+// ★ THE BUILD YIELDS THE CPU TO LIVE TRANSCRIPTION. Rudder's speech model runs on the CPU
+// (backend/rudder-engine starts it with --device cpu), and dictation was measured falling
+// behind WHILE THIS BUILD RAN. A Rust build saturates every core, so at equal priority it starves
+// the one process whose latency a person can feel.
+//
+// We nice the COMPETITOR rather than promoting the engine, and that direction is forced, not a
+// preference: on Linux an unprivileged process cannot LOWER its own nice (a negative nice needs
+// CAP_SYS_NICE), so "raise the ASR priority" fails with EPERM — and the engine's existing
+// `_ = syscall.Setpriority(...)` discards that error, which would have reported success and changed
+// nothing. Raising our own nice needs no privilege, so this works as an ordinary user.
+//
+// Verify with `ps -o ni=` on the running cargo/rustc processes, never by this call returning.
+const NICE = process.platform === 'linux' || process.platform === 'darwin'
 const run = (cmd, args, opts = {}) => {
   console.log('→ ' + [cmd, ...args].join(' '))
-  const r = spawnSync(cmd, args, { stdio: 'inherit', cwd: ROOT, ...opts, env: { ...process.env, ...(opts.env || {}) } })
+  // nice(1) execs the command, so every child of the build — cargo, rustc, the linker — inherits it.
+  const [c, a] = NICE ? ['nice', ['-n', '10', cmd, ...args]] : [cmd, args]
+  const r = spawnSync(c, a, { stdio: 'inherit', cwd: ROOT, ...opts, env: { ...process.env, ...(opts.env || {}) } })
+  if (r.error && r.error.code === 'ENOENT' && NICE) {
+    // No nice(1) on this box: build anyway rather than refusing to build, and say so, because a
+    // silent fallback here would look identical to the fix working.
+    console.warn('desktop:build: nice(1) not found — building at normal priority; live dictation may lag')
+    const r2 = spawnSync(cmd, args, { stdio: 'inherit', cwd: ROOT, ...opts, env: { ...process.env, ...(opts.env || {}) } })
+    if (r2.status !== 0) die(`${cmd} failed (exit ${r2.status})`)
+    return
+  }
   if (r.status !== 0) die(`${cmd} failed (exit ${r.status})`)
 }
 
@@ -77,7 +101,13 @@ const override = {
   app: { windows: [{ title: name, width: 760, height: 820, minWidth: 360, minHeight: 480, resizable: true, url: 'index.html' }] },
   bundle: { active: true, targets, ...(externalBin.length ? { externalBin } : {}) },
 }
-run(join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'tauri.cmd' : 'tauri'), ['build', '--config', JSON.stringify(override)])
+// ★ LEAVE ONE CORE FOR THE PERSON SPEAKING. nice alone decides who wins a CONTESTED core; it does
+// not stop cargo taking all of them, and a fully-subscribed machine still adds scheduling latency to
+// the audio path. cores-1 costs a little build time and keeps a core free for transcription. Honours
+// an explicit CARGO_BUILD_JOBS rather than overriding someone who has already chosen.
+const jobs = Math.max(1, (os.cpus()?.length || 2) - 1)
+run(join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'tauri.cmd' : 'tauri'), ['build', '--config', JSON.stringify(override)],
+  { env: process.env.CARGO_BUILD_JOBS ? {} : { CARGO_BUILD_JOBS: String(jobs) } })
 
 const bundleDir = join(process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : join(TAURI_DIR, 'target'), 'release', 'bundle')
 const found = existsSync(bundleDir) ? readdirSync(bundleDir).flatMap((d) => readdirSync(join(bundleDir, d)).map((f) => join(bundleDir, d, f))) : []

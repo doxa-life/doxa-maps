@@ -17,7 +17,7 @@ A plugin that needs one names it in its `<profile>.meta.json` `"backend"` key, a
 `plugin-designs/rudder-voice/rudder-voice.meta.json` does with `"backend": "backend/rudder-engine"`.
 
 A plugin that needs a local backend almost certainly also needs `"targets"` without `web`, which
-keeps it out of the Research Gallery — see `targets.md`. Rudder declares both.
+keeps it out of Deep Research — see `targets.md`. Rudder declares both.
 
 ## The database rule: schema is a commit, never a click
 
@@ -53,7 +53,7 @@ the all-local default.
 ## User tiers — DESIGN INTENT, NOT BUILT
 
 > **Read this heading literally.** What follows is a *planned* model recorded in the project's
-> architecture notes under the heading "Open load-bearing assumptions (DX base; unproven)". **None
+> architecture notes as an open, unproven assumption. **None
 > of it is implemented in this repo.** Do not design your plugin around it, do not write code that
 > assumes a tier exists, and do not tell anyone a plugin "supports" these. It is here so you
 > recognise the vocabulary when it comes up, and so you do not invent a competing scheme.

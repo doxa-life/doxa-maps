@@ -1,9 +1,9 @@
 /**
  * describeGroup.js — one localized sentence pair describing a people group, built ONLY from API fields.
  *
- * DRIVER BRIEF 2026-09-28 §A1.5: the packet's profile rows carry "a short GENERATED description built
- * from the API variables, localized: how lost/unreached they are, where (country), what language they
- * speak". ~20 rows per page, so it has to be short, and it has to be right in eleven languages.
+ * THE BRIEF: the packet's profile rows carry a short GENERATED description built from the API
+ * variables, localized: how lost/unreached they are, where (country), what language they speak.
+ * ~20 rows per page, so it has to be short, and it has to be right in eleven languages.
  *
  * PURE. (group, locale) -> string. No refs, no map, no fetch. The strings object is the third argument
  * so a test can inject one; it defaults to the packet's own catalogue, which is what the renderer

@@ -96,12 +96,27 @@ import { resolveNamedStyle } from '@map/styles/registry.js'
 // object so a `clusters.` grep misses them. Recorded so the next reader greps too.
 import { zonesForList } from './data/zones-for-list.js'
 import { normalizeRecords, extractRecords } from './data/normalize.js'
+import { evaluate as evaluateSelector } from './data/selector-evaluator.js'
+import { makeZoneSheet } from './data/zone-sheet-print.js'
+import { createPeopleGroupRecords, PRINT_FIELDS } from '@map/lists/peopleGroupRecords.js'
 import { useI18n } from 'vue-i18n'
 // The in-place print helper: a hidden same-page iframe, NOT window.open(). A popup
 // is blockable and drops the user out of the map; the iframe opens the print dialog
 // right here. Shared so the packet, the poster and the card deck all print the same way.
 import { usePosterPrints } from '@map/composables/usePosterPrints.js'
-import { buildLegendNodes, leafZones } from './data/legend-tree.js'
+import { buildLegendNodes, leafZones, zonesWithSelectors, DEAF_SELECTOR, REGION_KEY } from './data/legend-tree.js'
+// Legend rows named in the reader's language: tier-A zones by their country (zone-title.js), the Deaf
+// row by its bloc name. Both modules are already in this bundle for the packet's localizedZone().
+import { zoneTitle, countryLabelIndex } from './data/zone-title.js'
+import { countryName } from '@map/utils/countryName.js'
+// Errors a reader sees carry their catalogue key; errorText() shows them in the reader's language.
+// Strings only this map shows live in their own area, upgMap.json, so no other bundle carries them.
+import { keyedError, errorText } from '@map/i18n/keyedError.js'
+// A list of names joined the reader's way ('A, B and C' / 'A、B和C' / 'A و B'), not with a hardcoded ', '.
+// The locale is passed from the i18n ref (packetLang), so the HUD's list re-renders on a language switch.
+import { formatList } from '@map/i18n/index.js'
+// The packet's text table, served and integrity-pinned rather than bundled (library/packet/packetStrings.js).
+import { loadPacketStrings } from '@map/packet/packetStrings.js'
 import { resolveAllZones } from './data/zone-geometry.js'
 // slice 09b-9 §3 (L18/L29 FIX): the per-zone color OVERRIDE map. zone-colors.json
 // holds the region-inherited tapestry (purple ME, red Africa, green
@@ -113,6 +128,10 @@ import { colorForZone } from './data/zone-colors.js'
 // clicked tapestry feature carries shapeName (ADM1) OR iso3 (ADM0) and this maps
 // either to { key, name, count } from admin-counts/membership (NEVER edits them).
 import { resolveTerritory, buildCountryNameMap, formatClipboard, ADM1_COUNTS, ISO3_NAME } from './data/territory-counts.js'
+import { selectionCsv, selectionClipboard, selectionCsvFileName, regroupable, settleWithin, asReaderError, selectionTitleNames, overPhoneCeiling } from './data/selection-export.js'
+import { isPhonePrint } from '@map/composables/printInPlace.js'
+import visionFunnel from '../../data/people-groups/vision-funnel.json'
+import { upgTotal, countInSentence } from './data/upg-total.js'
 // 09b-search-bar §1(a-c): unified search index (PG + zone + territory) + the
 // tokenized contains matcher. Pure data + pure fns; this profile builds the rows
 // from the live records (PG), the legend leafZones (zone), and admin-counts +
@@ -155,7 +174,7 @@ function testHandleKey() {
 // the ENGINES table in a profile is how two copies of one fact drift apart.
 const upgProvider  = resolveMapProvider(profileConfig)
 const isMaplibre   = upgProvider === 'maplibre'
-// The geocoder is deferred to Mapbox by decision (Driver 2026-09-24): GeocoderComponent's maplibre
+// The geocoder is deferred to Mapbox by decision (2026-09-24): GeocoderComponent's maplibre
 // path still calls makeMapboxForwardGeocode(accessToken), so the SEARCH REQUEST goes to Mapbox
 // whichever engine draws the tiles — a keyless map with a search bar is not keyless.
 const hasGeocoder  = computed(() => {
@@ -187,7 +206,9 @@ const GEOCODER_SOURCE = 'upg-search'
 const uiStore = inject('uiStore', null)
 
 const mapEl       = ref(null)
-const status      = ref('loading…')
+// Set to the translated "Loading data…" as soon as t() exists (below useI18n) — before first render,
+// so no reader ever sees an English placeholder while the map engine downloads.
+const status      = ref('')
 // P3-1: the MAP CELL's own error. Distinct from `status` (the small bottom-right
 // telemetry badge): this is the user-facing "the map is unavailable" notice drawn
 // INSIDE the map cell, so a tile/token/WebGL failure degrades to a missing map
@@ -221,7 +242,7 @@ const selCount = computed(() => selectedTerritories.value.length)
 const copyFlash = ref('')                    // transient "Copied!" / "Copy failed" label
 let countryNameMap = null                    // iso3→label, built from live records
 
-// ── R1.2 PIVOT (design note 2026-06-11): MOBILE-FRIENDLY "Batch Select" mode ──────
+// ── R1.2 PIVOT (2026-06-11): MOBILE-FRIENDLY "Batch Select" mode ──────
 // The selection INPUT GESTURE is a visible toggle button + plain taps — NO
 // shift/ctrl/meta (touch devices have no modifier keys; D-8 removes them). When
 // batchMode is ON a plain tap on a map `tapestry-fill` feature OR a legend row
@@ -229,8 +250,8 @@ let countryNameMap = null                    // iso3→label, built from live re
 // plain tap is the existing single-zone isolate (a‴, unchanged). Leaving batch
 // mode KEEPS the selection STATE so Copy/color still work (D-7); Clear empties it.
 //
-// R1.4 (L4 fix — Brief: "should just be a single button and only should show ui
-// to batch select if you select the button"): the map-rail .upg-rail-batch is the
+// R1.4 (L4 fix — batch selection is ONE button, and its UI shows only once that
+// button is selected): the map-rail .upg-rail-batch is the
 // ONLY entry point (the always-visible HUD .upg-batch-btn is GONE), and ALL batch
 // chrome — HUD, legend row markers, the amber map highlight — renders ONLY while
 // batchMode is ON (progressive disclosure). The kept selection is invisible out
@@ -241,6 +262,8 @@ function setBatchMode(on) {
   if (next === batchMode.value) return next    // idempotent: repeat sets don't churn
   batchMode.value = next
   if (map) map.getCanvas().style.cursor = ''   // reset hover cursor on mode flip
+  // Warm the people-group records so Copy / Export CSV run from cache inside the tap (see selectionRecordsLoad).
+  if (next) selectionRecordsLoad().catch(() => {})
   // R1.4: show/hide ALL batch chrome (map highlight + legend markers) in the SAME
   // pass as the mode flip — no frame where the mode and its chrome disagree.
   refreshSelectionPaint()
@@ -264,6 +287,7 @@ function toggleTerritory(t) {
   const idx = list.findIndex((x) => x.key === t.key)
   if (idx >= 0) selectedTerritories.value = list.filter((_, i) => i !== idx) // toggle OFF
   else selectedTerritories.value = [...list, t]                              // toggle ON
+  if (idx < 0 && t.kind === 'adm1') indiaStates().catch(() => {})             // warm India's table for Copy / CSV
   refreshSelectionPaint()
   copyFlash.value = ''
 }
@@ -335,7 +359,7 @@ const geocoderRef = ref(null)                // <GeocoderComponent> exposed ref
 // catalog entry, so the labels below are what render. If these tabs are ever translated, add
 // `upg100Region`/`upg100Zone`/`upg100Group` to tabs.json rather than reusing a generic key.
 // ★ "Zone" RENAMED, ORDER DELIBERATELY UNCHANGED (2026-09-23).
-// Driver: "the user does not know what zones means" — the thing the map paints IS
+// A reader does not know what "zones" means — the thing the map paints IS
 // a UPG-100 list (27 of them); "zone" was our internal word leaking into the UI.
 // So the LABEL now names what it shows. Region stays as what it actually is: a way
 // to SORT those lists by world area when you want that.
@@ -349,7 +373,7 @@ const geocoderRef = ref(null)                // <GeocoderComponent> exposed ref
 // `:default-tab="1"` at the call site — the prop country-posters added for exactly
 // this ("it opens to the country's semantic level in the legend").
 //
-// The catalog entries this note used to ask for now EXIST (studio L56): tabs.upg100Region /
+// The catalog entries this note used to ask for now EXIST: tabs.upg100Region /
 // tabs.upg100Zone and legend.tabInfo.upg100Region / legend.tabInfo.upg100Zone, in all 11 locales
 // with exactly the text that used to be inline here. So the labels are bound, not hardcoded.
 //
@@ -369,7 +393,7 @@ const LEGEND_TABS = computed(() => [
   // MEASURED 2026-09-25 by expanding every caret on the Region tab — 37 rows, 9 at indent 0 and
   // 28 at indent 1, deepest level 1. There is no level 2, so tab index 2 resolved to an empty set
   // and the panel rendered its "No data at this level" empty state with the tab ACTIVE.
-  // The Driver said "it doesn't need to have a People Group tab inside the legend"; the reason is
+  // The legend does not need a People Group tab; the reason is
   // that clicking it showed nothing at all.
   // ⚠ IF PEOPLE-GROUP ROWS ARE EVER WANTED BACK, a third tab is not the mechanism — the tree would
   // need a third level (list -> group). Re-adding the tab without deepening the data reproduces
@@ -400,21 +424,67 @@ const API_BASE = (typeof window !== 'undefined' && window.MAP_APP_API_URL)
 // so the dialog opens in this tab rather than a popup a browser may block. The
 // packet's locale follows the app's, so a reader gets it in their own language.
 const { locale: packetLocale, t } = useI18n()
+// The first status a reader sees. Set in a watcher, not once at setup, so a language switch while the
+// map is still loading re-resolves it; the first real status replaces it and the watcher then leaves it.
+let loadingText = ''
+// Watched through packetLang(), not packetLocale itself: the host may install i18n with a plain-string
+// locale (see packetLang), and watch() on a non-ref is an invalid source that never fires.
+watch(() => packetLang(), () => {
+  if (status.value === '' || status.value === loadingText) status.value = loadingText = t('legend.loadingData')
+}, { immediate: true })
+
+// ★ THE LEGEND SPEAKS THE READER'S LANGUAGE. Its rows were clusters.json's English labels and its
+// section rows the English grouping keys, while the packet printed from the same row was localized
+// (localizedZone): السودان on paper, 'Sudan' on screen. Region sections go through REGION_KEY (the
+// table the wall uses too); tier-A zones through zoneTitle, preferring the records' own localized
+// country_code_label once they are loaded; the Deaf row through its bloc name. A zone the generator
+// declines (tier B/C) keeps its hand-written label, as on every other surface.
+// A function, not a const: DEAF_COUNT and packetLang are declared further down and are read per call.
+function legendOpts(records) {
+  const strings = { zone_affinity_A017: t('poster.zone_deaf') }
+  const byCode = records ? countryLabelIndex(records) : undefined
+  return {
+    deafCount: DEAF_COUNT,
+    ...(records ? { records } : {}),
+    title: (zone) => zoneTitle(zone, strings, { byCode, countryName, locale: packetLang() }),
+    regionTitle: (english) => (REGION_KEY[english] ? t(`poster.${REGION_KEY[english]}`) : english),
+  }
+}
+// ★ AND RE-BUILT WHEN THE LANGUAGE CHANGES. The tree above is built once and STORED, so a runtime switch
+// (ProfileLoader drives the i18n locale mid-session) left every region and zone name in the boot language
+// while the chrome around it changed — a frozen label that check:frozen-labels cannot see, because t()
+// runs inside a function. One builder for all three build sites remembers the last records, and a watch
+// on the locale rebuilds the tree, relabels the flat zone list IN PLACE (colours and selectors stay), and
+// refreshes the search feed built from those labels.
+let legendRecords = null
+function buildLegend(records) {
+  if (records !== undefined) legendRecords = records
+  return buildLegendNodes(listZones(), legendOpts(legendRecords))
+}
+watch(() => packetLang(), () => {
+  if (!legendNodes.value.length) return
+  legendNodes.value = buildLegend()
+  const fresh = new Map(leafZones(legendNodes.value).map((l) => [l.id, l.label]))
+  for (const z of leafZoneList) if (fresh.has(z.id)) z.label = fresh.get(z.id)
+  if (searchRecords) buildSearch(searchRecords)
+})
 // ⚠ IT WAS A HARDCODED ENGLISH LITERAL, and SemanticTreeLegend passes `title` through RAW —
 // the caller owns localizing it. MEASURED 2026-09-25 on the live Chinese render: the legend
 // header read "My UPG 100 List — Legend" in full English inside an otherwise localized panel,
 // beside translated tabs (区域 · UPG-100 名单) and a translated column header (人口).
-// The Driver's gift policy is explicit — "BEAUTIFUL: no clipped text, no placeholders, no English
-// leaking" — and an English title on the mobile showcase is exactly that.
+// The gift policy is explicit — beautiful: no clipped text, no placeholders, no English
+// leaking — and an English title on the mobile showcase is exactly that.
 // ★ THE HOUSE STYLE FOR A PROPER NOUN INSIDE A TRANSLATED PHRASE ALREADY EXISTS in this catalog:
 // "Doxa Regions" renders as "Doxa 区域" / "مناطق Doxa" / "Регионы Doxa" — the identifier stays
 // Latin, the frame translates. "UPG 100" is treated the same way rather than transliterated, so
 // this follows a convention demonstrated across 11 locales instead of inventing terminology.
 // COMPUTED, not a constant: a locale change must move it. A `const` captured at setup would keep
 // the mounting language forever, which is the subtler half of the same bug.
-const LEGEND_TITLE = computed(() => t('legend.title.upg100List'))
+// The plugin's display name, "UPG 100 List Posters" (2026-09-30). upgMap ships only in this bundle, so the rename
+// rebuilds one bundle; the old shared legend.title.upg100List stays for a batched shared-area cleanup.
+const LEGEND_TITLE = computed(() => t('upgMap.displayName'))
 const BATCH_SELECT_TITLE = computed(() => t('legend.title.batchSelect'))
-// ★ THE SEARCH PLACEHOLDER WAS THE LAST ENGLISH STRING ON THE ARABIC SCREEN. repo's ?lang=ar
+// ★ THE SEARCH PLACEHOLDER WAS THE LAST ENGLISH STRING ON THE ARABIC SCREEN. The ?lang=ar
 // screenshot was clean except for this one hardcoded literal.
 // ⚠ A computed, and declared HERE rather than beside geocoderContext, because t() is not
 // initialised until line 359 — a const at 339 would capture the fallback and never re-evaluate
@@ -434,11 +504,18 @@ import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 // non-useMapInstance profiles like this one can use it).
 import { useEdgeScrollAffordance } from '@map/composables/useEdgeScrollAffordance.js'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
+import { loadIndiaStates } from '@map/data/indiaStates.js'
 // Reads a GeoJSON source's features WITHOUT touching the engine-private _data, whose shape differs
 // between MapLibre and Mapbox (see openPgDetail).
 import { readSourceFeatures } from '@map/maps/pin-selection.js'
 useShadowStyles(
-  '.upg-root{position:absolute;inset:0;background:#0a1410;color:#e5e7eb;' +
+  // ★ isolation:isolate CONFINES THE MAP AREA'S LAYERS (2026-09-30), the containing layer Simple Research's and the
+  // country map's .rm-root already have. Without it the legend sheet's z-index 1000 competed directly with the
+  // gallery's round ☰ (z 15) in the shell's stacking context and painted over it on the Map view. Isolated,
+  // the whole map area stacks as one layer and the ☰ sits above it, sheet included, as on those maps. It is on
+  // the MAP root only: the poster wall's modal scrim lives in the other pane, outside this layer, and keeps
+  // covering the ☰ (raising the ☰ instead would have put it over that modal).
+  '.upg-root{position:absolute;inset:0;background:#0a1410;color:#e5e7eb;isolation:isolate;' +
   "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}" +
   '.upg-map{position:absolute;inset:0}' +
   // P3-1 graceful degrade: the map-cell error notice. Centred in the map cell and
@@ -462,8 +539,8 @@ useShadowStyles(
   // matches research-map's .rm-legend-*-slot (767px) so the whole map stack
   // flips at the same width instead of drifting per profile.
   // ★ The search bar above the legend was REMOVED from this profile, so the legend rises into the
-  // vacated space (Driver 2026-09-23: "the search bar is removed... the legend needs to be moved
-  // up so that there's not a gap where the search bar used to be"). --stl-top is the shared
+  // vacated space (2026-09-23: with the search bar removed, the legend moves
+  // up so that no gap is left where the search bar used to be). --stl-top is the shared
   // SemanticTreeLegend's offset-from-map-top; 8px matches its own left inset. Other profiles keep
   // the 60px default because they still have their search bar.
   '.upg-legend-desktop-slot{--stl-top:8px}' +
@@ -474,9 +551,31 @@ useShadowStyles(
     // The bottom-sheet owns the people-group card on mobile — see the
     // .upg-detail-desktop-slot comment in the template.
     '.upg-detail-desktop-slot{display:none}}' +
-  '.upg-status{position:absolute;bottom:10px;right:10px;z-index:5;' +
-  'font:10px/1 ui-monospace,monospace;color:#9aa7b8;background:rgba(10,14,21,.82);' +
+  // ★ THE MAP CREDITS ARE A LICENCE TERM, AND THIS BADGE SAT ON THEM. bottom:10px + right:10px is the
+  // corner both engines put their attribution in, and at z-index 5 the badge won every hit point of
+  // '© OpenStreetMap' on both engines in en and ar; in Arabic the list panel mirrors onto that corner
+  // too, so it also covered the panel's pin note (measured on 29634ed07, card
+  // FIX-UPG100-STATUS-BADGE-COVERS-THE-MAP-ATTRIBUTION).
+  // --upg-credit-floor is the top of the credit band: 30px, the tallest single-line credit (the Mapbox
+  // wordmark, 23px + its 6px margin; the attribution line and the compact "i" are shorter), plus the
+  // lift LegendMobile already gives the engine corners on a phone (the collapsed sheet, or the
+  // gallery's menu button), read from the same two variables so whatever stacks on it moves with them.
+  // The badge sits above that floor at the INLINE END: the right in English, the left in Arabic, where
+  // the panel is not. z-index 1 keeps it under the engine corners (z 2-3), so a credit that grows (the
+  // compact "i" expanded on a narrow map) paints over the badge, never under it; and it takes no clicks.
+  '.upg-root{--upg-credit-floor:calc(max(min(var(--legend-sheet-h,0px),48px),var(--map-fab-clearance,0px)) + 30px)}' +
+  // ★ ON A PHONE THE CREDIT IS NOT DOWN HERE (2026-09-30). LegendMobile moves both engines' bottom corners
+  // to the TOP of the map below 768px (its own query, repeated here), so the band leaves the floor and
+  // what stacks on it (the batch HUD; the badge is hidden on a phone) sits over the sheet and the round
+  // menu button alone, 30px lower than before.
+  '@media(max-width:767.98px){.upg-root{--upg-credit-floor:max(min(var(--legend-sheet-h,0px),48px),var(--map-fab-clearance,0px))}}' +
+  '.upg-status{position:absolute;bottom:calc(var(--upg-credit-floor) + 6px);inset-inline-end:10px;z-index:1;' +
+  'pointer-events:none;font:10px/1 ui-monospace,monospace;color:#9aa7b8;background:rgba(10,14,21,.82);' +
   'padding:6px 10px;border-radius:8px}' +
+  // On a phone the collapsed legend sheet owns the bottom edge, and the badge always sat UNDER it (at 390,
+  // 0 of its 15 points visible, both engines, en and ar), so it was never seen there. That stays true, now
+  // on purpose instead of by accident: lifting it above the sheet would put new chrome on the phone map.
+  '@media(max-width:767px){.upg-status{display:none}}' +
   // slice 13 §1c: detail-panel wrapper. The SemanticTreeLegend lives top-LEFT
   // (.stl-panel left:8px) in THIS profile and the MapToolbar floats top-RIGHT;
   // so the detail panel slides in from the RIGHT edge, starting below the
@@ -494,10 +593,23 @@ useShadowStyles(
   '@media(max-width:480px){.upg-detail-panel{top:auto;left:8px;right:8px;' +
   'width:auto;height:55vh}}' +
   // ── 09b shift-select tool: the land-division HUD (sits ABOVE the status badge,
-  // bottom-right). Shows "N territories · TOTAL UUPG" live + a Copy/Clear bar that
+  // at the same inline end, so it follows the badge off the credit band: the badge's
+  // top is the floor + 6 + its 22px, and 2px more is the gap this HUD always kept).
+  // Shows "N territories · TOTAL UUPG" live + a Copy/Clear bar that
   // only appears when something is selected. (No backticks anywhere in this string
   // — a stray one closes the JS template literal and blanks the whole stylesheet.)
-  '.upg-hud{position:absolute;bottom:34px;right:10px;z-index:6;min-width:150px;' +
+  // The shown-zone chip: centred above the same floor the HUD uses (the two never show together: batch
+  // mode feeds the selection union, not the isolate). A pill-sized button, 40px tall, so the × is a
+  // finger's target on a phone; the name ellipsises rather than pushing the chip wider than the map.
+  '.upg-shown{position:absolute;bottom:calc(var(--upg-credit-floor) + 12px);left:50%;transform:translateX(-50%);z-index:6;' +
+  'display:inline-flex;align-items:center;gap:10px;max-width:calc(100% - 120px);min-height:40px;box-sizing:border-box;' +
+  'padding:0 6px 0 16px;border:1px solid rgba(110,231,183,.45);border-radius:999px;background:rgba(10,20,16,.92);' +
+  'color:#e5e7eb;font:600 13px/1.2 system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}' +
+  '.upg-shown-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+  '.upg-shown-x{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;height:28px;' +
+  'border-radius:50%;background:rgba(255,255,255,.16);font-size:18px;line-height:1}' +
+  '.upg-shown:focus-visible{outline:2px solid #6ee7b7;outline-offset:2px}' +
+  '.upg-hud{position:absolute;bottom:calc(var(--upg-credit-floor) + 30px);inset-inline-end:10px;z-index:6;min-width:150px;' +
   'font:11px/1.35 ui-monospace,monospace;color:#e5e7eb;' +
   'background:rgba(10,20,16,.92);border:1px solid rgba(110,231,183,.35);' +
   'border-radius:10px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.4)}' +
@@ -520,7 +632,7 @@ useShadowStyles(
   // only renders while batch mode is ON (progressive disclosure).
   '.upg-hud-btn.clear{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.4);' +
   'color:#cbd5e1}' +
-  '.upg-hud-flash{margin-top:5px;font-size:9px;color:#6ee7b7;min-height:11px}' +
+  '.upg-hud-flash{margin:4px 0 2px;font-size:11px;line-height:1.3;color:#6ee7b7;min-height:14px}' +
   '.upg-hud-hint{margin-top:4px;font-size:9px;color:#64748b}' +
   // R1.1 (g): the color-picker row — 8 preset swatches + a custom hex input.
   // (Still no backticks anywhere in this string — the burned-3x rule.)
@@ -536,7 +648,7 @@ useShadowStyles(
   'font:12px/1 ui-monospace,monospace;padding:0 8px;border-radius:8px}' +
   // R1.2 mobile sizing: at ≤480px the HUD spans the bottom edge (above the status
   // badge) so the Batch button + swatches + Copy never overlap the legend/toolbar.
-  '@media(max-width:480px){.upg-hud{left:8px;right:8px;min-width:0;bottom:30px;' +
+  '@media(max-width:480px){.upg-hud{left:8px;right:8px;min-width:0;bottom:calc(var(--upg-credit-floor) + 30px);' +
   'max-height:48vh;overflow:auto}}' +
   // ── Batch Select toggle — the ONLY local rule left is the emerald ON state ───
   // ARCHIVED 2026-07-30: this profile used to hand-roll the whole button skin
@@ -558,7 +670,7 @@ useShadowStyles(
   '.map-toolbar .mcb.upg-batch-on.dark{border-color:#34d399!important}' +
   // ── R1.3 (j): legend MULTI-SELECT marker (batch mode). The SHARED legend only
   // paints ONE .selected row (its internal single selectedId). In batch mode the
-  // design note selects 2+ rows, so the profile marks EVERY legend row that maps to a
+  // the reader selects 2+ rows, so the profile marks EVERY legend row that maps to a
   // selected zone with .upg-batch-row (applied profile-side by markLegendBatchRows
   // — we never edit the shared component). Emerald left-rail + tint so multiple
   // rows clearly read as selected at once; the dot gets an emerald ring.
@@ -588,12 +700,12 @@ useShadowStyles(
   'max-width:380px!important;z-index:1200!important}' +
   '.mapboxgl-ctrl-top-left .mapboxgl-ctrl{margin:0!important;float:none!important}' +
   // Push the legend panel BELOW the geocoder pill (legend is top-left here too) —
-  // ★ BUT ONLY IF THE PILL ACTUALLY RENDERED (Driver 2026-09-23, reported repeatedly: "the search
-  // bar is removed, so the legend needs to move up — there's a gap where the search bar used to
-  // be"). MEASURED in both hosts with a real token: the standalone leaf mounts the geocoder
+  // ★ BUT ONLY IF THE PILL ACTUALLY RENDERED (2026-09-23, reported repeatedly: with the search
+  // bar removed, the legend must move up — no gap where the search bar used to
+  // be). MEASURED in both hosts with a real token: the standalone leaf mounts the geocoder
   // (top 12, h 35) and the legend belongs at 58; the cap-5 shell mounts NO geocoder at all, and
   // an unconditional 58px stranded the legend below a pill that was not there — the dead gap the
-  // Driver kept reporting. One host cannot be fixed by breaking the other, so the offset is
+  // reports kept naming. One host cannot be fixed by breaking the other, so the offset is
   // conditional on the pill EXISTING: default raised to 8px (matching .stl-panel's own left
   // inset), pushed down only when a rendered geocoder is actually in the tree.
   // ★ SET --stl-top, DO NOT SET top DIRECTLY. The library caps the panel at
@@ -603,18 +715,30 @@ useShadowStyles(
   // MEASURED 2026-09-24, upg-100-list hosted in a 420px-tall frame at 390px wide: top resolved to
   // 58px while max-height resolved to calc(100% - 20px), so the panel ran to 458px in a 420px map
   // and HUNG 38px PAST THE BOTTOM OF THE MAP — exactly 58 - 20. Same 38px at a 560px frame, because
-  // the error is the offset mismatch, not the map's size. Driver 2026-09-24: "the upg 100 list
-  // legend on the map is overflowing beyond the height of the map".
+  // the error is the offset mismatch, not the map's size. Reported 2026-09-24: the UPG-100 list
+  // legend on the map overflowed beyond the height of the map.
   // ⚠ WHY THIS IS INVISIBLE ON EVERY PUBLISHED LEAF: a standalone leaf gives the map the FULL
   // viewport, and a panel that overflows a full-height map is still inside the screen. It only
   // shows when a host makes the map SHORTER than the viewport, which is how the element is really
   // embedded. Verify in a constrained host, never on the bare leaf.
   '.stl-panel{--stl-top:8px!important}' +
   '.upg-root:has(.mapboxgl-ctrl-geocoder) .stl-panel{--stl-top:58px!important}' +
+  // ★ …AND IT ENDS ABOVE THE CREDIT BAND WHERE A CREDIT SHARES ITS CORNER. The panel sits at the inline
+  // START, 12px off the map's bottom. In Arabic that is the bottom-RIGHT, the corner both engines keep
+  // their attribution in (they do not mirror it), so the panel lay over the top of the credit line; on
+  // Mapbox in English it is the bottom-LEFT, over the Mapbox wordmark (5 of 15 hit points visible,
+  // measured on 29634ed07). Those two cases give up the credit band (the same 30px as
+  // --upg-credit-floor); MapLibre in English has no credit in that corner, so its panel is unchanged.
+  // Same max-height formula as SemanticTreeLegend's own cap, one term longer, so --stl-top still drives both.
+  // ⚠ DESKTOP SLOT ONLY. The phone's bottom sheet renders a .stl-panel too, and '100%' there is the 48px
+  // collapsed sheet: 48 - 8 - 12 - 30 is negative, the panel collapsed to nothing and the sheet lost its
+  // "My UPG 100 List" title on Mapbox (measured at 390 on the first build of this fix, then scoped here).
+  '[dir="rtl"] .upg-legend-desktop-slot .stl-panel,.upg-root:has(.mapboxgl-ctrl-logo) .upg-legend-desktop-slot .stl-panel{' +
+    'max-height:calc(100% - var(--stl-top,60px) - 12px - 30px)!important}' +
 
   // ── RTL: WHAT THE LIBRARY DOES NOT DO ──────────────────────────────────────
   // ⚠ THE TWO POSITION RULES THAT USED TO LIVE HERE ARE GONE, deleted deliberately rather than left as a
-  // belt-and-braces duplicate. studio's c79aae95 converts BOTH physical insets in SemanticTreeLegend to
+  // belt-and-braces duplicate. c79aae95 converts BOTH physical insets in SemanticTreeLegend to
   // logical ones — :619 .stl-panel and :925 .stl-reopen are now `inset-inline-start: 8px` — so the panel
   // and its reopen button mirror for EVERY profile, not just this one. Two mechanisms doing one job is
   // worse than either: the next reader cannot tell which is load-bearing, and deleting the wrong one
@@ -626,13 +750,13 @@ useShadowStyles(
   //     panel's POSITION; these set its CONTENT direction, which is a different property. repo reported
   //     BOTH symptoms — "the panel is on the left" AND "the rows stay LTR" — so dropping these would fix
   //     the first and silently restore the second.
-  //     ⚠ AND THIS PAIR MAY YET BECOME REDUNDANT: studio's argument is that dir on .profile-loader
+  //     ⚠ AND THIS PAIR MAY YET BECOME REDUNDANT: the argument is that dir on .profile-loader
   //     (ProfileLoader.vue:282) inherits into the legend, since `direction` is an inherited property that
-  //     crosses the shadow boundary. That is plausible and they declined to add a library rule without a
-  //     measurement — correctly. rega will read the rows on Simple Research and Prayer Progress, which
-  //     have NO override, after landing 5. If they read RTL there, DELETE the two rules below too.
+  //     crosses the shadow boundary. That is plausible, and a library rule was declined without a
+  //     measurement — correctly. The rows on Simple Research and Prayer Progress, which
+  //     have NO override, get read after landing 5. If they read RTL there, DELETE the two rules below too.
   // ── the original finding, kept because it explains the shape ────────────────
-  // Driver-reported via repo, 2026-09-26, from the README's Arabic picture: under ?lang=ar the legend
+  // Reported via repo, 2026-09-26, from the README's Arabic picture: under ?lang=ar the legend
   // panel stayed on the LEFT and the map controls sat on top of its top-left corner.
   //
   // ★ THE CAUSE IS ONE COMPONENT BEING RTL-AWARE AND ITS NEIGHBOUR NOT. MapToolbar.vue:42 already uses
@@ -641,11 +765,11 @@ useShadowStyles(
   // dir entirely. So the toolbar moves left, the panel never leaves, and they land on top of each other.
   // The overlap is not a z-index or spacing bug; it is two coordinate systems disagreeing.
   //
-  // ⚠ THIS IS A WORKAROUND FOR A LIBRARY DEFECT AND I AM SAYING SO RATHER THAN QUIETLY PAPERING IT.
+  // ⚠ THIS IS A WORKAROUND FOR A LIBRARY DEFECT, SAID PLAINLY RATHER THAN QUIETLY PAPERED OVER.
   // The real fix is one character class in SemanticTreeLegend — `left:8px` -> `inset-inline-start:8px` —
   // which would mirror for EVERY profile automatically. That file is library/, so under rule 5B it is
-  // studio's; reported. Until then every other profile with an RTL locale has this same collision, and
-  // this override fixes only mine.
+  // the library's to change; reported. Until then every other profile with an RTL locale has this same
+  // collision, and this override fixes only this one.
   //
   // Scoped to [dir=rtl] so the LTR layout is untouched: ProfileLoader.vue:282 binds dir on the
   // .profile-loader wrapper from RTL_LOCALES, so this activates exactly when the document says so.
@@ -660,7 +784,7 @@ useShadowStyles(
   // REDUNDANT. It matched real elements (.stl-panel appears 69 times in SemanticTreeLegend) but the
   // library gets there on its own: it uses the :dir(rtl) PSEUDO-CLASS (:645-646), which reads the
   // INHERITED direction rather than needing a declaration, and CSS `direction` inherits across the
-  // shadow boundary. rega measured the consequence at main 4ca2dcf9 (row 56b): Simple Research and
+  // shadow boundary. Measured at main 4ca2dcf9 (row 56b): Simple Research and
   // Prayer Progress, which carry NO override at all, compute direction rtl on their legend rows under
   // ?lang=ar. A rule whose effect is indistinguishable from its absence on two other profiles is not
   // load-bearing here either.
@@ -669,22 +793,21 @@ useShadowStyles(
   // ⚠ DEAD CSS, and it always was. The library's count and population cells are `.stl-num` (:1314-1315).
   // `.stl-count` and `.stl-pop` DO NOT EXIST — `git grep` finds those two class names nowhere in
   // library/ or any other plugin, only inside this override. So this rule matched zero elements from the
-  // day it was written, and the digit order rega verified ("694", "1,413" keeping their order under ar)
-  // was always the library's doing, never mine.
+  // day it was written, and the verified digit order ("694", "1,413" keeping their order under ar)
+  // was always the library's doing, never this file's.
   // ★ THE LESSON IS ABOUT THE EVIDENCE, NOT THE CSS: this rule was written to fix a real bidi problem,
   // was believed to have fixed it, and was cited as the reason the numbers read correctly — while
   // matching nothing. A style rule fails SILENTLY when its selector is wrong; it does not warn, and the
   // page looks right if something else is already handling it. The only way to know a rule works is to
   // check that its selector exists, which is a different act from looking at the rendered page.
-  // (dx-shepherd UPGDEL authorised deleting both as provisional; recording here that one of the two was
+  // (Both were deleted as provisional; recorded here that one of the two was
   // never provisional but inert, so nobody re-adds it believing it once worked.)
   // ⚠ AND THE REOPEN BUTTON, which I missed on my first pass and repo caught. SemanticTreeLegend has
   // TWO physical `left:8px` rules, not one: :619 for the panel and :921 for .stl-reopen, the button that
   // brings the panel back after it is collapsed. Mirroring only the panel would leave the button on the
   // opposite side from the thing it opens — a worse state than the original bug, because it looks
   // deliberate.
-  // The lesson is mine: I told studio to sweep for other physical insets and did not run the sweep
-  // myself before reporting. `grep -nE '(^|[^-])(left|right):' library/components/legends/*.vue`.
+  // The lesson: a sweep for other physical insets was requested but not run before reporting. `grep -nE '(^|[^-])(left|right):' library/components/legends/*.vue`.
   // Geocoder suggestion metadata layout (clone — bold field labels for PG rows).
   '.dg-main{font:13px/1.3 ui-monospace,monospace}' +
   '.dg-meta{margin-top:2px;font-size:11px;color:#475569;display:flex;flex-wrap:wrap;gap:8px}' +
@@ -723,11 +846,10 @@ function ensureLayers() {
   // `if (map.getSource('tapestry')) return`, which returns and adds NOTHING whenever the source
   // survives while the layers are gone. That state is real: a style reload wipes LAYERS, and a source
   // can be present without them.
-  //   ⚠ THIS IS NOT THE CAUSE OF THE BLANK ENGLISH README SHOT, and I want that on record because I
-  // diagnosed it as such and was wrong. rega settled that one with the measurement I did not have:
-  // the leaf paints 9.5-16.5 s after load and the screenshot tool waited 7 s. A timeout, not a defect.
-  // I had built a confident chain — source-survives-layers, half-built style, en/ar divergence — that
-  // explained the symptom without being true of it.
+  //   ⚠ THIS IS NOT THE CAUSE OF THE BLANK ENGLISH README SHOT, though it was first diagnosed as one.
+  // A measurement settled it: the leaf paints 9.5-16.5 s after load and the screenshot tool waited 7 s.
+  // A timeout, not a defect. The earlier chain — source-survives-layers, half-built style, en/ar
+  // divergence — explained the symptom without being true of it.
   //   THE GUARD BUG IS STILL REAL, on its own merits and on a different path: setStyle() (the
   // light/dark toggle) wipes LAYERS, and a source can outlive them, so the old guard returns having
   // added nothing. That is why paintAll is re-armed on 'style.load' at :1625 — the re-add is a real
@@ -914,7 +1036,9 @@ function clearSelection() {
 // useGeoSearch consumes; zone rows from the legend leafZones; territory rows
 // from admin-counts (ADM1) + ISO3 names (ADM0 countries). countryNameMap (built
 // from the live records) gives the exact country label the legend shows.
+let searchRecords = null                      // the records the feed was last built from (see the locale watch)
 function buildSearch(records) {
+  searchRecords = records
   // (i) Feed the SHARED GeocoderComponent: unify PG + zone + territory into ONE
   //     record list and cache it under our source so useGeoSearch (inside the
   //     component) indexes it. Zones/territories ride as synthetic records with a
@@ -1277,14 +1401,15 @@ provide('onSemanticTreeSelect', onLegendSelect)
 // prop because <LegendMobile> renders several levels down inside the shell, which is also
 // why onSemanticTreeSelect above is provided. Without this the mobile sheet rendered its
 // SemanticTreeLegend with exportEnabled defaulting to FALSE, so a phone reader could browse
-// the lists and had no way to print a packet or a poster — the half of this profile the
-// Driver called "the only way that map would be usable".
+// the lists and had no way to print a packet or a poster — the half of this profile without
+// which the map is not usable.
 provide('onLegendExport', onLegendExport)
+provide('legendExportCards', true)   // the card deck prints for the selected list
 
 // ── LEGEND EXPORT (top-right of the legend titlebar) ────────────────────────
 // The shared legend emits 'export' with 'poster' | 'packet' for the currently
-// SELECTED node — the Driver's ask: "I select one and it gives me print options at
-// the top right of the legend... that's the only way that map would be usable."
+// SELECTED node — the requirement: select one and its print options appear at
+// the top right of the legend; without that the map is not usable.
 //
 // Poster serves the SAME pre-rendered artefact the poster wall downloads — one
 // file, so the legend, the wall and the preview can never show three different
@@ -1294,14 +1419,14 @@ provide('onLegendExport', onLegendExport)
 // One packet is ~3.5 MB (photos dominate); 28 zones would add ~100 MB to a repo
 // that ALREADY had a publish blocked at a 74 MB asset tree. Generating on click
 // costs zero repository bytes, and the photos come from URLs the records already
-// carry. This is the Driver's instruction: "instead of fetching the poster from
-// the public folder I want the client side code to generate the poster real time
-// when you click on the button so it does not take a lot of mb storage."
+// carry. The requirement: instead of fetching the poster from
+// the public folder, the client generates the poster in real time
+// at the click, so it does not cost megabytes of storage.
 //
 // The pages themselves come from library/packet/packet-render.js — the SAME module
 // the build-time generator uses, so the printed packet and the generated one cannot
 // drift. The card asked for exactly that: reuse, do not grow a fourth print path.
-// ★ PRINT STRAIGHT FROM THE MAP — the Driver's "that's the only way that map would be usable".
+// ★ PRINT STRAIGHT FROM THE MAP — without it the map is not usable.
 // Select a UPG-100 list in the legend and its print options appear at the legend's top right.
 //
 // ⚠ THE POSTER PATH USED TO HAND-ROLL AN <a download> OF THE .webp, which was wrong twice:
@@ -1330,13 +1455,21 @@ async function onLegendExport(kind) {
   // renders over one print frame.
   if (batchBusy.value) return;
   batchBusy.value = true;
-  busyAction.value = base === 'packet' ? 'packet' : 'poster';
+  busyAction.value = base === 'packet' ? 'packet' : base === 'cards' ? 'cards' : 'poster';
   try {
     if (base === 'packet') { await printPrayerPacket(zoneId, variant || 'full'); return; }
     // The legend selects by KEY, while the print actions label by item — hand over the zone
     // object so the print dialog's title says the list's name rather than its slug.
     // Same resolution printPrayerPacket uses, so both print actions name the list identically.
-    const zone = allLists().find((z) => z.id === zoneId) || { id: zoneId };
+    const zone = printableZones().find((z) => z.id === zoneId) || { id: zoneId };
+    // The card deck for the selected list: the same deck the poster wall prints, one card per group.
+    // Only a PRINTABLE zone has a deck: a parent row (Asia, a region) carries no selector of its own, so
+    // it returns quietly — the same call printPrayerPacket makes — rather than surfacing an evaluator error.
+    if (base === 'cards') {
+      const printable = printableZones().find((z) => z.id === zoneId);
+      if (printable) await packetPrints.printCardDeck(await localizedZone(printable));
+      return;
+    }
     await packetPrints.printPoster(zone);
   } finally {
     // Cleared on EVERY exit path including the early `return` inside the try — a throw would
@@ -1359,6 +1492,8 @@ async function onLegendExport(kind) {
 // (the people-groups API, the selector evaluator, and the pg_slugs special case
 // that 12 of the 27 lists need), and where this bundle's posters are served from.
 const packetPrints = usePosterPrints({
+  // The print HUD's messages in the reader's language (vue-i18n's t takes the count for plurals).
+  t: (key, params, n) => (typeof n === 'number' ? t(key, params, n) : t(key, params)),
   records: (zone) => packetRecords(zone),
   lang: () => packetLang(),
   label: (zone) => zone?.label || zone?.id || '',
@@ -1367,6 +1502,12 @@ const packetPrints = usePosterPrints({
   // Resolved here rather than inside the shared action, which knows nothing about a
   // bundle's asset layout — the same seam printPacket uses for its map svg.
   assetsBase: () => resolveAssetsBase(profileConfig.value),
+  // The table the zone sheets were labelled from, so the composable's page-1 lift names the countries
+  // in the packet's language — the ONE lift path; this profile no longer keeps a second one of its own.
+  iso3Names: () => ISO3_NAME,
+  // The zone's sheet GENERATED at the click (zoneSheet, below) — for the Poster print and the packet's
+  // page 1. An arrow, because zoneSheet is declared after this call (a direct reference is a TDZ throw).
+  sheet: (item, format) => zoneSheet(item, format),
   // The near-neighbours table for the FULL packet's bounded/centered back page — fetched from the
   // SAME served asset pool the posters come from, so an embedded copy of this bundle prints the
   // same page as the dev tree. null on any failure: the packet prints without the page rather
@@ -1381,68 +1522,53 @@ const packetPrints = usePosterPrints({
 // that and displays `status` instead. Without this watcher the packet would print
 // SILENTLY — no "building…", and a failure would vanish with nothing said — which
 // is the mechanism working while the feedback does not.
+// ⚠ CLEARED BY IDENTITY, NOT BY READING THE PROSE. This used to clear the status when it matched /packet/i —
+// true of the English message only. With the messages now translated (the print composable localizes them
+// through `t`), that test would never match in ten languages and the status would stick. So the line this
+// watcher wrote is remembered and cleared exactly — the same rule flashRef follows above.
+let printStatus = ''
 watch(packetPrints.exportState, (st) => {
-  if (!st) { if (/packet/i.test(status.value)) status.value = ''; return; }
+  if (!st) { if (printStatus && status.value === printStatus) status.value = ''; printStatus = ''; hudProgress.value = ''; return; }
   if (st.phase === 'error') {
-    flashStatus(t('messages.packetFailed', { reason: st.message }), 4000);
+    printStatus = ''; hudProgress.value = '';
+    hudSay(t('messages.packetFailed', { reason: st.message }), 5000);
     return;
   }
-  status.value = st.phase === 'done' ? '' : `${st.message}…`;
+  printStatus = st.phase === 'done' ? '' : `${st.message}…`;
+  status.value = printStatus;
+  hudProgress.value = printStatus;
 });
 
 // BUNDLE-SPECIFIC: who is in this list. ⚠ pg_slugs BYPASSES the shared evaluator —
 // it intentionally THROWS on that type, and 12 of the 27 lists use it. Same
 // special-case the map and the poster wall apply, so all three agree about
 // membership.
+// ★ THE LIBRARY'S RECORDS PROVIDER (lists/peopleGroupRecords.js) — this was the THIRD hand-written copy
+// of the same fetch (fields, list membership, normalisation, the pg_slugs case). Its fields already carry
+// what the profile description needs (primary_language, imb_gsec) and the selector inputs (wagf_region,
+// wagf_block, rop1); pg_slugs is understood by the provider and every other selector goes through this
+// profile's evaluator. Sorted in the packet's language, as before.
+const recordsFor = createPeopleGroupRecords({
+  apiBase: () => API_BASE,
+  lang: () => packetLang(),
+  profileConfig,
+  evaluate: (selector, records) => evaluateSelector(selector, records),
+});
 async function packetRecords(zone) {
-  if (!API_BASE) throw new Error('no API configured');
-  // ★ primary_language + imb_gsec FEED THE GENERATED PROFILE DESCRIPTION (Driver brief A1.5 col 2,
-  // 2026-09-28). describeGroup builds a localized sentence — who, where, what language, how reached —
-  // and GSEC is the only reachedness field that is a NUMBER: EvangelicalLevel is English prose from the
-  // API ('2% or Greater but Less than 5%'), so interpolating it would leave every non-English packet
-  // half-English in its widest column (sr measured this across 12,379 rows). primary_language is the
-  // same field poster-wall already fetches (:171), so this adds no new API surface.
-  // ★ wagf_region + wagf_block ARE SELECTOR INPUTS, not display fields. SIX of the 27 printable
-  // zones select on them — west-africa / east-africa / central-africa (wagf_block), europe
-  // (wagf_region), southern-africa-islands (union of two wagf_block) and oceania-indonesia (union of
-  // wagf_region + country_code). Without them here, evaluate() matched NOTHING on packet rows and
-  // those packets printed EMPTY, while the same selectors resolved correctly on the map — whose
-  // fetch (:1988) has always carried both. Measured: a wagf_block selector returns 0 members on
-  // packet rows and 1 on map rows. oceania-indonesia was the worst of the six because its union
-  // still matched IDN, so it printed a PLAUSIBLE packet that was silently missing all of Oceania.
-  const fields = 'slug,name,country_code,wagf_region,wagf_block,population,religion,image_url,primary_language,imb_gsec';
-  const resp = await fetch(`${API_BASE}/api/people-groups/list?fields=${fields}&lang=${packetLang()}`,
-    { cache: 'no-store' });
-  if (!resp.ok) throw new Error(`people-groups fetch failed (${resp.status})`);
-  const records = normalizeRecords(await applyPeopleGroupList(extractRecords(await resp.json()), profileConfig));
-  let slugs;
-  if (zone.selector && zone.selector.type === 'pg_slugs') {
-    slugs = new Set(zone.selector.values || []);
-  } else {
-    const { evaluate } = await import('./data/selector-evaluator.js');
-    slugs = new Set(evaluate(zone.selector, records));   // evaluate returns a Set
-  }
-  return records.filter((r) => slugs.has(r.slug))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), packetLang()));
+  if (!API_BASE) throw keyedError('wall.hud.noApi', 'no people-groups service is configured');
+  return recordsFor(zone.selector);
 }
+// The zone's sheet, generated at the click, for the legend's Poster and the packet's page 1.
+const zoneSheet = makeZoneSheet({ allRecords: () => recordsFor.all(), assetsBase: () => resolveAssetsBase(profileConfig.value), profileConfig });
 
-// BUNDLE-SPECIFIC: the map page's <svg>, lifted from this bundle's own poster.
-// Absent is fine — the packet prints a cover without the map rather than failing.
-async function packetMapSvg(zoneId, R) {
-  try {
-    const base = resolveAssetsBase(profileConfig.value);
-    const html = await (await fetch(`${base}/posters/${zoneId}.html`, { cache: 'force-cache' })).text();
-    const svg = html.match(/<svg[\s\S]*?<\/svg>/);
-    if (!svg) return '';
-    return `<style>${R.mapCss(html)}</style>`
-      + `<div style="position:absolute;left:0;top:250px;width:${R.W}px;`
-      + `transform:scale(0.62);transform-origin:top center">${svg[0]}</div>`;
-  } catch { return ''; }
-}
-
+// BUNDLE-SPECIFIC: WHERE this bundle serves its map sheets. Which file to prefer and how to place it on
+// page 1 are the renderer's (R.mapSheetFiles, R.liftMap): the map-only vertical sheet first, then the
+// poster. Absent is fine — page 1 then says the map is missing rather than printing blank.
+// ⚠ res.ok IS CHECKED. The old body read .text() on any response, so a 404 page was searched for an
+// <svg> as if it were a poster.
 // ⚠ A TRANSIENT STATUS CLEARS BY IDENTITY, NOT BY ITS ENGLISH PREFIX. Each of these messages used to be
 // cleared by `if (status.value.startsWith('Packet failed'))` — a guard that reads the PROSE. The moment
-// the prose is translated (exp-shepherd's universal-props row, 2026-09-26) that guard stops matching and
+// the prose is translated (the universal-props change, 2026-09-26) that guard stops matching and
 // the status never clears in any non-English locale: a stuck error message, in ten languages, from a fix
 // that looked purely cosmetic. Same family as counting prayer points by matching the English word
 // "prayer". So compare against the exact string we set instead — locale-independent by construction.
@@ -1451,35 +1577,55 @@ function flashRef(target, text, ms) {
   setTimeout(() => { if (target.value === text) target.value = ''; }, ms);
 }
 const flashStatus = (text, ms) => flashRef(status, text, ms);
+// ★ A BATCH ACTION SPEAKS WHERE A PHONE CAN SEE IT. .upg-status is display:none below 768px (the legend sheet owns
+// the bottom edge there), so a message written only to it was invisible on a phone: a reader tapped Prayer List
+// and nothing visible happened. hudSay writes the same text to the batch HUD's line (.upg-hud-flash, a polite
+// live region, visible at every width) as well as to the status badge.
+const hudSay = (text, ms) => { flashStatus(text, ms); flashRef(copyFlash, text, ms); };
+// The print's progress ("fetching people groups…", "printing 905 people groups…"), mirrored into the HUD for the
+// same reason; the HUD shows it whenever no flash is up.
+const hudProgress = ref('');
 
 // `variant` selects WHICH packet — 'full' (map, life calendar, %-evangelical grid, triangle,
 // profiles, sets, points, wheel) or 'lightweight' (map, triangle, profiles, points, wheel).
 // Defaults to 'full', so every caller that does not pass one prints exactly what it printed before.
 async function printPrayerPacket(zoneId, variant = 'full') {
-  const zone = allLists().find((z) => z.id === zoneId);
+  const zone = printableZones().find((z) => z.id === zoneId);
   if (!zone) return;
-  // The map svg needs the renderer's own mapCss/W, so it is resolved here and
-  // handed in rather than fetched inside the shared action, which knows nothing
-  // about where this bundle serves its posters.
-  const [{ createPacketRenderer }, strings] = await Promise.all([
-    import('@map/packet/packet-render.js'),
-    import('@map/scripts/posters/packet-strings.json').then((m) => m.default || m),
-  ]);
-  const R = createPacketRenderer({ strings, lang: packetLang() });
-  await packetPrints.printPacket(zone, {
-    variant,
-    mapSvg: await packetMapSvg(zoneId, R),
-    funnel: await packetFunnel(),
-  });
+  // ★ THE TITLE IN THE READER'S LANGUAGE, WHERE IT CAN BE GENERATED. A one-country zone's title is that
+  // country's name, which Intl supplies in every language (zone-title.js tier A); every other zone keeps
+  // its hand-written label, because a region's name is not a list of its countries. The title prints on
+  // page 1, heads every profile page and names the document.
+  // Page 1's map is the shared composable's: it lifts this zone's sheet (assetsBase) and names the
+  // countries in the packet's language (iso3Names) — the same path the wall prints through.
+  const titled = await localizedZone(zone);
+  await packetPrints.printPacket(titled, { variant, funnel: await packetFunnel() });
+}
+
+// The zone as the packet should print it: a tier-A zone's generated title in the packet's language, or
+// the zone unchanged. Loaded lazily, like the packet renderer, so the map pays nothing until a print.
+async function localizedZone(zone) {
+  try {
+    const [{ zoneTitle }, { countryName }, strings] = await Promise.all([
+      import('./data/zone-title.js'),
+      import('@map/utils/countryName.js'),
+      loadPacketStrings(resolveAssetsBase(profileConfig.value)),
+    ]);
+    // the packet's own strings for this language, English per key where a block lacks one — the same
+    // fallback the renderer applies (an affinity-bloc zone such as Deaf is named from them)
+    const block = { ...(strings.en || {}), ...(strings[packetLang()] || {}) };
+    const title = zoneTitle(zone, block, { countryName, locale: packetLang() });
+    return title ? { ...zone, label: title } : zone;
+  } catch { return zone; }            // a title that cannot be generated keeps the hand-written one
 }
 
 // Every list across all three cluster buckets, flattened.
 //
-// ★ THE ONE SEAM THE `list` PROP WILL FEED. Driver 2026-09-26 via the shepherd: UPG-100 is the mass
+// ★ THE ONE SEAM THE `list` PROP WILL FEED. Decided 2026-09-26: UPG-100 is the mass
 // prayer mobiliser — a GENERATOR that takes a list in and puts posters, packets and cards out, so a
 // partner can generate their own. Every list-consuming path in this profile goes through THIS
 // function (allLists -> selectedLists, printPrayerPacket, the legend, the funnel), so when the
-// universal `list` prop lands (exp-shepherd Tier A: profile-config.list / ?list= / window.MAP_LIST,
+// universal `list` prop lands (Tier A: profile-config.list / ?list= / window.MAP_LIST,
 // default 'doxa') it replaces the body here and nothing else moves. Do not read `clusters` directly
 // anywhere else; that is what makes the swap a one-line change instead of an audit.
 // ★ AND THIS IS THAT SWAP, taken 2026-09-27 — the body, exactly as the note above predicted, with the
@@ -1500,6 +1646,24 @@ function allLists() {
     ...(z.uncovered_lists || [])];
 }
 
+// Every zone a reader can PICK — the legend's leaves — as the object the print actions need.
+//
+// ★ allLists() IS 27 AND THE LEGEND IS 28. It spreads the three geographic buckets and cannot see
+// `deaf`, which the legend shows as one row (the two deaf_lists collapse into a single affinity-bloc
+// leaf). Every place that turned a picked id back into a zone went through allLists(), so Deaf was
+// unreachable from all of them, silently: the Prayer packet returned on `if (!zone)`, the poster
+// titled itself by its slug, a selection containing Deaf dropped it in `.filter(Boolean)`, and the
+// packet count read 27 while 28 packets exist.
+// The 27 keep EXACTLY the catalogue objects they had; only a leaf the catalogue lacks is added, as the
+// legend's own leaf carrying its selector (legend-tree.js zonesWithSelectors). One enumeration for
+// every pick, so the four sites cannot disagree about which zones exist.
+function printableZones() {
+  const base = allLists();
+  const have = new Set(base.map((z) => z.id));
+  return [...base, ...zonesWithSelectors(listZones(), { deafCount: DEAF_COUNT })
+    .filter((z) => !have.has(z.id))];
+}
+
 // ── THE PAGE-2 FUNNEL CONTEXT ───────────────────────────────────────────────
 // What the packet's funnel page needs that the packet itself cannot know: the nested IMB/network
 // steps, how many lists the catalogue holds, and how many groups are in no list at all.
@@ -1513,7 +1677,7 @@ function allLists() {
 // 2026-09-26: K = 27 (13 + 12 + 2 buckets) with per-list counts from 8 to 118, against a brief that
 // said "~30 lists of 50-100" — only about half sit in that band, so no copy here claims it. The
 // 27 lists account for 2,086 of the 2,107, leaving 21 in no list; the footnote states that plainly
-// rather than letting a partner discover it by adding up rows (shepherd, ENDTOKEN-DXS-UPG-KDECIDE).
+// rather than letting a partner discover it by adding up rows.
 // ⚠ IT IS LIST-AWARE, AND IT HAS TO BE — THIS WAS A LIVE WRONG NUMBER, not a future risk. This
 // profile already honours the universal `list` prop: applyPeopleGroupList() filters the rows at all
 // four fetch sites, including packetRecords (:1258), and the membership files are on disk. So under
@@ -1555,13 +1719,15 @@ async function packetFunnel() {
     // allLists(), and summing all 29 gives 2,209 against a total of 2,106, so the deaf lists OVERLAP
     // the geographic ones. They are a second, cross-cutting partition, which means "in no list" has no
     // single answer until someone says which partition is meant.
-    // A confident figure I cannot defend is exactly the defect class I have been removing from other
-    // surfaces all day; this one I put here myself. funnelPage already falls back to the
+    // A confident figure that cannot be defended is exactly the defect class removed from other
+    // surfaces; this one was introduced here. funnelPage already falls back to the
     // provenance-only footnote when unassigned is absent, so the page simply stops claiming it.
-    // Carded for the Driver: 27 geographic / 29 counting deaf, and whether "Central Asia + Pakistan"
+    // Carded as a product question: 27 geographic / 29 counting deaf, and whether "Central Asia + Pakistan"
     // (55 groups, contiguous, poster-walled as a real region) is a prayer list rather than a residual.
     if (listId === LIST_DEFAULT) {
-      return { ...raw, listCount: allLists().length, listTotal: doxaTotal };
+      // printableZones, not allLists: the count prints on page 1 ("one of N") and at the triangle's
+      // tip, and allLists() is 27 while the legend offers — and the generator builds — 28 packets.
+      return { ...raw, listCount: printableZones().length, listTotal: doxaTotal };
     }
 
     // A NON-DEFAULT LIST: read its own DOXA-side total from the membership file the build writes.
@@ -1585,9 +1751,9 @@ async function packetFunnel() {
 }
 
 // ── BATCH SELECTION MAKES A PACKET OR A POSTER ──────────────────────────────
-// Driver: the batch tool is "super buggy", and recolouring regions is not what is wanted —
-// "the batch selection tool should let you create your own poster or prayer packet based on
-// your own selection." So the selection is an INPUT to the two artefacts this app already
+// The batch tool was reported very buggy, and recolouring regions is not what is wanted —
+// the batch selection tool should let a reader create their own poster or prayer packet from
+// their own selection. So the selection is an INPUT to the two artefacts this app already
 // builds, and neither of these grows a third pipeline: both end in printPrayerPacket /
 // packetPrints.printPoster, the same calls the legend and the poster wall make.
 const batchBusy = ref(false);
@@ -1604,7 +1770,7 @@ function selectedLists() {
   //     allLists().filter((l) => want.has(l.id))
   // which returns the lists in clusters.json order and silently DISCARDS the order the reader chose —
   // even though selectedTerritories is documented at :186 as "an ORDERED list … (insertion order)".
-  // rega measured the consequence (NEEDS-EYES row 45, main 52eeb0db): selecting Laos, then West Africa,
+  // Measured (main 52eeb0db): selecting Laos, then West Africa,
   // then Europe produced a packet headed "West Africa + Laos + Europe", because west-africa is index 0
   // in the catalogue and laos is index 4. Reproduced exactly from the data.
   // It matters because the label's whole job is to "name the territories they actually chose rather than
@@ -1613,7 +1779,7 @@ function selectedLists() {
   const ids = selectedTerritories.value
     .filter((t) => t.kind === 'zone')
     .map((t) => String(t.key).replace(/^zone:/, ''));
-  const byId = new Map(allLists().map((l) => [l.id, l]));
+  const byId = new Map(printableZones().map((l) => [l.id, l]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
 
@@ -1625,13 +1791,11 @@ function selectedLists() {
 // still leave the caller to merge.
 // The packet's own string block for the reader's locale, per-KEY fallback to English exactly as
 // packet.mjs and packet-render do it — a half-translated block must not blank a key that en has.
-let _packetStrings = null;
+// Not memoised here: loadPacketStrings caches a SUCCESS itself, and memoising the merged block would pin an
+// English-only fallback (a transient fetch failure) for the rest of the session.
 async function packetStrings() {
-  if (!_packetStrings) {
-    const all = await import('@map/scripts/posters/packet-strings.json').then((m) => m.default || m);
-    _packetStrings = { ...(all.en || {}), ...(all[packetLang()] || {}) };
-  }
-  return _packetStrings;
+  const all = await loadPacketStrings(resolveAssetsBase(profileConfig.value));
+  return { ...(all.en || {}), ...(all[packetLang()] || {}) };
 }
 /** `{a}` / `{b}` / `{n}` interpolation; null when the pattern is missing so the caller can default. */
 function fillJoin(pattern, params) {
@@ -1667,74 +1831,190 @@ function selectedAdm1Names() {
     .map((t) => t.name || String(t.key).replace(/^adm1:/, ''));
 }
 
-async function selectionAsList() {
+// ── THE SELECTION'S PEOPLE, detected ONCE for every action (packet, cards, Copy, Export CSV) ─────────
+// The records load once per language and are CACHED: batch mode prefetches them when it turns on, so a
+// Copy tap builds its text from cache and writes it inside the tap's user activation (a clipboard write
+// after a network wait is refused, on phones above all). A failed load is dropped so the next try refetches.
+let _selRecords = null;   // { lang, promise }
+const RECORDS_TIMEOUT_MS = 30000;   // the people-group list: abort a request that has not answered by then
+const COPY_WAIT_MS = 8000;          // Copy waits this long for the people groups, then copies the territories alone
+// Any load failure without a catalogue key (the timeout's abort, a dropped network) reads as the stall does.
+const stillLoading = () => keyedError('upgMap.peopleStillLoading', 'the people groups are still loading, try again in a moment');
+const readerError = (e) => asReaderError(e, stillLoading);
+function selectionRecordsLoad() {
+  const lang = packetLang();
+  if (_selRecords && _selRecords.lang === lang) return _selRecords.promise;
+  if (!API_BASE) return Promise.reject(keyedError('wall.hud.noApi', 'no people-groups service is configured'));
+  const fields = PRINT_FIELDS;   // the print standard's one field list (lists/peopleGroupRecords.js)
+  // A STALLED request must not hold the cache forever: it aborts after RECORDS_TIMEOUT_MS, rejects, and the catch
+  // below drops it, so the next action fetches again.
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), RECORDS_TIMEOUT_MS) : 0;
+  const promise = (async () => {
+    const resp = await fetch(`${API_BASE}/api/people-groups/list?fields=${fields}&lang=${lang}`, { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .finally(() => clearTimeout(timer));
+    if (!resp.ok) throw keyedError('wall.hud.fetchFailed', 'could not load the people groups ({status})', { status: resp.status });
+    return normalizeRecords(await applyPeopleGroupList(extractRecords(await resp.json()), profileConfig));
+  })().catch((e) => { throw readerError(e); });
+  _selRecords = { lang, promise };
+  promise.catch(() => { if (_selRecords && _selRecords.promise === promise) _selRecords = null; });
+  return promise;
+}
+
+// { records, from: Map(slug → the selected territories that contain it), missing: adm1 names } in the
+// SELECTION'S order: a zone's groups, then a country's, each record once. Territory names are the HUD's own
+// (selectedTerritories[].name), the same names the clipboard's first line carries.
+// ★ INDIA'S STATES AND UNION TERRITORIES resolve through the served table (data/people-groups/india-states.json,
+// library/data/indiaStates.js), fetched only once a state is selected. Any other ADM1 (China's provinces) has no
+// table yet, so it stays `missing` and is NAMED to the reader, never silently dropped.
+function indiaStates() { return loadIndiaStates(resolveAssetsBase(profileConfig.value)); }
+async function selectionPeople() {
   const lists = selectedLists();
   const codes = selectedCountryCodes();
-  const adm1 = selectedAdm1Names();
-  if (!lists.length && !codes.length) {
-    // Name WHY when the only thing selected is a province — "nothing selected" would be a lie the
-    // reader can see is false, with their selection visibly highlighted on the map.
-    if (adm1.length) throw new Error(`no people-group data for ${adm1.join(', ')} — select the country instead`);
-    throw new Error('nothing selected');
+  let adm1 = selectedAdm1Names();
+  let india = null;
+  if (adm1.length) {
+    try { india = await indiaStates(); } catch (_) { india = null; }   // unreachable table: every state stays missing
+    if (india) adm1 = adm1.filter((n) => !india.byShapeName.has(n));
   }
-  if (!API_BASE) throw new Error('no API configured');
-  // ★ primary_language + imb_gsec FEED THE GENERATED PROFILE DESCRIPTION (Driver brief A1.5 col 2,
-  // 2026-09-28). describeGroup builds a localized sentence — who, where, what language, how reached —
-  // and GSEC is the only reachedness field that is a NUMBER: EvangelicalLevel is English prose from the
-  // API ('2% or Greater but Less than 5%'), so interpolating it would leave every non-English packet
-  // half-English in its widest column (sr measured this across 12,379 rows). primary_language is the
-  // same field poster-wall already fetches (:171), so this adds no new API surface.
-  // ★ wagf_region + wagf_block ARE SELECTOR INPUTS, not display fields. SIX of the 27 printable
-  // zones select on them — west-africa / east-africa / central-africa (wagf_block), europe
-  // (wagf_region), southern-africa-islands (union of two wagf_block) and oceania-indonesia (union of
-  // wagf_region + country_code). Without them here, evaluate() matched NOTHING on packet rows and
-  // those packets printed EMPTY, while the same selectors resolved correctly on the map — whose
-  // fetch (:1988) has always carried both. Measured: a wagf_block selector returns 0 members on
-  // packet rows and 1 on map rows. oceania-indonesia was the worst of the six because its union
-  // still matched IDN, so it printed a PLAUSIBLE packet that was silently missing all of Oceania.
-  const fields = 'slug,name,country_code,wagf_region,wagf_block,population,religion,image_url,primary_language,imb_gsec';
-  const resp = await fetch(`${API_BASE}/api/people-groups/list?fields=${fields}&lang=${packetLang()}`,
-    { cache: 'no-store' });
-  if (!resp.ok) throw new Error(`people-groups fetch failed (${resp.status})`);
-  const records = normalizeRecords(await applyPeopleGroupList(extractRecords(await resp.json()), profileConfig));
+  const indiaCount = india ? selectedTerritories.value.filter((t) => t.kind === 'adm1' && india.byShapeName.has(t.name)).length : 0;
+  if (!lists.length && !codes.length && !indiaCount) {
+    // Name WHY when the only thing selected is a province — "nothing selected" would be a lie the
+    // reader can see is false.
+    if (adm1.length) throw keyedError('upgMap.selectionAdm1NoData', 'no people-group data for {names} — select the country instead', { names: formatList(adm1, { locale: packetLang() }) });
+    throw keyedError('upgMap.nothingSelected', 'nothing is selected');
+  }
+  const records = await selectionRecordsLoad();
   const { evaluate } = await import('./data/selector-evaluator.js');
-  const slugs = new Set();
-  for (const l of lists) {
-    if (l.selector && l.selector.type === 'pg_slugs') {
-      for (const s of (l.selector.values || [])) slugs.add(s);
-    } else {
-      for (const s of evaluate(l.selector, records)) slugs.add(s);
+  const bySlug = new Map(records.map((r) => [r.slug, r]));
+  const byId = new Map(printableZones().map((l) => [l.id, l]));
+  const from = new Map();
+  const add = (slug, name) => {
+    const at = from.get(slug);
+    if (!at) from.set(slug, [name]);
+    else if (!at.includes(name)) at.push(name);
+  };
+  for (const t of selectedTerritories.value) {
+    if (t.kind === 'zone') {
+      const l = byId.get(String(t.key).replace(/^zone:/, ''));
+      if (!l) continue;
+      const slugs = l.selector && l.selector.type === 'pg_slugs' ? (l.selector.values || []) : evaluate(l.selector, records);
+      for (const s of slugs) add(s, t.name);
+    } else if (t.kind === 'adm0') {
+      for (const s of evaluate({ type: 'country_codes', values: [String(t.key).replace(/^adm0:/, '')] }, records)) add(s, t.name);
+    } else if (t.kind === 'adm1' && india) {
+      const st = india.byShapeName.get(t.name);
+      if (st) for (const s of st.slugs) add(s, t.name);
     }
   }
-  // The tapped countries, through the SAME evaluator and into the SAME slug set, so a mixed
-  // selection (a legend zone AND a country) unions correctly and de-duplicates for free.
-  if (codes.length) {
-    for (const s of evaluate({ type: 'country_codes', values: codes }, records)) slugs.add(s);
-  }
-  // The label is what the reader sees on the cover and in the print dialog's title. Name the
-  // territories they actually chose rather than inventing a title for their selection.
-  // ⚠ THE JOINERS WERE HARDCODED ENGLISH on a cover an Arabic reader sees: ' + ' and ' +N more', printed
-  // straight onto the packet's first page and into the print dialog's title. Found while checking whether
-  // batch selection was already done (dx-shepherd END-DXS-U100B) — the SELECTION path was, but its label
-  // was not localized, so a reader choosing three territories in Arabic got their names in Arabic joined
-  // by an English tail.
-  // zone_join / zone_join_more already exist in all eleven packet-strings blocks (landed with the zone
-  // title generator), translated once for exactly this shape, so this is a reuse rather than new strings.
-  // ⚠ NAME THE COUNTRIES TOO. Built from `lists` alone this was EMPTY for a country-only selection,
-  // and names.reduce(join2) on an empty array THROWS ("Reduce of empty array with no initial value")
-  // — so even after the selector fix the packet would have died on its cover. The names come from
-  // selectedTerritories in the reader's own selection order, which is the order the cover promises.
-  const zoneNames = lists.map((l) => l.label || l.id);
-  const countryNames = selectedTerritories.value.filter((t) => t.kind === 'adm0').map((t) => t.name);
-  const names = [...zoneNames, ...countryNames];
+  return { records: [...from.keys()].map((s) => bySlug.get(s)).filter(Boolean), from, missing: adm1 };
+}
+
+async function selectionAsList() {
+  const lists = selectedLists();
+  const { from } = await selectionPeople();
+  const zoneNames = (await Promise.all(lists.map(localizedZone))).map((l) => l.label || l.id);
+  // Zones, countries AND the states that brought people (data/selection-export.js says why the states matter).
+  const names = selectionTitleNames(zoneNames, selectedTerritories.value, from,
+    () => keyedError('wall.hud.noRecords', 'that list has no people groups to print'));
   const S = await packetStrings();
   const join2 = (a, b) => fillJoin(S.zone_join, { a, b }) ?? `${a} + ${b}`;
   const label = names.length <= 3
     ? names.reduce(join2)
     : fillJoin(S.zone_join_more, { a: names.slice(0, 2).reduce(join2), n: names.length - 2 })
       ?? `${names.slice(0, 2).join(' + ')} +${names.length - 2} more`;
-  return { id: 'selection', label, count: slugs.size,
-    selector: { type: 'pg_slugs', values: [...slugs] } };
+  return { id: 'selection', label, count: from.size,
+    selector: { type: 'pg_slugs', values: [...from.keys()] } };
+}
+
+// ── COPY + EXPORT CSV (restored 2026-09-30; see data/selection-export.js for WHY and the formats) ────────
+// COPY starts SYNCHRONOUSLY: the text is a promise handed to ClipboardItem, which Safari and Chrome accept
+// inside the tap even when the people groups are still loading. Where that is refused it falls back to
+// writeText, then to the textarea path. A selection whose people groups cannot be detected (a province)
+// still copies the territory lines that data/apply-grouping.mjs needs, and the flash says what was left out.
+function selectionNote(missing) {
+  return missing && missing.length
+    ? t('upgMap.selectionAdm1NoData', { names: formatList(missing, { locale: packetLang() }) }) : '';
+}
+function copySelection() {
+  const sel = selectedTerritories.value;
+  if (!sel.length) return;
+  const color = selectedColor.value;
+  let count = null, note = '';
+  const STALLED = {};
+  const text = settleWithin(selectionPeople(), COPY_WAIT_MS, STALLED).then((p) => {
+    if (p === STALLED) { note = t('upgMap.peopleStillLoading'); return selectionClipboard(sel, { color }); }
+    count = p.records.length; note = selectionNote(p.missing);
+    return selectionClipboard(sel, { color }, selectionCsv(p.records, p.from, { color }));
+  }, (e) => { note = errorText(readerError(e), t); return selectionClipboard(sel, { color }); });
+  text.then((v) => { try { window.__UPG_LAST_CLIPBOARD__ = v } catch (_) {} });
+  // A selection apply-grouping cannot regroup in one go (a mix of kinds, or a legend zone) still copies; the
+  // flash says so, so a partner does not hand an agent a line it will refuse.
+  const warn = regroupable(sel) ? '' : t('upgMap.copyNotRegroupable');
+  writeClipboard(text).then((ok) => {
+    const done = (count == null ? t('upgMap.copiedTerritoriesOnly', { reason: note.slice(0, 90) })
+      : t('upgMap.copiedSelection', { count }) + (note ? ' · ' + note.slice(0, 90) : '')) + (warn ? ' · ' + warn : '');
+    flashRef(copyFlash, ok ? done : t('messages.copyFailed'), ok && (note || warn) ? 6000 : 3000);
+  });
+}
+async function writeClipboard(textPromise) {
+  const nav = typeof navigator !== 'undefined' ? navigator : null;
+  if (nav && nav.clipboard && nav.clipboard.write && typeof ClipboardItem !== 'undefined') {
+    try {
+      await nav.clipboard.write([new ClipboardItem({ 'text/plain': textPromise.then((v) => new Blob([v], { type: 'text/plain' })) })]);
+      return true;
+    } catch (_) { /* refused (e.g. no promise support): the next paths */ }
+  }
+  const text = await textPromise;
+  try {
+    if (nav && nav.clipboard && nav.clipboard.writeText) { await nav.clipboard.writeText(text); return true; }
+  } catch (_) { /* no permission or no activation left: the textarea path */ }
+  return legacyCopy(text);
+}
+// textarea + execCommand('copy'): a non-secure context has no navigator.clipboard at all.
+function legacyCopy(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0'; ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const ok = document.execCommand && document.execCommand('copy');
+    document.body.removeChild(ta);
+    return !!ok;
+  } catch (_) { return false; }
+}
+// EXPORT CSV downloads the same CSV Copy carries. A UTF-8 byte-order mark leads the file so a spreadsheet
+// reads the diacritics and non-Latin names as UTF-8 rather than guessing a legacy code page.
+async function exportSelectionCsv() {
+  if (batchBusy.value) return;
+  batchBusy.value = true;
+  busyAction.value = 'csv';
+  try {
+    const p = await selectionPeople();
+    const color = selectedColor.value;
+    const csv = selectionCsv(p.records, p.from, { color });
+    try { window.__UPG_LAST_CSV__ = csv } catch (_) {}
+    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = selectionCsvFileName(selectedTerritories.value.map((x) => x.name).join(' '));
+    a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { try { URL.revokeObjectURL(url); a.remove(); } catch (_) {} }, 400);
+    const note = selectionNote(p.missing);
+    flashRef(copyFlash, t('upgMap.csvSaved', { count: p.records.length }) + (note ? ' · ' + note.slice(0, 90) : ''), note ? 6000 : 3000);
+  } catch (e) {
+    flashRef(copyFlash, t('upgMap.csvFailed', { reason: errorText(readerError(e), t).slice(0, 90) }), 5000);
+  } finally { batchBusy.value = false; busyAction.value = ''; }
+}
+
+// A selection too big for a phone's print (data/selection-export.js has the measurement) starts nothing and says so.
+// The same platform test the print path uses (isPhonePrint: a phone or tablet prints the page, with a phone's memory).
+const ON_PHONE = isPhonePrint();
+function phoneTooBig(count) {
+  if (!overPhoneCeiling(count, ON_PHONE)) return false;
+  hudSay(t('poster.phoneLimitAll'), 6000);
+  return true;
 }
 
 async function makeSelectionPacket() {
@@ -1743,29 +2023,43 @@ async function makeSelectionPacket() {
   busyAction.value = 'packet';
   try {
     const sel = await selectionAsList();
+    if (phoneTooBig(sel.count)) return;
     // The packet's map page is per-zone artwork; a multi-zone selection has no single poster to
     // lift it from, so it prints a cover WITHOUT the map rather than one zone's map standing in
-    // for all of them. packetMapSvg already treats a miss as fine.
-    const [{ createPacketRenderer }, strings] = await Promise.all([
-      import('@map/packet/packet-render.js'),
-      import('@map/scripts/posters/packet-strings.json').then((m) => m.default || m),
-    ]);
-    const R = createPacketRenderer({ strings, lang: packetLang() });
+    // for all of them. A packet with no sheet says so on page 1.
     const lists = selectedLists();
-    const mapSvg = lists.length === 1 ? await packetMapSvg(lists[0].id, R) : '';
+    // mapId: the one list's sheet stands in only when there IS one list; null means no sheet at all.
+    const mapId = lists.length === 1 ? lists[0].id : null;
     // ⚠ "1 OF 27 LISTS" IS FALSE FOR A CUSTOM SELECTION — it is not one of the catalogue's lists at
     // all. The NARROWING is still true and still the point, and "N of the 2,107" stays exactly true
     // because N is the selection's own row count. So a multi-list selection keeps the funnel steps
     // and drops listCount, which funnelPage already treats as "omit the share line". Same judgement
     // the map above makes: print nothing rather than something that reads true and is not.
     const funnel = await packetFunnel();
-    await packetPrints.printPacket(sel, {
-      mapSvg,
+    await packetPrints.printPacket({ ...sel, mapId }, {
       funnel: funnel && lists.length === 1 ? funnel : (funnel ? { ...funnel, listCount: 0 } : null),
     });
   } catch (e) {
-    flashStatus(t('messages.selectionPacketFailed', { reason: String(e?.message || e).slice(0, 90) }), 4000);
+    hudSay(t('messages.selectionPacketFailed', { reason: errorText(e, t).slice(0, 90) }), 5000);
   } finally { batchBusy.value = false; busyAction.value = ''; }
+}
+
+// The card deck for whatever is selected — the same people the selection's Prayer list prints (one card
+// each), through the shared print standard.
+async function makeSelectionCards() {
+  if (batchBusy.value) return;
+  batchBusy.value = true;
+  busyAction.value = 'cards';
+  try {
+    const sel = await selectionAsList();
+    if (phoneTooBig(sel.count)) return;
+    await packetPrints.printCardDeck(sel);
+  } catch (e) {
+    hudSay(t('upgMap.selectionCardsFailed', { reason: errorText(e, t).slice(0, 90) }), 5000);
+  } finally {
+    batchBusy.value = false;
+    busyAction.value = '';
+  }
 }
 
 async function makeSelectionPoster() {
@@ -1780,21 +2074,22 @@ async function makeSelectionPoster() {
     // selection on the map. The packet is the thing that works for a country selection, so point at it.
     if (!lists.length) {
       if (selectedCountryCodes().length || selectedAdm1Names().length) {
-        throw new Error('posters exist per territory on the legend — use Prayer list for a map selection');
+        throw keyedError('upgMap.selectionPosterNeedsZone', 'posters exist per territory on the legend — use Prayer list for a map selection');
       }
-      throw new Error('nothing selected');
+      throw keyedError('upgMap.nothingSelected', 'nothing is selected');
     }
     // ⚠ A POSTER IS PRE-RENDERED PER ZONE — there is no artwork for an arbitrary union, and
     // generating one would be the new pipeline the brief rules out. With one zone selected this
     // is exactly the wall's poster; with several, say so plainly instead of silently printing
     // the first zone's poster as though it covered the selection.
     if (lists.length > 1) {
-      flashStatus(t('messages.posterOneTerritory', { count: lists.length }), 5000);
+      hudSay(t('messages.posterOneTerritory', { count: lists.length }), 5000);
       return;
     }
+    if (phoneTooBig(lists[0].count)) return;
     await packetPrints.printPoster(lists[0]);
   } catch (e) {
-    flashStatus(t('messages.selectionPosterFailed', { reason: String(e?.message || e).slice(0, 90) }), 4000);
+    hudSay(t('messages.selectionPosterFailed', { reason: errorText(e, t).slice(0, 90) }), 5000);
   } finally { batchBusy.value = false; busyAction.value = ''; }
 }
 
@@ -1811,7 +2106,7 @@ function packetLang() {
 // ★ IT REPORTS WHETHER IT ACTED. Returns true when the selection was applied, false when it bailed.
 //
 // WHY: a silent `return` on a precondition is INDISTINGUISHABLE AT THE RENDERED LAYER from the
-// request never arriving (regions-plugin + upg100, 2026-09-26). The "Show on map" interop bug had
+// request never arriving (2026-09-26). The "Show on map" interop bug had
 // three layers stacked under one symptom — an element event with no replay, an id resolved against
 // unloaded legendNodes, and THIS function no-op'ing on a missing layer — and each fix looked
 // sufficient because all three produced the same nothing. Two were fixed by retaining the request;
@@ -1874,7 +2169,7 @@ function paintAll() {
   if (!map) return
   // ★ IT PAINTS WHAT IS READY, rather than refusing until everything is. The old guard was
   // `if (!map || !tapestry) return`, which meant the PINS could not be drawn until the boundaries had
-  // been fetched AND parsed — and rega's baseline trace showed the parse, not the network, is the
+  // been fetched AND parsed — and a baseline trace showed the parse, not the network, is the
   // 5.6-6.4 s cost. The pins need only the 68 KB records list. Every step below is idempotent and
   // guards its own source and layers, so calling this twice (once with pins only, once when the
   // tapestry lands) adds each thing exactly once.
@@ -1936,18 +2231,25 @@ function handleToggleTheme() {
 // selectPeopleGroup(null). useMapEvents.js:205-247 is the canonical pattern.
 let _pinHandlersAttached = false
 function attachPinHandlers() {
-  if (!map || !map.getLayer('upg-pins')) return
+  // Bound to the invisible 'upg-pins-hit' twin, not the drawn 'upg-pins': the twin keeps the tap target
+  // the dots had before they were drawn smaller at world zoom (see addPinLayers).
+  if (!map || !map.getLayer('upg-pins-hit')) return
   // Mapbox keeps its own per-layer listener list; after setStyle the layer is a
   // fresh object so re-binding is correct. Guard only the cursor leak below.
-  map.on('click', 'upg-pins', (e) => {
+  map.on('click', 'upg-pins-hit', (e) => {
+    // ★ IN BATCH MODE A PIN TAP IS A TERRITORY TAP. The same tap also reaches the 'tapestry-fill' listener
+    // (attachTapestrySelect), which toggles the territory under the finger. Opening the pin's detail sheet
+    // as well covered the whole batch HUD on a phone (Copy, CSV and Clear hidden), and in a dense state
+    // almost every tap lands on a pin. So batch mode opens no sheet; outside it, pins behave as before.
+    if (batchMode.value) return
     const f = e && e.features && e.features[0]
     if (!f) return
     if (uiStore && typeof uiStore.selectPeopleGroup === 'function') {
       uiStore.selectPeopleGroup(f)   // opens panel (selectedPeopleGroup + legendMode='detail')
     }
   })
-  map.on('mouseenter', 'upg-pins', () => { if (map) map.getCanvas().style.cursor = 'pointer' })
-  map.on('mouseleave', 'upg-pins', () => { if (map) map.getCanvas().style.cursor = '' })
+  map.on('mouseenter', 'upg-pins-hit', () => { if (map) map.getCanvas().style.cursor = batchMode.value ? 'crosshair' : 'pointer' })
+  map.on('mouseleave', 'upg-pins-hit', () => { if (map) map.getCanvas().style.cursor = '' })
   _pinHandlersAttached = true
 }
 
@@ -1959,7 +2261,7 @@ function attachPinHandlers() {
 //   detail.listId = a zoneKey to select, or NULL to deselect.
 let _selectZoneHandler = null;
 // ★ A REQUEST THAT ARRIVES TOO EARLY IS NOW REMEMBERED, NOT DROPPED.
-// rega measured the defect: the FIRST "Show on map" on a poster card did nothing, while a SECOND
+// Measured: the FIRST "Show on map" on a poster card did nothing, while a SECOND
 // one after the map had loaded isolated the zone and fitted the camera. So the listener and the
 // handler both work -- the first request simply died before this component was ready for it.
 // There were two ways for it to die and the fix has to survive both, which is why it retains the
@@ -1975,17 +2277,17 @@ let _pendingZoneId;                     // undefined = nothing outstanding
 let _selectZoneObserver = null;         // watches the retained `select-zone` attribute
 
 /** The ONE apply path. Returns true when the request was satisfied (or was a deselect). */
-// ★ THE APPLY REPORTS ITS OWN OUTCOME. rega's timeline proved delivery works (attribute written
+// ★ THE APPLY REPORTS ITS OWN OUTCOME. A timeline proved delivery works (attribute written
 // t=4106, and main already reads it at registration t=4763) and a headless test proved the lookup
 // works (asia-india-rajasthan -> "Northwest India", 37 legend keys). So the failure is DOWNSTREAM of
 // onLegendSelect and invisible: nothing throws, and "selected but not visibly selected" is
 // indistinguishable at the rendered layer from "never selected". Writing the outcome onto the HOST
-// makes it readable by rega's existing 50 ms poll, with no CDP and no new instrument.
-// ★ NAMESPACED, on upg100-plugin's point: the host element is SHARED SURFACE. A partner page
+// makes it readable by an existing 50 ms poll, with no CDP and no new instrument.
+// ★ NAMESPACED: the host element is SHARED SURFACE. A partner page
 // embedding this custom element could reasonably own an attribute called `data-select-zone-state`,
 // and a diagnostic has no business squatting a generic name on someone else's element. The
 // data-doxa- prefix makes the owner obvious and the collision risk nil.
-// Renamed AFTER rega's re-shoot rather than before, deliberately: their probe polls these names, and
+// Renamed AFTER a re-shoot rather than before, deliberately: the probe polls these names, and
 // renaming mid-flight would have burned a measurement instead of costing a few minutes.
 function _markZoneState(state, zoneId) {
   try {
@@ -2003,11 +2305,11 @@ function applySelectZone(zoneId) {
   const applied = onLegendSelect(node);
   // selectedKey (:163, "currently isolated zoneKey (or null)") is this component's own record of the
   // isolation, so 'applied-but-no-selection' means the path was REACHED and its EFFECT lost -- a
-  // different bug from delivery, and the one rega's timeline points at.
+  // different bug from delivery, and the one the timeline points at.
   // ★ I first wrote selectedZoneKey here, which does not exist; the try/catch would have swallowed
   // the ReferenceError and reported 'applied' every time. A diagnostic that cannot report failure is
   // worse than none. main's check:no-free-identifiers (6b05f513) now catches this class.
-  // ★ IF THE EFFECT DID NOT TAKE, THE REQUEST IS STILL OUTSTANDING. rega's re-shoot on 27eed341
+  // ★ IF THE EFFECT DID NOT TAKE, THE REQUEST IS STILL OUTSTANDING. A re-shoot on 27eed341
   // read exactly this state twice, 13 ms apart, with the right id -- so the node WAS found and
   // onLegendSelect WAS called, and the selection still did not hold. The cause is onLegendSelect's
   // own first line: `if (!map || !map.getLayer('tapestry-fill')) return`. It bails silently when the
@@ -2024,8 +2326,8 @@ function applySelectZone(zoneId) {
   // !selectedKey.value as "it failed". That is a proxy for "did it ISOLATE", not for "did it work",
   // and the two differ in exactly the two paths above — batch mode and the un-isolate both leave
   // selectedKey unset while having succeeded. Retaining on that would have re-applied the zone and
-  // toggled it back OUT of the selection union. upg100-plugin caught that before it bit anyone, and
-  // added the boolean so the applier could be ASKED instead of inferred from.
+  // toggled it back OUT of the selection union. That was caught before it bit anyone, and
+  // the boolean was added so the applier could be ASKED instead of inferred from.
   if (!applied) { _pendingZoneId = zoneId; _markZoneState('applied-but-no-selection', zoneId); return false; }
   // ★ CLEAR THE RETAINED REQUEST ON SUCCESS. Every FAILING path above sets _pendingZoneId and the
   // no-op path clears it, but this one — the one that WORKED — left it set. So a request that was
@@ -2043,8 +2345,8 @@ function _onSelectZone(ev) {
   const zoneId = ev?.detail?.listId ?? null;
   // REUSE THE CANONICAL SELECT PATH. onLegendSelect(node) is what a legend row
   // tap and the search bar already call: it isolates the zone, DIMS everything
-  // outside it, and fits the camera. Brief: "when I click Show on map it should
-  // be basically the same as if I searched that result in the search bar."
+  // outside it, and fits the camera. "Show on map" should behave exactly as if
+  // that result had been chosen in the search bar.
   //
   // Writing a second selection path here would have diverged from the legend and
   // the search bar the first time any of them changed — so this resolves the zone
@@ -2065,6 +2367,17 @@ function findLegendNode(nodes, key) {
   return null;
 }
 
+// ★ A SHOWN ZONE CAN BE CLEARED FROM THE MAP ITSELF (2026-09-30, from a phone: after "Show on map" there
+// was no way back). The only way out was re-tapping the same legend row, inside a collapsed sheet on a
+// phone. While a zone is isolated (and batch mode is off), a chip names it with an × that restores every
+// zone through the same path the wall's own deselect takes (applySelectZone(null)).
+const shownZone = computed(() => {
+  if (!selectedKey.value || batchMode.value) return null
+  const n = findLegendNode(legendNodes.value, selectedKey.value)
+  return (n && n.label) || String(selectedKey.value)
+})
+function clearShownZone() { applySelectZone(null) }
+
 
 // P3-1: build the curated legend tree + wire each leaf's selector. Pure and
 // synchronous — `clusters` is a static JSON import, so this needs no map, no token
@@ -2080,7 +2393,7 @@ function bootstrapLegend() {
   // the two would disagree with nothing reporting it. Found by grepping for `clusters.` rather than by
   // trusting the convention comment.
   const z = listZones()
-  const nodes = buildLegendNodes(z, { deafCount: DEAF_COUNT })
+  const nodes = buildLegend(null)
   legendNodes.value = nodes
   leafZoneList = leafZones(nodes)
   const byId = {}
@@ -2088,7 +2401,7 @@ function bootstrapLegend() {
   for (const a of z.asia_lists || []) byId[a.id] = a.selector
   // slice 09b-6 §1a: the 7 Frontier-Asia uncovered zones (country_codes → ADM0).
   for (const u of z.uncovered_lists || []) byId[u.id] = u.selector
-  byId['deaf'] = { type: 'affinity_bloc', rop1: 'A017' }
+  byId['deaf'] = DEAF_SELECTOR
   for (const z of leafZoneList) z.selector = byId[z.id]
   matchColorExpr = buildMatchColorExpr(leafZoneList)
 }
@@ -2111,7 +2424,7 @@ async function enrichLegendFromRecords() {
     if (!resp.ok) throw new Error(`list ${resp.status}`)
     const records = normalizeRecords(await applyPeopleGroupList(extractRecords(await resp.json()), profileConfig))
     countryNameMap = buildCountryNameMap(records)
-    legendNodes.value = buildLegendNodes(listZones(), { deafCount: DEAF_COUNT, records })
+    legendNodes.value = buildLegend(records)
   } catch (_) { /* counts-only legend is the honest fallback; keep it rendered */ }
 }
 
@@ -2135,6 +2448,11 @@ onMounted(async () => {
   bootstrapLegend()
   // Load the engine the PROVIDER selects, not the one this file used to assume.
   try { await ensureEngineScript(upgProvider) } catch (_) { /* fall through to the !gl notice below */ }
+  // ★ THE PANE MAY BE GONE BY NOW. Both shells (Posterverse, the Research Gallery) DESTROY a heavy pane on
+  // deactivate, so a switch while the engine loads nulls mapEl, and `new gl.Map({ container: null })` threw
+  // "Invalid type: 'container' must be a String or HTMLElement". An unmounted pane is normal, so return silently:
+  // the same guard library/composables/useMapInstance.js keeps after every await (check:map-unmount-mid-init).
+  if (!mapEl.value) return
   // ★ NEVER SWITCH ENGINES SILENTLY. This read `engineGlobal(upgProvider) || window.mapboxgl`, and that
   // fallback can ONLY fire when the requested provider is 'maplibre' and MapLibre failed to load —
   // engineGlobal already resolves mapbox's own global for the mapbox case (useMapInstance.js:115 falls back
@@ -2144,14 +2462,14 @@ onMounted(async () => {
   // ⚠ AND THE FALLBACK COULD NOT EVEN WORK: `gl.accessToken = token` a few lines below is gated on
   // `if (!isMaplibre)`, so a maplibre request that fell through to Mapbox would get Mapbox WITHOUT a token
   // — 401s on every tile instead of a legible failure. Two defects in one expression.
-  // Found by regions' C3 read, routed via dx-shepherd (END-SHEP-C3C). Same shape in all three raw-map
+  // Found by a read of the regions map. Same shape in all three raw-map
   // plugins.
   const gl = engineGlobal(upgProvider)
   // ★ SHAPE RTL BASEMAP LABELS — HERE, not in index.js, and not after the map exists.
   // This profile builds its map RAW (`new gl.Map` below) instead of going through
   // useMapInstance, so it inherits none of the entry's side effects. It appeared to work only
   // because the leaf head PRELOADED the Mapbox peer, which made an entry-time registration land
-  // in time; studio is removing that preload, and with the engine injected lazily an index.js
+  // in time; that preload is being removed, and with the engine injected lazily an index.js
   // call runs before `gl` exists and does nothing at all.
   //
   // ⚠ IT IS NOT A UI-LANGUAGE FEATURE, which is why it matters more than it looks. A basemap
@@ -2207,8 +2525,8 @@ onMounted(async () => {
   // mapbox-under-maplibre reference in this profile, carried as a named exemption in the
   // maplibre-embed gate; guarding it lets that exemption be deleted and enforced instead.
   // MapLibre ships its own ctrl CSS via ensureEngineScript, so nothing is lost.
-  // ★ THE LIBRARY'S ensureEngineCSS, NOT A HAND-ROLLED COPY (rega END-REGA-SRV / END-DXS-U100C,
-  // 2026-09-27). Mapbox logged "missing CSS declarations" on the BUILT leaf and in the gallery, and the
+  // ★ THE LIBRARY'S ensureEngineCSS, NOT A HAND-ROLLED COPY (2026-09-27).
+  // Mapbox logged "missing CSS declarations" on the BUILT leaf and in the gallery, and the
   // cause was this block, not a missing <link>:
   //   (a) it only ran when the map element was inside a ShadowRoot — `root instanceof ShadowRoot` — so on
   //       a standalone leaf, where the element is in LIGHT DOM, no stylesheet was ensured at all; and
@@ -2226,6 +2544,7 @@ onMounted(async () => {
     const css = engineStylesheetUrl(upgProvider)
     if (css) await ensureEngineCSS(mapEl.value, css)
   } catch (_) { /* a stylesheet must never stop the map painting */ }
+  if (!mapEl.value) return   // gone while the stylesheet loaded (see the guard after ensureEngineScript)
   // The legacy shadow-root injection stays ONLY as the belt to that braces: ensureEngineCSS returns early
   // for light DOM on the assumption a wrapper <link> exists, and a partner embedding the custom element
   // directly may have no wrapper at all. Harmless when ensureEngineCSS already added the same href — both
@@ -2240,7 +2559,7 @@ onMounted(async () => {
       // the shadow root v3.3.0, .mapboxgl-canvas-container position:STATIC where Mapbox declares
       // it absolute, .mapboxgl-canary display:block, and 0 markers. A canvas container with no
       // positioning context leaves every absolutely-positioned child — the pins — with nothing to
-      // anchor to. Driver: "the polygons for the map and map colors and pins are not showing up".
+      // anchor to. Reported: the map's polygons, colours and pins were not showing up.
       // The comment at the top of this file already says the engine loader is imported rather than
       // re-declared "because a second copy of one fact drifts"; the stylesheet URL was that second
       // copy, and it drifted.
@@ -2314,26 +2633,26 @@ onMounted(async () => {
       toggleTerritory(t)
       return { ...t }
     },
-    // ── R1.3 (f″) gate drivers ────────────────────────────────────────────────
+    // ── R1.3 (f″) gate test handles ────────────────────────────────────────────────
     // Toggle a LEGEND ROW by its visible label exactly as a batch-mode legend tap
     // would — resolves the label to its legend node, then routes through
     // toggleZoneSelection (the SAME union path a real row tap uses). Returns the
     // node's descendant zoneKeys (count) so the gate can recompute the expected
     // map-highlight feature count independently.
-    // ⚠ THIS IS THE BATCH-UNION DRIVER, NOT A CLICK SIMULATOR — it calls toggleZoneSelection() directly,
+    // ⚠ THIS IS THE BATCH-UNION TEST HANDLE, NOT A CLICK SIMULATOR — it calls toggleZoneSelection() directly,
     // so OUTSIDE batch mode it toggles a union nobody is displaying and the isolate filter stays
-    // undefined. rega measured exactly that (NEEDS-EYES row 45) and asked whether it should isolate for a
+    // undefined. Measured exactly that, which raised whether it should isolate for a
     // single select.
     // IT SHOULD NOT, and widening it would be worse than the narrowness. A REAL click goes through
     // onLegendSelect(), which branches on batchMode — isolate when off, feed the union when on. If this
     // handle isolated on its own it would no longer EXERCISE that branch, and a gate built on it could go
     // green while the real click path was broken. A test handle that does more than the UI hides the UI.
-    // So: use a real click to test isolation (rega's row-45 test A does, and it passes), and use this only
+    // So: use a real click to test isolation (the row-45 test A does, and it passes), and use this only
     // to drive batch selection. The name says Toggle, and toggling the union is what it does.
     toggleLegendRow: (label) => {
       const find = (nodes) => {
         for (const n of nodes) {
-          if (n.label === label) return n
+          if (n.label === label || n.id === label) return n
           if (n.children && n.children.length) {
             const hit = find(n.children); if (hit) return hit
           }
@@ -2376,7 +2695,7 @@ onMounted(async () => {
     zoneKeysForRow: (label) => {
       const find = (nodes) => {
         for (const n of nodes) {
-          if (n.label === label) return n
+          if (n.label === label || n.id === label) return n
           if (n.children && n.children.length) { const h = find(n.children); if (h) return h }
         }
         return null
@@ -2415,7 +2734,7 @@ onMounted(async () => {
     // ★ THE API REQUEST IS ISSUED NOW, NOT AFTER THE BOUNDARIES. Measured 2026-09-26: this chain was
     // strictly serial — `await Promise.all([3 boundaries])` and only THEN `await fetch(API)` — so
     // 3,549 KB of geojson (world-adm0 1,866 + gb-IND-ADM1 1,628 + gb-CHN-ADM1 54) had to download AND
-    // JSON.parse before the API request was even sent. rega measured the first paint at 9.5-16.5 s.
+    // JSON.parse before the API request was even sent. The first paint measured 9.5-16.5 s.
     // Starting the fetch here overlaps the two; nothing below needs the boundaries to BUILD the URL.
     // ⚠ NOT awaited here — the promise is created and awaited further down, so a rejection surfaces at
     // the same place in the same try/catch as before. Creating it early changes WHEN the request goes
@@ -2455,8 +2774,8 @@ onMounted(async () => {
     // full fetch, no per-slice field subsets.
     //
     // ★ THE RECORDS ARE AWAITED BEFORE THE BOUNDARIES, so the pins can be drawn while MapLibre is still
-    // parsing 3.6 MB of GeoJSON. rega traced the baseline (main ccc2b1bb, tokenless MapLibre, software
-    // GL) and the finding overturned my own profile: every key byte arrives by 1.2-2.9 s, but the first
+    // parsing 3.6 MB of GeoJSON. A baseline trace (main ccc2b1bb, tokenless MapLibre, software
+    // GL) overturned an earlier profile: every key byte arrives by 1.2-2.9 s, but the first
     // territory draws 5.6-6.4 s LATER, and only ~2.6 s of that gap is main-thread long tasks. The rest
     // is MapLibre's WORKERS parsing and tiling the boundaries. I had profiled file sizes and request
     // order — the artifact — and concluded the download was the cost; on localhost those 3.6 MB arrive
@@ -2464,7 +2783,7 @@ onMounted(async () => {
     // The pins need none of it: they are built from `records` (lat/lng) and slugToZone, and the
     // selector evaluate() at the pin build maps slugs to zone keys without touching any geometry.
     // 68 KB, arriving at ~2.9 s cold.
-    status.value = t('messages.fetchingUupgs', { n: 2106 })
+    status.value = countInSentence(t, 'messages.fetchingUupgs', upgTotal(visionFunnel), packetLang())   // the funnel's total, never a literal
     const records = normalizeRecords(await applyPeopleGroupList(extractRecords(await recordsPromise), profileConfig))
     // 09b shift-select §1(b): build iso3→display-name from the LIVE records so an
     // ADM0 country click resolves to the exact label the legend shows (the ADM0
@@ -2474,7 +2793,7 @@ onMounted(async () => {
 
     // Re-shape the legend tree WITH records so every node carries `pop` (slice
     // 04u §1b). Selectors/colors/counts are unchanged; only `pop` is added.
-    legendNodes.value = buildLegendNodes(listZones(), { deafCount: DEAF_COUNT, records })
+    legendNodes.value = buildLegend(records)
 
 
     // ── pins layer (kept from 04b, now stamped with zoneKey for isolate dim) ──
@@ -2535,12 +2854,11 @@ onMounted(async () => {
       // ⚠ SAME BUG, SAME FIX as ensureLayers():606 — guard on the LAYER, not only the source. The old
       // `if (map.getSource('upg')) return` adds nothing whenever the source survives a style reload
       // while 'upg-pins' does not. NOT the cause of the blank English README shot (that was a 7 s
-      // screenshot wait against a 9.5-16.5 s first paint — rega measured it); this is the
+      // screenshot wait against a 9.5-16.5 s first paint — measured); this is the
       // setStyle/theme-toggle path, where the re-add is real and could silently no-op.
-      if (map.getSource('upg') && map.getLayer('upg-pins')) return
+      if (map.getSource('upg') && map.getLayer('upg-pins') && map.getLayer('upg-pins-hit')) return
       if (!map.getSource('upg')) map.addSource('upg', { type: 'geojson', data: pinFC })
-      if (map.getLayer('upg-pins')) { attachPinHandlers(); return }
-      map.addLayer({
+      if (!map.getLayer('upg-pins')) map.addLayer({
         id: 'upg-pins', type: 'circle', source: 'upg', paint: {
           // BUG-UPG100-DOTS-HARD-TO-SEE (2026-09-19): the previous floor (2.5px @ low zoom,
           // 0.6px semi-transparent WHITE stroke) was still hard to see — a translucent white
@@ -2560,22 +2878,47 @@ onMounted(async () => {
           // nothing here. Sized for the count, not copied from the sibling: 6px at z=1 (+50%),
           // tapering back to the original 9px by z=8, where geography supplies the context and the
           // dots no longer need to carry it alone.
-          // ★ REVERTED TOWARD THE SIBLINGS (Driver 2026-09-23: "the dots are way too big, I never
-          // asked for them to be that big, they're larger than the dots on most of the other maps").
-          // He is right and this was my overcorrection: an earlier pass raised z=1 from 4 to 6 to fix
+          // ★ REVERTED TOWARD THE SIBLINGS (2026-09-23: the dots were far too big, larger than
+          // the dots on most of the other maps, and nobody had asked for that size).
+          // That report is right and this was my overcorrection: an earlier pass raised z=1 from 4 to 6 to fix
           // "hard to see", reasoning that 100 marks alone on a planet need more presence than
           // all-people-groups' 12,379. The reasoning was sound but the amount was not — at 6 this map
           // became the LARGEST of the set (all-people-groups is 2.2 at z=0, 3.4 at z=4), so it read as
           // wrong rather than as emphasised. 5 keeps a deliberate step above the dense map without
           // breaking the family; the halo below is what actually carries visibility at world zoom.
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 5, 4, 6.5, 8, 9],
+          // ★ SMALL WHEN ZOOMED OUT, AS THE REST OF THE FAMILY (2026-09-30: on a phone at world zoom the
+          // pins read as far too large). The reasoning above counted ONE HUNDRED dots; this
+          // map draws every group of every list, 2,107 of them (the status line says so). The ramp's
+          // first stop was z=1, and MapLibre clamps below the first stop, so a phone's whole-world view
+          // (z ≈ 0.5-1.2) drew 2,107 dots at the full 5 px + a 1.8 px halo (≈ 14 px across): India
+          // and Africa became solid blobs. Now it starts at z=0, between all-people-groups (2.2) and
+          // the library's standard ramp (3), and grows back to the SAME 9 px by z=8, so a zoomed-in
+          // view is unchanged: ≈ 7.6 px across at a phone's world view, about a third of the area.
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 0, 2.6, 2, 3.2, 4, 4.5, 6, 6.5, 8, 9],
           'circle-color': matchColorExpr, 'circle-opacity': 1,
           // Solid dark outer halo = the visibility win (frames every dot on any basemap).
           // Widened in step with the radius so the halo stays a frame, not a smudge: a 1.2px ring
           // around a 6px dot is proportionally thinner than around a 4px one, which would have
           // spent the size increase and lost the contrast that made small dots findable at all.
-          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 1, 1.8, 8, 2],
+          // The halo shrinks with the dot at world zoom (a 1.8 px ring around a 2.6 px dot would BE the
+          // dot), but stays solid and dark: here the dots sit on fills of their own zone's hue, and the
+          // halo is what separates one from the other. Unchanged from z=8.
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 4, 1.4, 8, 2],
           'circle-stroke-color': 'rgba(15,20,25,0.9)',
+        },
+      })
+      // ★ THE TAP TARGET DID NOT SHRINK WITH THE DOT (2026-09-30). Mapbox and MapLibre hit-test a circle
+      // at its radius + stroke, and the pin click was bound to the drawn layer, so the smaller dot above
+      // would have taken the tap target down with it (≈ 7 → 4 px radius at world zoom). This invisible
+      // twin keeps the ramps the drawn layer had until then, and the click + cursor bind to it
+      // (attachPinHandlers): a tap selects exactly what it selected before; only the drawing changed.
+      // Both opacities are 0, so the engines skip the draw but still query the features (the library's
+      // pin hitbox layers rely on the same). The STROKE opacity matters: its default is an opaque black ring.
+      if (!map.getLayer('upg-pins-hit')) map.addLayer({
+        id: 'upg-pins-hit', type: 'circle', source: 'upg', paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 5, 4, 6.5, 8, 9],
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 1, 1.8, 8, 2],
+          'circle-opacity': 0, 'circle-stroke-opacity': 0,
         },
       })
       // slice 13 §1b: wire the pin-click + hover-cursor handlers HERE so they
@@ -2600,11 +2943,10 @@ onMounted(async () => {
     // ── NOW the boundaries, and the territories behind the pins ───────────────
     // ★ EVERYTHING ABOVE THIS LINE NEEDS ONLY THE 68 KB RECORDS LIST. The boundary await sits HERE so
     // the pin layer can be added while MapLibre's workers are still parsing 3.6 MB of GeoJSON —
-    // rega's baseline trace showed the first territory drawing 5.6-6.4 s after the last key byte
+    // A baseline trace showed the first territory drawing 5.6-6.4 s after the last key byte
     // arrived, and only ~2.6 s of that is main-thread work. Parsing is the bottleneck, not the network,
     // so putting SOMETHING useful on screen means drawing what does not need parsing.
-    // (dx-shepherd ENDTOKEN-DXS-UPG-PINSFIRST; it replaced my two-pass-zones plan, which would still
-    // have waited on world-adm0.)
+    // (This replaced a two-pass-zones plan, which would still have waited on world-adm0.)
     status.value = t('messages.loadingBoundaries')
     const [adm0, adm1Chn] = await Promise.all([boundaryPromises.adm0, boundaryPromises.adm1Chn])
     const adm1Ind = await boundaryPromises.adm1Ind
@@ -2698,7 +3040,10 @@ onMounted(async () => {
     const resolved = paintable.filter(([, n]) => n >= 1).length
     status.value = t('messages.mapStatusCounts', { polys: tapestry.features.length, zones: resolved, total: paintable.length, pins: pinFeatures.length })
   } catch (e) {
-    status.value = '⚠ ' + (e && e.message ? e.message : String(e))
+    // The reader gets a sentence in their language; the cause (a boundary 404, a missing API base —
+    // developer configuration text) goes to the console, where the person who can fix it looks.
+    console.warn('[upg-100-list] map data failed:', e)
+    status.value = '⚠ ' + t('upgMap.mapDataFailed')
   }
 
   // R1.3 (j): once the legend tree paints its rows, start the MutationObserver
@@ -2747,7 +3092,7 @@ onMounted(async () => {
 // When the legend data finally lands, satisfy anything that was asked for too early. This is the
 // half that makes retention real -- without it the request is remembered and never applied.
 //
-// ★ ON nextTick, AND NOT AS A PRECAUTION. upg100-plugin flagged the race from experience with this
+// ★ ON nextTick, AND NOT AS A PRECAUTION. The race is a known one in this
 // file: watch([batchMode, isDark]) at :222 calls markLegendBatchRows() on nextTick, and this watcher
 // would otherwise fire PRE-FLUSH -- so the selection would be applied against the legend rows that
 // are about to be replaced by the re-render from these very legendNodes, and its row highlight
@@ -2756,7 +3101,7 @@ onMounted(async () => {
 // the bug this whole change exists to fix. Draining after the flush lets the rows exist and be
 // marked first.
 // ★ DRAIN ON EITHER READINESS SIGNAL, AND RE-READ THE ATTRIBUTE RATHER THAN THE BOOKKEEPING.
-// rega measured legendNodes populated at t=1017 and the request at t=4106, so a legendNodes-change
+// Measured: legendNodes populated at t=1017 and the request at t=4106, so a legendNodes-change
 // drain can never re-fire for it. Re-reading the host attribute makes the outcome independent of
 // which hook fired when, which is the whole reason state was chosen over an event.
 const _hostEl = () => { try { return mapEl.value?.getRootNode?.()?.host || null } catch (_) { return null } }
@@ -2809,6 +3154,9 @@ onBeforeUnmount(() => {
       if (window.__UPG_SEARCH__ === _mySearchHandle) delete window.__UPG_SEARCH__
       if (window.__UPG_MAP__ === _myMapHandle) delete window.__UPG_MAP__
       if (window.__UPG_SELECT__ === _mySelectHandle) delete window.__UPG_SELECT__
+      // Copy / Export CSV's last text (the gates read them back); released with the rest of this map's hooks.
+      delete window.__UPG_LAST_CLIPBOARD__
+      delete window.__UPG_LAST_CSV__
     } catch (_) { /* a frozen or cross-origin window must not break teardown */ }
   }
 })
@@ -2872,7 +3220,8 @@ onBeforeUnmount(() => {
       @clear="onGeocoderClear"
     />
     <!-- Shared control rail — same set + ordering as research-map. MapToolbar
-         self-positions top-right; the status badge is bottom-right (no collision).
+         self-positions top-right; the status badge sits at the bottom inline end, above the
+         map credits (no collision).
          Gated on mapRef so the buttons only mount once the map instance exists. -->
     <MapToolbar v-if="mapRef" :has-geocoder="hasGeocoder">
       <ZoomInButton      :map="mapRef"         :is-dark="isDark" />
@@ -2880,9 +3229,9 @@ onBeforeUnmount(() => {
       <LocationButton    :map="mapRef"         :is-dark="isDark" />
       <FullscreenButton  :map-container="mapEl" :is-dark="isDark" />
       <ThemeToggleButton :is-dark="isDark"      @toggle="handleToggleTheme" />
-      <!-- ★ NO MAP-LEVEL SHARE BUTTON HERE (Driver 2026-09-23, reported twice): "there's a share
-           button on the map, but there's ALSO a share button on the header of the website. That's
-           two separate share buttons. We don't need the one on the map."
+      <!-- ★ NO MAP-LEVEL SHARE BUTTON HERE (2026-09-23, reported twice): there was a share
+           button on the map AND a share button in the header of the website — two separate
+           share buttons, and the one on the map is not needed.
            The composite upg-100-mfe.vue:217 already mounts a ShareButton in the header, and that is
            the one to keep — it shares the whole cap-4 element, whereas this one shared only the map
            half, so the duplicate was also the less useful of the two.
@@ -2940,6 +3289,7 @@ onBeforeUnmount(() => {
         :columns="['count', 'pop']"
         :title="LEGEND_TITLE"
         :export-enabled="true"
+        :export-cards="true"
         @select="onLegendSelect"
         @export="onLegendExport"
       />
@@ -2959,7 +3309,7 @@ onBeforeUnmount(() => {
         :tabs="LEGEND_TABS"
         :default-tab="LEGEND_DEFAULT_TAB"
         :columns="['count', 'pop']"
-        column-label="UPG 100"
+        column-label="UPG100"
         :title="LEGEND_TITLE"
         :is-dark="isDark"
         popup-action="pray"
@@ -2993,7 +3343,7 @@ onBeforeUnmount(() => {
         />
       </div>
     </div>
-    <!-- R1.4 (L4 — Brief: single button + progressive disclosure): the land-
+    <!-- R1.4 (L4 — single button + progressive disclosure): the land-
          division HUD renders ONLY while batch mode is ON. The map-rail
          .upg-rail-batch (above, in the MapToolbar) is the SINGLE batch entry
          point — the old always-visible HUD .upg-batch-btn is gone. Inside batch
@@ -3001,15 +3351,25 @@ onBeforeUnmount(() => {
          territory/zone is selected. .upg-hud / .upg-hud-total / .upg-hud-btn are
          the selectors the firefox gate reads. Band turns green in the 50–100
          UUPG curation band. -->
+    <!-- The shown zone, named, with the × that shows every zone again (clearShownZone). -->
+    <button v-if="shownZone" type="button" class="upg-shown" :aria-label="t('buttons.clearSelection') + ': ' + shownZone"
+      :title="t('buttons.clearSelection')" @click="clearShownZone">
+      <span class="upg-shown-name">{{ shownZone }}</span><span class="upg-shown-x" aria-hidden="true">×</span>
+    </button>
     <div v-if="batchMode" class="upg-hud">
       <div class="upg-hud-hint">
         {{ t('messages.tapTerritoriesHint') }}
       </div>
+      <!-- ★ THE HUD'S MESSAGE LINE SITS AT THE TOP, not under the buttons: on a phone the first-visit PinHint toast
+           sits over the HUD's bottom edge, and a line down there was covered ("This needs a desktop or laptop
+           computer." read as "This needs a"). Copy's flash, the phone ceiling's notice, failures and the print's
+           progress all appear here (hudSay / hudProgress). -->
+      <div v-if="selCount" class="upg-hud-flash" role="status" aria-live="polite">{{ copyFlash || hudProgress }}</div>
       <div v-if="selCount" class="upg-hud-head">
         <!-- ★ A LABEL FORM ("Territories: {count}"), NOT A PLURAL KEY. This was
              `territor{{ selCount === 1 ? 'y' : 'ies' }}` — English pluralisation welded
-             into the template. I proposed a vue-i18n plural key instead; studio was right
-             that it would be WORSE. Tested: with no pluralRules registered, vue-i18n v9
+             into the template. A vue-i18n plural key was proposed instead; it would
+             be WORSE. Tested: with no pluralRules registered, vue-i18n v9
              applies an English-shaped choice (count===1 ? 0 : 1) to EVERY locale, so ru
              with 3 forms supplied picks wrong at 1, 2 and 21 — confidently wrong grammar
              that LOOKS translated. Real plural support needs a pluralRules map at
@@ -3017,20 +3377,30 @@ onBeforeUnmount(() => {
              agreement entirely and is correct in all 11 today. -->
         <span>{{ t('messages.territoriesSelected', { count: selCount }) }} ·</span>
         <span class="upg-hud-total">{{ selTotal }} UUPG</span>
-        <!-- TWO KEYS, not a ternary over one (studio's call, and it is the right one): these are two
+        <!-- TWO KEYS, not a ternary over one: these are two
              STATES of one label, and a locale may not phrase "in range" and "out of range" as a tick
              plus the same words. The ✓ lives in the catalogue string so a locale can drop it. -->
         <span class="upg-hud-band" :class="{ ok: selTotal >= 50 && selTotal <= 100 }">
           {{ selTotal >= 50 && selTotal <= 100 ? t('messages.bandInRange') : t('messages.bandOutOfRange') }}
         </span>
       </div>
-      <div v-if="selCount" class="upg-hud-names">{{ selectedTerritories.map(t => t.name).join(', ') }}</div>
-      <!-- ★ THE SELECTION MAKES SOMETHING. Driver: the batch tool is "super buggy", and letting
-           you change the colour of regions is NOT what is wanted — "the batch selection tool
-           should let you create your own poster or prayer packet based on your own selection."
-           So the colour swatches and the hex input are GONE, and the actions that remain BUILD
-           the two artefacts this app already knows how to make, from exactly what was picked.
-           These reuse printPrayerPacket / printPoster rather than growing a third pipeline. -->
+      <div v-if="selCount" class="upg-hud-names">{{ formatList(selectedTerritories.map(t => t.name), { locale: packetLang() }) }}</div>
+      <!-- ★ RECOLOUR IS BACK (2026-09-30), beside the actions that build from the selection. The batch tool
+           exists so that when the people-group data changes, partners can redraw the zones and re-derive
+           their people groups: the colour previews on the map (the upg-sel-fill layer repaints; the base map
+           stays clean) and travels in Copy's first line as " · #hex", which data/apply-grouping.mjs applies
+           to the regrouped zone. 8 Okabe–Ito swatches (colour-blind aware) + a custom hex. -->
+      <div v-if="selCount" class="upg-hud-swatches" role="group" :aria-label="t('upgMap.selectionColourGroup')">
+        <button v-for="c in SWATCHES" :key="c" type="button"
+          class="upg-swatch" :class="{ active: selectedColor === c }" :aria-pressed="selectedColor === c ? 'true' : 'false'"
+          :data-color="c" :style="{ background: c }"
+          :title="t('upgMap.selectionColour', { hex: c })" :aria-label="t('upgMap.selectionColour', { hex: c })"
+          @click="setSelectionColor(c)"></button>
+        <input v-model="hexDraft" class="upg-hex" placeholder="#hex" spellcheck="false"
+          :aria-label="t('upgMap.customColour')" @change="onHexInput" @keyup.enter="onHexInput" />
+      </div>
+      <!-- The make-row BUILDS what this app already makes from exactly what was picked (printPrayerPacket /
+           printPoster / the card deck); the data-row below EXPORTS the selection itself. -->
       <!-- ★ THE BUTTON SAYS WHAT IT IS DOING. Reported from mobile 2026-09-28: pressing these gave
            no sign of progress. batchBusy only DISABLED them, and a disabled button is visually
            indistinguishable from an unresponsive one — so a reader on a phone taps, sees the label
@@ -3043,9 +3413,17 @@ onBeforeUnmount(() => {
           @click="makeSelectionPacket">{{ busyAction === 'packet' ? t('buttons.working') : t('buttons.prayerList') }}</button>
         <button class="upg-hud-btn make" :class="{ 'is-busy': busyAction === 'poster' }" :disabled="batchBusy"
           @click="makeSelectionPoster">{{ busyAction === 'poster' ? t('buttons.working') : t('buttons.posterMap') }}</button>
+        <button class="upg-hud-btn make" :class="{ 'is-busy': busyAction === 'cards' }" :disabled="batchBusy"
+          @click="makeSelectionCards">{{ busyAction === 'cards' ? t('buttons.working') : t('buttons.cardDeck') }}</button>
+      </div>
+      <!-- COPY + EXPORT CSV: the selection's territories (apply-grouping's line) and its people groups
+           (data/selection-export.js). A second row, so six buttons never squeeze into one on a phone. -->
+      <div v-if="selCount" class="upg-hud-actions">
+        <button class="upg-hud-btn copy" @click="copySelection">{{ t('upgMap.copySelection') }}</button>
+        <button class="upg-hud-btn csv" :class="{ 'is-busy': busyAction === 'csv' }" :disabled="batchBusy"
+          @click="exportSelectionCsv">{{ busyAction === 'csv' ? t('buttons.working') : t('upgMap.exportCsv') }}</button>
         <button class="upg-hud-btn clear" @click="clearSelection">{{ t('buttons.clearSelection') }}</button>
       </div>
-      <div v-if="selCount" class="upg-hud-flash">{{ copyFlash }}</div>
     </div>
     <div class="upg-status">{{ status }}</div>
   </div>

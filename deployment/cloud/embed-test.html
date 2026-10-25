@@ -59,6 +59,10 @@
     const r = await fetch(`${base}/manifest.json`, { cache: 'no-cache' })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     manifest = await r.json()
+    // The data API the maps read (people groups, statistics). Every generated page and copy-paste snippet sets it
+    // before its bundle loads; this page builds its cards itself, so it sets it from the manifest. Without it the
+    // bundles asked this host's own /api, which the research host doesn't serve (404s, fewer nodes drawn).
+    if (!window.MAP_APP_API_URL && manifest.runtime && manifest.runtime.apiBaseUrl) window.MAP_APP_API_URL = manifest.runtime.apiBaseUrl
   } catch (e) {
     status.textContent = `The manifest did not load from ${base}/manifest.json (${e.message}).`
     return

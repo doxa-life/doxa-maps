@@ -81,8 +81,8 @@ const familyColorMap = new Map(FAMILIES.map(f => [f.key, f.color]))
 function familyColor(fam) { return familyColorMap.get(fam) || familyColorMap.get('Other') }
 
 // LoadingGlobe stays mounted until pins are added to the map. Flips true after
-// setupLayers + family aggregation completes. Per user 2026-05-02: don't drop
-// the loader before pins populate.
+// setupLayers + family aggregation completes: the loader must not drop
+// before pins populate.
 const dataReady = ref(false)
 function reload() { window.location.reload() }
 
@@ -105,7 +105,7 @@ function buildColorExpr() {
 }
 
 // ── Projection + basemap ──────────────────────────────────────────────────────
-const projection    = ref('mercator')  // default mercator per user spec
+const projection    = ref('mercator')  // default: mercator
 const showBasemap   = ref(false)
 const currentBasemap = ref('dark')
 const BASEMAPS = [
@@ -446,7 +446,7 @@ onMounted(async () => {
   map.value.on('load', async () => {
     // The constructor's projection:'mercator' is only a request: on Mapbox the style's own projection
     // (globe) wins, so the map booted as a globe while this view's state and button said Mercator, and
-    // the first "Switch to Globe" click did nothing (rega, C2). The style is ready here, on both
+    // the first "Switch to Globe" click did nothing (C2). The style is ready here, on both
     // engines, so apply the state to the map.
     setProjectionFor(map.value, projection.value)
     try {
@@ -559,7 +559,7 @@ const LF_CSS = POPUP_CSS + `
 
     <!-- Toolbar — rounded pill controls -->
     <div class="map-toolbar">
-      <button class="toolbar-btn round" :title="`Theme: ${currentBasemap === 'dark' ? 'Dark' : 'Light'} (click to toggle)`"
+      <button class="toolbar-btn round" :title="tShared(currentBasemap === 'dark' ? 'buttons.switchToLightMode' : 'buttons.switchToDarkMode')" :aria-label="tShared(currentBasemap === 'dark' ? 'buttons.switchToLightMode' : 'buttons.switchToDarkMode')"
         @click="toggleTheme">
         <svg v-if="currentBasemap === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -569,7 +569,7 @@ const LF_CSS = POPUP_CSS + `
           <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn round" :title="projection === 'globe' ? 'Switch to Mercator' : 'Switch to Globe'"
+      <button class="toolbar-btn round" :title="tShared(projection === 'globe' ? 'mapui.disableGlobe' : 'mapui.enableGlobe')" :aria-label="tShared(projection === 'globe' ? 'mapui.disableGlobe' : 'mapui.enableGlobe')"
         @click="toggleProjection">
         <span class="toolbar-icon">{{ projection === 'globe' ? '🌐' : '🗺' }}</span>
       </button>

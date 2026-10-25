@@ -23,5 +23,12 @@
     "within": "ضمن {selection}",
     "allData": "كل بيانات DOXA"
   },
-  "upg100Placeholder": "ابحث عن شعب أو قائمة UPG-100 أو منطقة…"
+  "upg100Placeholder": "ابحث عن شعب أو قائمة UPG100 أو منطقة…",
+  "tabPlaceholder": {
+    "languageFamilies": "ابحث في عائلة اللغة أو اللغة أو اللهجة/التنوع",
+    "affinityBlocks": "ابحث في كتلة التقارب أو المجموعة أو الشعب",
+    "regions": "ابحث في المنطقة أو الدولة أو الشعب",
+    "religion": "ابحث في الديانة أو الشعب"
+  },
+  "placeholderRegions": "ابحث عن منطقة أو دولة أو شعب"
 }

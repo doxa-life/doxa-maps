@@ -2,11 +2,11 @@
  "meta": {
   "title": "Which province each people group falls in — India and China",
   "why": "Published so no other build has to repeat this point-in-polygon. gospel-internet ran the identical ray-casting over the identical geometry and could only check itself against our aggregates; a second implementation of the same geometry is a second place for it to drift.",
-  "generated": "2026-09-27",
+  "generated": "2026-10-02",
   "grain": "one row per PLACED people group; the four that fall outside every polygon are in the aggregate file's `unassigned`",
   "rows": 1009,
   "agrees_with": "gospel-by-province.json — per-province counts and the assigned total are reconciled at build time, and neither file is written if they differ",
-  "approximate": "Every row is approximate. The coordinate marks where a PEOPLE is found, not a settlement, and near a border it can fall on the wrong side. No surface may present a province as a fact about a group."
+  "approximate": "Every row is approximate. The coordinate marks a PEOPLE group, not a settlement; its position is approximate, and near a border it can fall on the wrong side. No surface may present a province as a fact about a group."
  },
  "columns": [
   {

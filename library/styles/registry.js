@@ -100,8 +100,8 @@ export const STYLE_REGISTRY = [
     bestFor: ['research-dashboard'] },
 
   // ── GALAXY — black ground, BLUE water ────────────────────────────────────────────────────
-  // DRIVER 2026-09-23: "the map style needs to have the BLUE WATER with like the BLACK GALAXY
-  // background". The continents go to deep space; the oceans stay unmistakably water.
+  // The ask (2026-09-23): BLUE WATER against a BLACK GALAXY background. The continents go to deep
+  // space; the oceans stay unmistakably water.
   //
   // ★ WHY THIS IS A BASE STYLE + A PAINT PATCH, NOT A HAND-AUTHORED style.json. Writing a whole
   // style document would mean owning ~47 layers, a glyph endpoint and a sprite URL forever, and
@@ -121,10 +121,9 @@ export const STYLE_REGISTRY = [
   // non-text threshold, so the coastline is a real edge rather than a tonal hint. Darker,
   // moodier blues were tried and measured first: #1b3a6b 1.74:1 and #1e4d8f 2.34:1 both fall
   // UNDER 3:1, which is how an ocean ends up merely looking like slightly-less-black land.
-  /* ★ CORRECTED 2026-09-23 — THE FIRST GALAXY WAS A MISREADING OF THE ASK, and the Driver said so:
-     "I don't want a dark basemap, I didn't ask for one. I asked for a spherical GLOBE with a black
-     background — the galaxy, like the Mapbox map — with BLUE OCEANS like the Mapbox map, and the
-     land was NOT to be black."
+  /* ★ CORRECTED 2026-09-23 — THE FIRST GALAXY WAS A MISREADING OF THE ASK. Not a dark basemap: a
+     spherical GLOBE on a black background (the galaxy, as the Mapbox map has it), with BLUE OCEANS
+     like the Mapbox map, and land that is NOT black.
      The first attempt tinted a dark basemap (black land, recoloured water) — the night side of
      Earth. What he described is the DAY side seen from space: NORMAL land colours, the default
      blue oceans, and the blackness belongs to the SPACE BEHIND THE SPHERE, not to the ground.
@@ -133,7 +132,7 @@ export const STYLE_REGISTRY = [
      background showing through outside the sphere (see DashboardMapPanel's .rd-map rule). */
   { id: 'galaxy',         label: 'Galaxy',         mood: 'the day side of Earth floating in space — normal land, blue oceans, black void behind the sphere',
     mapbox: 'mapbox://styles/mapbox/standard',
-    // ★ FOUND, NOT AUTHORED (Driver: "I want it replaced with something you can find online").
+    // ★ FOUND, NOT AUTHORED: replaced with a style that already exists online.
     // VersaTiles Colorful — a maintained, production-free, keyless style (280 layers) whose ocean
     // is a real blue (#bfd9f2), the closest of the surveyed free styles to the Mapbox look. The
     // alternatives measured and rejected: CARTO Voyager's water is pale teal #b0d0d6; OSM

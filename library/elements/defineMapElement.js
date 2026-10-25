@@ -37,6 +37,13 @@ import ProfileLoader from '../ProfileLoader.vue'
 import { createAppI18n } from '../i18n/index.js'
 import { provideOwn, withoutInheritedProvides } from './provide-own.js'
 
+// ★ THE PILOT'S HOT-RELOAD SERVER PREVIEWS UNRELEASED CONTENT. globalThis.DXM_PREVIEW_UNRELEASED lets a preview show
+// what is withheld from the public (the whole-India country poster, library/packet/countrySheet.js). It is set here,
+// in every element's first module, ONLY under the Vite dev server: import.meta.env.DEV is a compile-time false in
+// every build, so the build drops the line and no built bundle (the public tree, the research landing, DX Life's
+// /dx-maps) can carry it. check:preview-flag-dev-only greps the built tree for any assignment of the flag.
+if (import.meta.env && import.meta.env.DEV && typeof globalThis !== 'undefined') globalThis.DXM_PREVIEW_UNRELEASED = true
+
 /**
  * @param {Object} o
  * @param {Object} o.profileModules  the profile's `import.meta.glob('./*.vue')` map — per-plugin, which
@@ -53,7 +60,7 @@ import { provideOwn, withoutInheritedProvides } from './provide-own.js'
  * runtime-core's app.provide() then warns on every key that is already reachable —
  *   'App already provides property with key "profileModules" inherited from its parent element.
  *    It will be overwritten with the new value.'
- * — 8 of those per key, 24 in the Driver's console (2026-09-28), for three keys where overwriting is
+ * — 8 of those per key, 24 in a live console (2026-09-28), for three keys where overwriting is
  * the POINT. `profileModules` is the plugin's own .vue glob and a child must not render its parent's
  * components; pinia is per-instance so two embeds never bleed state; and the i18n instance is what
  * ProfileLoader drives from THIS element's profile-config, which is the whole of the permanently-

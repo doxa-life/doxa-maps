@@ -2,9 +2,8 @@
 /**
  * MapboxGeocoder.vue — wraps mapbox-gl-geocoder npm plugin (loaded via CDN).
  *
- * DOXA's pattern, ported per user request 2026-05-02 ("your competitor is
- * beating you in that area. Their geocoder's directly mapped to language-
- * family legend"). Replaces the bespoke PplrGeocoder.vue dropdown with
+ * DOXA's pattern, ported here: a geocoder mapped directly to the language-family
+ * legend, as comparable tools offer. Replaces the bespoke PplrGeocoder.vue dropdown with
  * Mapbox's vetted UI/UX (keyboard nav, debouncing, ARIA, mobile-friendly)
  * while keeping local-data search via the localGeocoder callback.
  *
@@ -83,7 +82,7 @@ function buildLocalGeocoder() {
       if (out.length >= props.localMax) break
     }
     // Sort priority: BROADER scope first (lower depth = bigger bucket), then
-    // prefix matches, then population/count desc. Per user 2026-05-02:
+    // prefix matches, then population/count desc. Found in QA:
     // searching "Arabic" was selecting the narrow "Arabic" language node
     // (depth 1) instead of the family "Arab (Arabic)" (depth 0) — only some
     // Arabic pins showed. Depth-first means picking the top result now
@@ -138,7 +137,7 @@ function setup() {
   // Wrap entire setup in try/catch — a geocoder failure must NEVER bubble
   // out of onMounted, since Vue's "Unhandled error during execution of
   // mounted hook" cascades and can prevent sibling components (the map!)
-  // from mounting. Per user 2026-05-02: map went completely blank when
+  // from mounting. Without the guard the map went completely blank when
   // the geocoder threw on shadow-DOM addTo().
   try {
     if (isMaplibre) {

@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file: it carries doctrinal and statistical precision — which pools were searched, what \"nothing found\" does and does not claim, why Open Bible Stories is not Scripture — and a mistranslated caveat there would read as authoritative. `prose.english` is the one translated line that says so. When a human-reviewed translation of the prose exists, it gets its own area file and that line comes out.",
   "prose": {
     "english": "Explanatory notes below are in English."
   },
@@ -12,7 +11,8 @@
     "clear": "Clear search",
     "none": "Nothing matches that name, language or code.",
     "placeholderShort": "Group, language or ISO code",
-    "showingOf": "Showing {shown} of {total} matches — keep typing to narrow."
+    "showingOf": "Showing {shown} of {total} matches — keep typing to narrow.",
+    "aria": "Find a people group, language or ISO code"
   },
   "legend": {
     "title": "Unengaged groups with no gospel resource found",
@@ -78,7 +78,17 @@
     "everyResource": "Every resource in",
     "alsoSpeak": "Also speak",
     "share": "Share",
-    "linkCopied": "Link copied"
+    "linkCopied": "Link copied",
+    "seeLargest": "See the {n} largest →",
+    "alreadyPraying": "{n} already praying",
+    "everyIn": "Every resource used in {country}",
+    "found": "Gospel resources found ({n})",
+    "none": "No resource found ({n})",
+    "showingOf": "Showing {shown} of {total}.",
+    "popSuffix": "· {pop} people",
+    "hasResources": "related: {lang} has resources",
+    "loadingTable": "Loading {table}…",
+    "popCountries": "{pop} people · {countries}"
   },
   "res": {
     "scripture": "Scripture",
@@ -166,7 +176,9 @@
     "allLanguages": "All languages",
     "peopleGroup": "people group",
     "peopleGroups": "people groups",
-    "scriptureHere": "Scripture in this language"
+    "scriptureHere": "Scripture in this language",
+    "noTextMeans": "What “no text” means.",
+    "pageLists": "This page lists"
   },
   "columns": {
     "People group": "People group",
@@ -334,7 +346,9 @@
     "c2Unit": "people in the people groups whose PRIMARY language this is — not speakers of the language",
     "c3Title": "Countries with the most unserved languages",
     "c3Sub": "The {n} countries with the most languages that have nothing found. Bar length is every language present in that country.",
-    "c3Unit": "languages present in the country (a cross-border language counts in each)"
+    "c3Unit": "languages present in the country (a cross-border language counts in each)",
+    "noneHero": "{nNone} of {nLang} languages have {noScripture} — the languages of {popNone} people.",
+    "noneHeroFound": "no scripture and no film found in the pools checked"
   },
   "filter": {
     "showingOnly": "Showing only {what}.",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "SUN is already being taught in {countries} by {organisation}."
+  },
+  "gap": {
+    "popLine": "{pop} people · {iso3}",
+    "wayIn": "way in: {via}",
+    "hasNoText": "has {what} — no text found",
+    "showingOnly": "Showing only {what}.",
+    "seeLargest": "See the {n} largest →",
+    "kind": {
+      "none": "groups with nothing found",
+      "some": "groups with some resource",
+      "hnr": "groups that can hear the gospel but have no text Scripture in the pools checked",
+      "all": "groups with Scripture and film"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "Scripture, {medium} · {source}",
+    "bibleVideoOf": "Bible video · {source}",
+    "loading": "Loading resources…",
+    "peopleWord": "people",
+    "alreadyPraying": "already praying",
+    "exhausted": "exhausted",
+    "together": "together with"
+  },
+  "gapHero": {
+    "hero": "{groups} people groups are {growing} {noFound} {pop} people, an estimated {deaths} deaths per day.",
+    "growing": "growing",
+    "found": "with no scripture and no film found in the pools checked —"
+  },
+  "ui": {
+    "noCode": "no code",
+    "unnamed": "unnamed language",
+    "hideKey": "Collapse legend",
+    "showKey": "Expand legend",
+    "largest": "Largest groups with nothing found",
+    "nobodyPraying": "Nothing found, and nobody praying",
+    "concentrates": "Where the gap concentrates",
+    "linkUnchecked": "This link has not been checked."
+  },
+  "rows": {
+    "scriptureHere": "Scripture in this language",
+    "audio": "Scripture",
+    "bibleVideo": "Bible video",
+    "gospelPresentation": "Gospel presentation",
+    "studyNotes": "study notes",
+    "readOnline": "read online",
+    "audioScripture": "Audio Scripture",
+    "listenBrowser": "Listen in a browser",
+    "inBrowser": "In a browser — {media}",
+    "readHere": "Read in this language",
+    "listenHere": "Listen in this language",
+    "wordsOfLife": "Words of Life — {name}",
+    "gospelAudio": "Gospel audio",
+    "discipleship": "{brand} discipleship training"
   }
 }

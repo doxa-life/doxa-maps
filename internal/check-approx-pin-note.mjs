@@ -30,7 +30,7 @@ check('a GeoJSON feature is matched to rows on the same point', colocatedWith(id
 check('a lone point shares with nobody', colocatedWith(idx, rows[3]).length === 0, colocatedWith(idx, rows[3]))
 check('a row without a position is ignored', colocatedWith(idx, rows[4]).length === 0, colocatedWith(idx, rows[4]))
 // A click hands over the RENDERED feature: the engine rebuilt its geometry from tile coordinates, so it is
-// near the roster point but not equal to it: ~0.001 degree at low zoom (rega, row 46, a shared point that never matched).
+// near the roster point but not equal to it: ~0.001 degree at low zoom (a browser check, row 46: a shared point that never matched).
 const rendered = { type: 'Feature', properties: { name: 'Koraga' }, geometry: { type: 'Point', coordinates: [75.2486, 12.8431] } }
 check('a rendered (tile-rounded) feature still finds its co-located groups', colocatedWith(idx, rendered).sort().join() === 'Godda,Maila', colocatedWith(idx, rendered))
 // The same people in two countries: the nearest roster row wins, not the first.
@@ -39,7 +39,7 @@ const renderedFar = { type: 'Feature', properties: { name: 'Koraga' }, geometry:
 check('a repeated name resolves to the nearest roster point', colocatedWith(twin, renderedFar).join() === 'Other', colocatedWith(twin, renderedFar))
 // The rows a map DRAWS are normalized people groups (name + latitude/longitude, no geometry), and every
 // map built on useMapData must offer them to its legends: the prayer map did not, so its legends read the
-// raw API cache and neither the shared-point sentence nor the standing note appeared (rega, row 46 at 835ec1ac).
+// raw API cache and neither the shared-point sentence nor the standing note appeared (a browser check, row 46 at 835ec1ac).
 const drawn = [{ name: 'A', latitude: 12.85, longitude: 75.25 }, { name: 'B', latitude: '12.85', longitude: '75.25' }]
 const clickedA = { type: 'Feature', properties: { name: 'A' }, geometry: { type: 'Point', coordinates: [75.2504, 12.8497] } }
 check('normalized rows (no geometry) index and match a clicked pin', colocatedWith(buildColocationIndex(drawn), clickedA).join() === 'B', colocatedWith(buildColocationIndex(drawn), clickedA))
@@ -65,10 +65,13 @@ try {
   const one = await render('en', {})
   check('first sentence always', /not a town or a boundary/.test(one) && !/same point/.test(one), one)
   const two = await render('en', { shared: ['Koraga', 'Maila'] })
-  check('shared point names the others and counts all', /Koraga, Maila/.test(two) && /3 groups share/.test(two), two)
+  // The names join by the locale's own list grammar (library/i18n formatList), not by an English comma.
+  check('shared point names the others and counts all', /Koraga and Maila/.test(two) && /3 groups share/.test(two), two)
   check('never prints a raw coordinate', !/\d+\.\d{3,}/.test(one + two), one + two)
   const ar = await render('ar', { shared: ['Koraga'] })
   check('Arabic renders from the Arabic catalogue', /[؀-ۿ]/.test(ar) && /Koraga/.test(ar), ar)
+  const ar2 = await render('ar', { shared: ['Koraga', 'Maila'] })
+  check('Arabic joins the names with و, never an English comma inside Arabic prose', /Koraga وMaila/.test(ar2) && !/Koraga, Maila/.test(ar2), ar2)
 } finally { await server.close() }
 if (bad) { console.log(`APPROX-PIN-NOTE: FAIL — ${bad} case(s).`); process.exit(1) }
-console.log('APPROX-PIN-NOTE: PASS — pins say they are localities, and name the groups that share a point.')
+console.log('APPROX-PIN-NOTE: PASS — pins say what they are, and name the groups that share a point.')

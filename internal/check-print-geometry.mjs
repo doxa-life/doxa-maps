@@ -1,10 +1,9 @@
 // check-print-geometry — the THREE print paths must each produce their OWN page
 // geometry, from the UPG-100 page, in JavaScript.
 //
-// Driver: "make sure poster generation works and the aspect ratio of the print
-// dialog can be custom based on your print point, so print dialog works for
-// poster, for vertical packet, and for horizontal cards... not using python but
-// all working in the jamstack maps."
+// THE ASK: poster generation works, and the print dialog's aspect ratio follows
+// what is being printed, so the print dialog works for the poster, the vertical
+// packet and the horizontal cards, all in the JAMstack maps rather than in Python.
 //
 // One gate over all three because the failure they share is the same: a print
 // path silently falling back to letter. Chromium does that SILENTLY for any

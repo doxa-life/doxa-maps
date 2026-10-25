@@ -4,7 +4,7 @@
  *
  * THE BUG THIS EXISTS TO PREVENT (real, found 2026-09-22 by resizing the cap-5 SPA to 414px).
  * VerticalTabsLayout renders its drawer toggle inside `<header v-if="header">`. The cap-5 DX-Maps
- * SPA runs header-OFF by default (the Driver's no-stacked-headers rule for embedding). At mobile
+ * SPA runs header-OFF by default (the no-stacked-headers rule for embedding). At mobile
  * width the rail becomes an off-canvas drawer at translateX(-100%) with navOpen=false. So: the
  * drawer was off screen, the header holding the toggle did not exist, and the only other control
  * (.vtl-collapse) lives INSIDE the drawer — measured off screen at x:-244.
@@ -112,11 +112,12 @@ const PROBE = () => {
   const rail = all.find(n => /vtl-nav/.test(cls(n)))
   if (!rail) return { noRail: true }
 
-  // Any control that can bring the rail on screen. Both are legitimate: the header toggle when a
-  // header exists, the floating opener when it does not.
+  // Any control that can bring the rail on screen. All are legitimate: the header toggle when a
+  // header exists; with none, the phone bar's ☰ (.vtl-phone-menu, app mode) or the corner ☰ (.vtl-fab,
+  // web mode: a host page with its own site header).
   const openers = all
-    .filter(n => n.tagName === 'BUTTON' && /vtl-menu|vtl-fab/.test(cls(n)))
-    .map(n => ({ kind: /vtl-fab/.test(cls(n)) ? 'fab' : 'header-menu', on: onScreen(n), name: name(n) }))
+    .filter(n => n.tagName === 'BUTTON' && /vtl-menu|vtl-phone-menu|vtl-fab/.test(cls(n)))
+    .map(n => ({ kind: /vtl-phone-menu/.test(cls(n)) ? 'phone-bar' : /vtl-fab/.test(cls(n)) ? 'corner' : 'header-menu', on: onScreen(n), name: name(n) }))
 
   return {
     railOnScreen: onScreen(rail),
@@ -173,7 +174,7 @@ for (const t of targets) {
       for (const c of (n.children || [])) w(c)
     })(document.body)
     const cls = (n) => (n.className || '').toString()
-    const btn = all.find(n => n.tagName === 'BUTTON' && /vtl-menu|vtl-fab/.test(cls(n)) &&
+    const btn = all.find(n => n.tagName === 'BUTTON' && /vtl-menu|vtl-phone-menu|vtl-fab/.test(cls(n)) &&
                               n.getBoundingClientRect().width > 0)
     if (!btn) return { clicked: false }
     btn.click()

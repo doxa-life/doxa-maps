@@ -7,7 +7,7 @@
  * decoupling the bus exists for — the table panel owns no camera code, and this file owns
  * no table code.
  *
- * ── MOTION SAFETY (BUG-RESIZE-STROBE class; the Driver is photosensitive) ──────────────
+ * ── MOTION SAFETY (BUG-RESIZE-STROBE class; a reader may be photosensitive) ────────────
  * The strobe bug fixed in @map/composables/useMapInstance.js was caused by a resize handler
  * re-snapping the camera on EVERY frame at 60fps. The rule learned there is applied here:
  *

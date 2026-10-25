@@ -72,6 +72,14 @@ useShadowStyles(`
   .hbg-btn { width: 36px; height: 36px; gap: 4px; }
   .hbg-line { width: 14px; }
 }
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .hb-btn, .hb-bar { transition: none !important; animation: none !important; }
+}
 `, 'hamburger-button')
 
 const props = defineProps({

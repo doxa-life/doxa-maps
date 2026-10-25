@@ -29,6 +29,7 @@
 
 import { computed } from 'vue'
 import { useAffinityBlockLegendData } from '@map/composables/legends/useAffinityBlockLegendData.js'
+import { formatList } from '@map/i18n/index.js'
 
 /**
  * @param {object} cfg           the injected dashboardConfig (read for facetRail)
@@ -83,7 +84,11 @@ export function useTreeLegendLabels(cfg, dataStore, searchSourceId) {
     // thing. Without it an array fell through to its default toString and a chip read
     // "Religion: Islam,Hinduism": the codes joined by a bare comma, with no spacing and no code
     // resolved to its human name.
-    if (Array.isArray(value)) return value.map((v) => (map && map.get(v)) || v).join(', ')
+    // DISJUNCTION: a multi-value filter holds ALTERNATIVES, and the bus matches a row if ANY of them
+    // matches. Every surface that turns a filter into words comes through here, so the connector is
+    // resolved once and the chip bar, the research-filter chips and the CSV provenance line all say
+    // the same thing in the reader's language.
+    if (Array.isArray(value)) return formatList(value.map((v) => (map && map.get(v)) || v), { type: 'disjunction' })
     if (!map) return value
     return map.get(value) || value
   }

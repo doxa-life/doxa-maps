@@ -2,7 +2,7 @@
 /**
  * LanguageTreeChart.vue — every language family a roster belongs to, as a radial tree on a whiteboard.
  *
- * Promoted from gospel-internet's GiTree (Driver brief §B). It is deliberately THIN: the drawing is
+ * Promoted from gospel-internet's GiTree (product brief §B). It is deliberately THIN: the drawing is
  * library/charts/whiteboard/tiered-points.js, the surface is library/maps/whiteboard-map.js, the
  * hierarchy is library/charts/whiteboard/language-tree-model.js and the camera is
  * library/charts/whiteboard/frame-target.js — all four tested headlessly. What is left here is wiring,

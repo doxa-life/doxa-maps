@@ -7,7 +7,7 @@
  * This one server-renders them (Vue's renderer, through vite's module loader, no browser, no WebGL):
  * every panel's setup, computeds and template run against the real table, tree and resources, and the
  * HTML is asserted on CONTENT the panel must show, never on the panel's own count of itself.
- * onMounted does not run under SSR, so map layers are not covered here; that is the browser's (rega's).
+ * onMounted does not run under SSR, so map layers are not covered here; that is the browser check's job.
  *
  * `--poison` blanks the rows handed to the panels and requires the content assertions to FAIL.
  * Exit 0 pass · 1 fail · 75 not measured (vite could not load the modules).
@@ -84,7 +84,7 @@ try {
   }
 
   const en = await render('en')
-  // the Driver's default (2026-09-28): with no knob both legends start collapsed behind their "Legend" button
+  // the shipped default (2026-09-28): with no knob both legends start collapsed behind their "Legend" button
   const shut = await render('en', {})
   ok(!/data-tree-legend|class="gim-legend"/.test(shut.html) && /class="gtr-min"/.test(shut.html) && /class="gim-legend-min"/.test(shut.html),
     'en: with no knob, the tree and map legends start collapsed')
@@ -133,5 +133,10 @@ try {
   process.exit(75)
 }
 await server.close()
-if (POISON) { console.log(fails ? `POISON OK: ${fails} caught` : 'POISON FAILED'); process.exitCode = fails ? 0 : 1 }
-else { console.log(fails ? `FAIL check-gospel-internet-render: ${fails}` : 'PASS check-gospel-internet-render'); process.exitCode = fails ? 1 : 0 }
+// Exit explicitly. The repo's vite config starts the local dev backends (internal/backend-dev-plugin.mjs, PocketBase),
+// keeps them past server.close() so a vite restart can reuse them, and stops them on the process's 'exit'. With only
+// exitCode set, PocketBase's open pipes kept this check alive after its verdict, so every runner saw a timeout.
+let code
+if (POISON) { console.log(fails ? `POISON OK: ${fails} caught` : 'POISON FAILED'); code = fails ? 0 : 1 }
+else { console.log(fails ? `FAIL check-gospel-internet-render: ${fails}` : 'PASS check-gospel-internet-render'); code = fails ? 1 : 0 }
+process.exit(code)

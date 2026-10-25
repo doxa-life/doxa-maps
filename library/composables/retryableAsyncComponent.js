@@ -3,8 +3,8 @@
  *
  * ★ WHY (card BUG-LAZY-PLUGIN-DEATH-ON-A-SINGLE-FAILED-IMPORT). Vue's defineAsyncComponent
  * caches a REJECTED loader promise: once a dynamic import() fails, that component is dead for
- * the life of the page — every later render replays the same rejection. The Driver hit exactly
- * this: one net::ERR_NETWORK_CHANGED event (wifi switch / VPN / sleep-wake, a TRANSPORT blip,
+ * the life of the page — every later render replays the same rejection. It happened live, exactly
+ * like this: one net::ERR_NETWORK_CHANGED event (wifi switch / VPN / sleep-wake, a TRANSPORT blip,
  * not a 404) failed five unrelated module fetches at the same moment, and doxa-simple-map +
  * doxa-research-map stayed "not loading" until a full reload — a working product reading as
  * two broken plugins.

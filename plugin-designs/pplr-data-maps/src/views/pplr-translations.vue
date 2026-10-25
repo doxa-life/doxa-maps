@@ -126,20 +126,20 @@ onBeforeUnmount(() => { releaseMap(map.value); pinIndicator.destroy(); destroy()
 
     <div ref="mapContainer" class="map" />
     <div class="status">{{ status }}</div>
-    <div class="header-pill">PG name · 17 locales · click any pin</div>
+    <div class="header-pill">{{ t('pplr.pill.translations', { n: 17 }) }}</div>
 
     <!-- Toolbar — single-button (data sources) for now; this profile doesn't
          expose theme / projection / basemap toggles since it's locale-focused. -->
     <div class="map-toolbar">
       <div class="settings-wrap">
-        <button class="toolbar-btn round" title="Data sources" @click="showSettings = !showSettings">
+        <button class="toolbar-btn round" :title="t('pplr.ui.dataSources')" :aria-label="t('pplr.ui.dataSources')" @click="showSettings = !showSettings">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
             <path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2.1-1.2L14 3h-4l-.4 2.6A7 7 0 0 0 7.5 6.8l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2.1 1.2L10 21h4l.4-2.6a7 7 0 0 0 2.1-1.2l2.4 1 2-3.5-2-1.5c.06-.4.1-.8.1-1.2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
           </svg>
         </button>
         <div v-if="showSettings" class="settings-panel">
-          <div class="settings-header">Data sources</div>
+          <div class="settings-header">{{ t('pplr.ui.dataSources') }}</div>
           <div v-for="src in DATA_SOURCES" :key="src.url" class="settings-src">
             <div class="settings-src-label">{{ src.label }}</div>
             <div class="settings-src-url">{{ src.url }}</div>

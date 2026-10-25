@@ -11,13 +11,13 @@
 AGENT-BRIEF.md
 _archive
 data-private
-library/scripts/posters/snapshots/_granular-experiment.mjs.shelved
 plugin-designs/key-cities
-name:*field-access*
+# The bracket forms below ([-], [ ]) match the same names and text; they keep this list from matching its own content rule.
+name:*field[-]access*
 name:*visa*.json
 name:.env
 name:.env.*
 name:*.pem
 name:*.key
 keep:.env.example
-content:field-access|Visa Requirements
+content:field[-]access|Visa[ ]Requirements

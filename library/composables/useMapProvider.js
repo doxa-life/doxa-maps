@@ -6,20 +6,18 @@
  *   2. ?provider= in the page URL   — read here directly, so any generated leaf page can be
  *                                     flipped from the URL without the host doing anything
  *   3. window.MAP_PROVIDER          — host global, for a host that sets it programmatically
- *   4. 'auto'                       — the default: Mapbox WHEN A TOKEN IS AVAILABLE, else MapLibre
+ *   4. 'auto'                       — the default: MapLibre. A token alone never selects Mapbox.
  *
  * Valid values: 'mapbox' | 'maplibre' | 'auto'. Anything else is treated as 'auto'.
  *
- * ★ 'auto' (2026-09-25, by project decision). The public repo carries NO Mapbox token, so a default
- * of 'mapbox' gave every keyless visitor a map that could not draw and a paste-a-token prompt.
- * 'auto' asks the token ladder instead: a token in this element's profile-config (`tk`), or one
- * published page-wide (window.MAP_TOKEN — the generated leaf's ?tk= / pasted / baked / fetched rungs,
- * the studio's ⚙ Settings, and any element handed a `tk` all land there, see useSharedMapToken)
- * means Mapbox, exactly as before. No token anywhere means MapLibre, keyless, with zero requests to
- * Mapbox. An explicit provider (rungs 1-3) always wins.
- * The decision is taken when the map is created: a token that arrives LATER does not swap a map
- * that already drew with MapLibre (a host that fetches its token should set it before mounting, or
- * set provider:'mapbox' explicitly).
+ * ★ 'auto' IS MAPLIBRE. The public repo carries NO Mapbox token, so a default of 'mapbox' gave every
+ * keyless visitor a map that could not draw and a paste-a-token prompt. From 2026-09-25 'auto' asked
+ * the token ladder (a token meant Mapbox); since 2026-09-28 it is MapLibre whether or not a token is
+ * present — resolveMapProvider below has the reasoning. A map that wants Mapbox says so with
+ * provider:'mapbox' (rungs 1-3), and a token then authenticates it: this element's profile-config
+ * `tk`, or one published page-wide (window.MAP_TOKEN — the generated leaf's ?tk= / pasted / baked /
+ * fetched rungs, the studio's ⚙ Settings, and any element handed a `tk` all land there, see
+ * useSharedMapToken). Place search uses a token on either engine. An explicit provider always wins.
  *
  * documentation/how-to.md ("Swap the map engine") carries the same order; keep the two in sync, and
  * treat THIS function as the authority when they disagree.
@@ -56,17 +54,18 @@ export function hasMapToken(cfg) {
 /**
  * Resolve the provider from a profile-config (object or ref) + window fallback.
  * Always returns a concrete engine ('mapbox' | 'maplibre'); 'auto' is decided here. `token` is a
- * token the caller holds outside the config (useMapInstance's accessToken); it counts as available.
+ * token the caller holds outside the config (useMapInstance's accessToken); it no longer chooses the
+ * engine (see below) and stays in the signature for the callers that pass one.
  * Pure — safe to call outside a Vue setup().
  */
 export function resolveMapProvider(profileConfig, { token } = {}) {
   const cfg = unwrapConfig(profileConfig)
-  // ★ AUTO IS MAPLIBRE. A TOKEN NO LONGER CHOOSES AN ENGINE (Driver, 2026-09-28: MapLibre is the
-  // default everywhere, on cost and on how it looks; Mapbox stays supported as an explicit choice).
+  // ★ AUTO IS MAPLIBRE. A TOKEN NO LONGER CHOOSES AN ENGINE (2026-09-28: MapLibre is the default
+  // everywhere, on cost and on how it looks; Mapbox stays supported as an explicit choice).
   //
   // It used to read: explicit || (token present ? 'mapbox' : 'maplibre') — so merely HOLDING a
-  // Mapbox token selected Mapbox. That conflated two different things: "I have a token" is a
-  // capability, "I want Mapbox" is a decision, and only the second belongs in this function.
+  // Mapbox token selected Mapbox. That conflated two different things: holding a token is a
+  // capability, choosing Mapbox is a decision, and only the second belongs in this function.
   //
   // The token is still honoured for what it IS: with provider:'mapbox' it authenticates the map,
   // and the `token` argument stays in the signature because callers pass one they hold outside the
@@ -187,7 +186,7 @@ export function engineFor(map) {
  *
  * Passing the Mapbox shape to MapLibre THROWS. That is not hypothetical: it was measured on
  * regions-dashboard, where the throw aborted the camera fly so opening a region dashboard never
- * framed its region (rega confirmed the fix by eye, rows 13/14).
+ * framed its region (the fix confirmed by eye, rows 13/14).
  *
  * WHAT THE 12 SITES DID BEFORE, and why one helper is worth it:
  *   · NINE passed a bare string, so on MapLibre the projection silently never changed. Eight wrapped
@@ -201,7 +200,7 @@ export function engineFor(map) {
  * and hold a map built by the other (a fallback, a second map, an auto-engine decision), and the
  * object-vs-string question is a fact about the INSTANCE.
  *
- * BOTH RETURN SOMETHING OBSERVABLE, on upg100-plugin's argument: a precondition that bails without
+ * BOTH RETURN SOMETHING OBSERVABLE, on a plugin owner's argument: a precondition that bails without
  * recording that it bailed is indistinguishable, at the rendered layer, from the request never
  * arriving. setProjectionOn returns whether it applied; projectionOf returns null rather than
  * throwing. Callers that do not care may ignore it, and all 12 existing sites do.

@@ -25,6 +25,7 @@
  * The result is cached for the session; if the fetch fails we still export the loaded record
  * (24 fields) rather than producing nothing — degraded, never broken.
  */
+import { retryFetch } from './retryFetch.js'
 import { getApiBaseUrl } from '@map/api/apiBaseUrl.js'
 import { inject } from 'vue'
 import sourcesConfig from '@map/api/sources.json'
@@ -83,14 +84,14 @@ export function useCsvExport({ rowStore, rows, selectionSet, filterSet, FACET_AC
   // What this export calls itself, and who to credit for the data. Defaults keep every existing
   // caller's file identical to the byte.
   exportLabel = 'Research Dashboard', sources = '',
-  // ★ FOUR OPTIONS ADDED BY THE KIT'S FIRST REAL CONSUMER (go-int, 2026-09-27). Each one is a
+  // ★ FOUR OPTIONS ADDED BY THE KIT'S FIRST REAL CONSUMER (the gospel-internet dashboard, 2026-09-27). Each one is a
   // pray-tools assumption this file was making silently; each default is exactly what
   // research-dashboard already did, so Big Picture's file is unchanged to the byte. A second
-  // consumer is the only thing that finds these — I could not have told you they were assumptions
+  // consumer is the only thing that finds these — they could not be seen as assumptions
   // while there was one caller.
   //
   // columns: the EXACT column set and order to export. Default = today's behaviour (the canonical
-  //   EXPORT_FIELDS order, then any other key the API returned). go-int's spec asks for the VISIBLE
+  //   EXPORT_FIELDS order, then any other key the API returned). Its spec asks for the VISIBLE
   //   columns, and projecting rows before handing them over — its workaround — loses the ordering
   //   this file exists to impose.
   columns = null,
@@ -105,7 +106,7 @@ export function useCsvExport({ rowStore, rows, selectionSet, filterSet, FACET_AC
   filename = 'research-dashboard.csv', hookPrefix = '__rdash',
   // keyOf: how a row identifies itself, for matching a narrow row to its wide twin and for reading
   //   the selection. Default = `slug || id`, which is what this file assumed. config.data.primaryKey
-  //   is the config-level spelling of the same thing; go-int flagged the pair, and they should agree.
+  //   is the config-level spelling of the same thing; the two were flagged as a pair, and they should agree.
   keyOf = (r) => r && (r.slug || r.id),
   // Defaulted so a caller that predates D1 keeps working exactly as before rather than throwing.
   // ★ THE DEFAULT IS ARRAY-AWARE, because it is the LIVE path, not a legacy shim. A filterSet value is
@@ -145,7 +146,7 @@ export function useCsvExport({ rowStore, rows, selectionSet, filterSet, FACET_AC
       const bulk = src.endpoints?.bulk || '/api/people-groups/list'
       const lang = src.queryParams?.lang || 'en'
       const url = `${getApiBaseUrl()}${bulk}?fields=${fields.join(',')}&lang=${lang}`
-      const res = await fetch(url, { cache: 'no-store' })
+      const res = await retryFetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error(`export list HTTP ${res.status}`)
       const json = await res.json()
       // Only the groups of this page's people-group LIST (library/lists/) are exported.
@@ -198,10 +199,12 @@ export function useCsvExport({ rowStore, rows, selectionSet, filterSet, FACET_AC
     for (const k of Object.keys(r)) o[k] = cell(r[k])
     return o
   }
-  // Quote if the field has , " CR LF; double internal quotes; neutralize leading = + - @ (CSV injection).
+  // Quote if the field has , " CR LF; double internal quotes; neutralize a leading = + - @ TAB or CR (CSV
+  // injection: OWASP's full list of formula triggers, since a spreadsheet can strip a leading TAB/CR and then
+  // read the = that follows as a formula).
   function esc(v) {
     let s = v === null || v === undefined ? '' : String(v)
-    if (/^[=+\-@]/.test(s)) s = "'" + s
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
     if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"'
     return s
   }
@@ -230,12 +233,11 @@ export function useCsvExport({ rowStore, rows, selectionSet, filterSet, FACET_AC
     // line said nothing about WHERE the data came from — which is the thing a provenance line is for.
     // A partner opening a CSV can see the scope and the filters and still not know who to cite.
     // `sources` is appended only when a caller supplies it, so today's output is byte-for-byte
-    // unchanged; go-int's spec asks for exactly this (its tables carry their own meta.sources).
+    // unchanged; the gospel-internet spec asks for exactly this (its tables carry their own meta.sources).
     const provenance = `# ${exportLabel} export — scope: ${scopeLabel()}; filters: ${chips}; rows: ${picked.length}`
       + (sources ? `; sources: ${sources}` : '')
     // ★ THE PROVENANCE LINE GOES LAST, NOT FIRST — that one position was the whole "glitched CSV".
-    // Driver-reported 2026-09-22: "this is me exporting the CSV directly without making any edits...
-    // it does look a little bit glitched out."
+    // Reported 2026-09-22: a CSV exported directly, with no edits, looked a little glitched out.
     //
     // MEASURED with a strict RFC-4180 parser against this exact generator. EVERYTHING ELSE IS CORRECT
     // and must not be "fixed" on suspicion:
@@ -244,7 +246,7 @@ export function useCsvExport({ rowStore, rows, selectionSet, filterSet, FACET_AC
     //     rows   ... N columns each, ZERO with a wrong column count
     //   embedded commas, embedded double quotes AND embedded newlines all survive the round trip, so
     //   esc() is genuinely RFC-4180 (quote when , " CR LF appear; double the internal quotes). The
-    //   file is comma-separated, not tab-separated — the tabs in the Driver's paste were his terminal
+    //   file is comma-separated, not tab-separated — the tabs in the pasted report were a terminal's
     //   rendering, not the bytes.
     //
     // The defect is purely POSITIONAL: every spreadsheet importer treats the FIRST line as the header.

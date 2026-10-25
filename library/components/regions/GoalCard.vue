@@ -1,7 +1,7 @@
 <!--
   GoalCard.vue — a headline figure with a goal line pinned to the bottom of the card.
 
-  The Driver named these directly: "the banners are the cards that tell you the prayer progress".
+  These are the banners: the cards that tell you the prayer progress.
   Their RegionDetail.vue renders three of them in a row -- Prayer Coverage, Adoption Progress,
   Engagement Progress -- identical in structure and different only in their numbers, their bar, and
   one dark variant. That is one component with props, which is why it is here and not three copies.
@@ -37,6 +37,7 @@
 -->
 <script setup>
 import { useShadowStyles } from '../../composables/useShadowStyles.js'
+import { cyrillicHeading, strongMedium } from '../../styles/portedGlobals.js'
 import { useCardSurface } from '../../composables/useCardSurface.js'
 
 defineProps({
@@ -66,8 +67,8 @@ useShadowStyles(
   // `.region-goal { margin-top: auto }` then OVERRIDES the same property on the last child,
   // so the goal line is pushed to the bottom and the 23.526px stack gap above it is GONE.
   // This was ported as `gap`, which margin cannot override: gap AND the auto both applied,
-  // so every goal card carried ~23.5px of space their cards do not have. The DRIVER saw it
-  // ('spcing is nto ths ame', naming these three cards). Ported as their mechanism.
+  // so every goal card carried ~23.5px of space their cards do not have. It showed as uneven
+  // spacing on exactly these three cards. Ported as their mechanism.
   '.rd-goal-card{ display:flex; flex-direction:column; text-align:center; }' +
   '.rd-goal-card > * + *{ margin-top:var(--spacing-lg); }' +
 
@@ -76,28 +77,23 @@ useShadowStyles(
   // duplication is deliberate rather than overlooked. Using .rd-h2 itself would put two identical
   // selectors in one shadow root from two different files -- the shape that drifts silently the first
   // time one is tuned. The plugin keeps .rd-h2 for the one heading it still owns (its table title).
-  // The real fix is a shared ported-globals module beside the token layer, which is a batch of its
-  // own; carded, not smuggled in here.
+  // (The ported-globals module this comment used to card now exists -- ../../styles/portedGlobals.js
+  // -- and the Cyrillic rule below comes from it. The h2 clamp itself stays local: it is this card's
+  // own sizing, not a globals rule.)
   '.rd-goal-card__title{ margin:0; font-size:clamp(var(--font-size-2xl), 6cqw, var(--font-size-4xl)); line-height:1;' +
   '  font-family:"Bebas Neue","Arial Narrow",BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;' +
   '  font-weight:400; }' +
-  // ★ CYRILLIC HEADINGS SWITCH FACE, as theirs do. base/_globals.scss:35-44:
-  //     h1,h2,h3 { [lang="ru-RU"] & { font-family: var(--font-family-cyrillic); letter-spacing: -0.02em } }
-  // and --font-family-cyrillic is Oswald. The switch is not decoration: BEBAS NEUE HAS NO CYRILLIC
-  // GLYPHS, so a Russian heading in it leaves the family entirely and lands on whatever condensed
-  // system face the browser picks.
-  // BOTH TAG FORMS, deliberately: their site tags the document ru-RU while our i18n locale is `ru`,
-  // and a host page embedding this element may set either. A selector that matched only one would
-  // work on their site and fail on ours, or the reverse, depending on who set the attribute.
-  '[lang="ru"] .rd-goal-card__title, [lang="ru-RU"] .rd-goal-card__title{' +
-  '  font-family:"Oswald","Arial Narrow",BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;' +
-  '  letter-spacing:-0.02em; }' +
+  // ★ CYRILLIC HEADINGS SWITCH FACE, as theirs do. base/_globals.scss:35-44. The rule, the reasons
+  // it is load-bearing (Bebas Neue has no Cyrillic glyphs) and why it matches BOTH tag forms are
+  // documented once at its source, ../../styles/portedGlobals.js -- this card supplies only its own
+  // heading class, because the declaration is shared and the subject is not.
+  cyrillicHeading('.rd-goal-card__title') +
 
   // ── the figure. .font-size-4xl .font-weight-medium / .font-size-lg
   // ★ NO line-height HERE. Theirs is `<p class="font-size-4xl font-weight-medium">` and the
   // .font-size-4xl utility sets ONLY a font-size — so their number inherits body's 1.5. Ours forced
   // 1.1, which was compensating for the base line-height we never ported (now on :host in
-  // dxlife-tokens.js). rega measured the cost: 24px of card height, their number ~12px lower and its
+  // dxlife-tokens.js). The measured cost: 24px of card height, their number ~12px lower and its
   // label ~24px lower. Inheriting is the faithful port.
   // ★ A CLAMP, LIKE THEIRS, AND IT RESOLVES THE NOWRAP WORRY RATHER THAN FIGHTING IT.
   // utilities/_typography.scss gives .font-size-4xl
@@ -107,13 +103,13 @@ useShadowStyles(
   //     390px viewport   theirs 38.15   ours 59.60   ours 21.46 too large
   //     768px viewport   theirs 46.08   ours 59.60   ours 13.52 too large
   //    1024px and up     theirs 59.60   ours 59.60   identical
-  // I had reported this as unchangeable because a figure must never split across lines in a 372px
+  // This was first reported as unchangeable because a figure must never split across lines in a 372px
   // card. That was backwards: the clamp makes the figure SMALLER exactly where the wrap was observed.
   // In a 372px container 6cqw is 22.3px, below the 2xl floor, so it resolves to 38.15px against the
   // 59.60px that was breaking. The clamp helps the very problem the flat value was chosen for, and
   // the nowrap stays as a belt.
   // cqw not vw, consistent with every other clamp in this port (the container-vs-viewport
-  // substitution the Driver is still ruling on); at 768 that lands 42.4 against their 46.08.
+  // substitution, provisional, pending a product decision); at 768 that lands 42.4 against their 46.08.
   '.rd-big{ margin:0; font-size:clamp(var(--font-size-2xl), 6cqw, var(--font-size-4xl));' +
   '  font-weight:500; }' +
   '.rd-goal-card .rd-big{ white-space:nowrap; }' +
@@ -129,17 +125,19 @@ useShadowStyles(
   // The visible consequence, and why it matters for a clone: the three goal cards hold different
   // amounts of copy, so theirs align their goal lines flush along the cards' bottom edge while ours
   // floated at three different heights.
-  // FOUND BY READING THEIR MARKUP after rega's spacing probe measured this pair as "same" -- which
+  // FOUND BY READING THEIR MARKUP after a spacing probe measured this pair as "same" -- which
   // it is, at 1440, because with no free space in the card the auto resolves to 0. An equal computed
   // margin hid a real difference, so the probe was right and incomplete at the same time.
   '.rd-goal{ margin:auto 0 0; font-size:var(--font-size-sm); }' +
   '.rd-goal-card > .rd-goal{ margin-top:auto; }' +
-  // base/_globals.scss:200-202 — <strong> is --font-weight-medium (500) on their site, not the UA's
-  // bold. The plugin's own `.rd-root strong` STAYS where it is: UupgsList renders a <strong> in the
-  // same shadow root and depends on it, so this is a second rule for this card's own subtree, not a
-  // move. Checked by reading the whole root rather than this card's markup -- a file-scoped grep
-  // would have called the plugin's copy dead and deleted a rule another component needs.
-  '.rd-goal strong{ font-weight:500; }'
+  // <strong> is --font-weight-medium on their site, not the UA's bold (portedGlobals.js carries the
+  // source line). ★ SCOPED to .rd-goal, and the scope is the point: the plugin's own `.rd-root
+  // strong` STAYS where it is, because UupgsList renders a <strong> in the same shadow root and
+  // depends on it. So this is a SECOND rule for this card's subtree, not a move -- which is why the
+  // shared helper is composed behind a prefix rather than emitted bare. Checked by reading the whole
+  // root rather than this card's markup: a file-scoped grep would have called the plugin's copy dead
+  // and deleted a rule another component needs.
+  '.rd-goal ' + strongMedium()
 , 'goal-card')
 </script>
 

@@ -1,10 +1,9 @@
 /**
  * useSharedMapToken.js — ONE page, ONE map token, shared by every element on it.
  *
- * THE BUG THIS ENDS (Driver, 2026-09-23; the repo already names it
- * BUG-COMPOSITE-LEAVES-ARE-TOKEN-FREE-BUT-NEST-REAL-MAPS):
- *   "the element gets the tk to the element itself and does not need to only gatekeep that to one
- *    component only — all components in a plugin can share that tk"
+ * THE BUG THIS ENDS (the repo names it BUG-COMPOSITE-LEAVES-ARE-TOKEN-FREE-BUT-NEST-REAL-MAPS): the
+ * element receives the tk, and it must not gatekeep it to one component — every component in a
+ * plugin can share it.
  *
  * Inside ONE element that was already true: ProfileLoader provides 'mapboxToken' and eleven
  * components inject it. The gate is the ELEMENT BOUNDARY. Every custom element mounts its own Vue
@@ -37,6 +36,7 @@
  * every tile request. It does not widen exposure — it stops a second element on the SAME page from
  * being unable to use what that page was already given. Nothing is persisted or sent anywhere.
  */
+import { retryFetch } from './retryFetch.js'
 import { ref, onBeforeUnmount } from 'vue'
 
 const KEY   = '__doxaMapToken'      // the value, on window, so every bundle sees one copy
@@ -131,7 +131,7 @@ export function fetchMapToken(url) {
   if (typeof window === 'undefined' || !/^https?:\/\//i.test(String(url || ''))) return Promise.resolve('')
   const cache = (window.__doxaMapTokenFetches = window.__doxaMapTokenFetches || {})
   if (cache[url]) return cache[url]
-  const p = fetch(url)
+  const p = retryFetch(url)
     .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return (r.headers.get('content-type') || '').includes('json') ? r.json() : r.text() })
     .then((d) => {
       const tk = String((typeof d === 'string' ? d : d && (d.token || d.tk || d.accessToken)) || '').trim()

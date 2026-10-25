@@ -64,5 +64,10 @@
     "rural": "Rural",
     "source": "NFHS-5 (2019–21), personnes de 15 à 49 ans : part de celles qui ont déjà utilisé Internet. Une enquête auprès des personnes, pas un décompte d’abonnements.",
     "missing": "Pas encore de limite d’État pour {names} : leurs chiffres figurent dans les données, pas sur la carte."
+  },
+  "loading": "Tracé de la carte…",
+  "ui": {
+    "showKey": "Développer la légende",
+    "hideKey": "Réduire la légende"
   }
 }

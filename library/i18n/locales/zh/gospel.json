@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file; prose.english is the one translated line that says so.",
   "prose": {
     "english": "以下说明性文字为英文。"
   },
@@ -12,7 +11,8 @@
     "clear": "清除搜索",
     "none": "没有符合该名称、语言或代码的结果。",
     "placeholderShort": "族群、语言或 ISO 代码",
-    "showingOf": "显示 {total} 个匹配中的 {shown} 个 — 继续输入以缩小范围。"
+    "showingOf": "显示 {total} 个匹配中的 {shown} 个 — 继续输入以缩小范围。",
+    "aria": "查找族群、语言或 ISO 代码"
   },
   "legend": {
     "title": "尚未接触且未找到任何福音资源的族群",
@@ -78,7 +78,17 @@
     "everyResource": "所有资源 —",
     "alsoSpeak": "同样使用",
     "share": "分享",
-    "linkCopied": "链接已复制"
+    "linkCopied": "链接已复制",
+    "seeLargest": "查看最大的 {n} 个 →",
+    "alreadyPraying": "{n} 人已在祷告",
+    "everyIn": "{country} 使用的所有资源",
+    "found": "找到的福音资源（{n}）",
+    "none": "未找到资源（{n}）",
+    "showingOf": "显示 {total} 中的 {shown}。",
+    "popSuffix": "· {pop} 人",
+    "hasResources": "相关：{lang} 有资源",
+    "loadingTable": "正在加载 {table}…",
+    "popCountries": "{pop} 人 · {countries}"
   },
   "res": {
     "scripture": "圣经",
@@ -166,7 +176,9 @@
     "allLanguages": "全部语言",
     "peopleGroup": "个族群",
     "peopleGroups": "个族群",
-    "scriptureHere": "本语言的圣经"
+    "scriptureHere": "本语言的圣经",
+    "noTextMeans": "“无文本”是什么意思。",
+    "pageLists": "本页列出"
   },
   "columns": {
     "People group": "族群",
@@ -334,7 +346,9 @@
     "c2Unit": "以该语言为主要语言的族群人口 — 不是该语言的全部使用者",
     "c3Title": "未得服事语言最多的国家",
     "c3Sub": "一无所获语言最多的 {n} 个国家。条形长度为该国存在的全部语言。",
-    "c3Unit": "该国存在的语言（跨境语言在每个国家各计一次）"
+    "c3Unit": "该国存在的语言（跨境语言在每个国家各计一次）",
+    "noneHero": "{nLang} 种语言中有 {nNone} 种{noScripture}——这是 {popNone} 人的语言。",
+    "noneHeroFound": "在已查询的资源库中既无圣经也无影片"
   },
   "filter": {
     "showingOnly": "仅显示{what}。",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "{organisation}已在{countries}教授 SUN。"
+  },
+  "gap": {
+    "popLine": "{pop} 人 · {iso3}",
+    "wayIn": "切入点：{via}",
+    "hasNoText": "有 {what} — 未找到文本",
+    "showingOnly": "仅显示{what}。",
+    "seeLargest": "查看最大的 {n} 个 →",
+    "kind": {
+      "none": "未找到任何资源的族群",
+      "some": "有部分资源的族群",
+      "hnr": "能听到福音但在已查询资源库中没有文字圣经的族群",
+      "all": "有圣经和影片的族群"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "圣经，{medium} · {source}",
+    "bibleVideoOf": "圣经视频 · {source}",
+    "loading": "正在加载资源…",
+    "peopleWord": "人",
+    "alreadyPraying": "已在祷告",
+    "exhausted": "已用尽",
+    "together": "连同"
+  },
+  "gapHero": {
+    "hero": "{groups} 个族群正在{growing}{noFound}{pop} 人，估计每天 {deaths} 人离世。",
+    "growing": "增长",
+    "found": "在已查询的资源库中既无圣经也无影片——"
+  },
+  "ui": {
+    "noCode": "无代码",
+    "unnamed": "未命名语言",
+    "hideKey": "收起图例",
+    "showKey": "展开图例",
+    "largest": "未找到任何资源的最大族群",
+    "nobodyPraying": "一无所获，也无人祷告",
+    "concentrates": "差距集中在哪里",
+    "linkUnchecked": "此链接尚未核查。"
+  },
+  "rows": {
+    "scriptureHere": "这种语言的圣经",
+    "audio": "圣经",
+    "bibleVideo": "圣经视频",
+    "gospelPresentation": "福音陈述",
+    "studyNotes": "研读注释",
+    "readOnline": "在线阅读",
+    "audioScripture": "有声圣经",
+    "listenBrowser": "在浏览器中收听",
+    "inBrowser": "在浏览器中 — {media}",
+    "readHere": "用这种语言阅读",
+    "listenHere": "用这种语言收听",
+    "wordsOfLife": "生命之道 — {name}",
+    "gospelAudio": "福音录音",
+    "discipleship": "{brand} 门徒训练"
   }
 }

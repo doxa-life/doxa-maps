@@ -400,7 +400,7 @@ const NOT_SCANNED = 'api_bible, dbl, progress_bible, youversion'
 //                        gap match above is a name match and is worth nothing on its own.
 //                    (3) DOCTRINE UNVERIFIED, not suspected. No statement of faith is served
 //                        at /about.php, /aboutus.php, /faith.php or /beliefs.php — all 404.
-//                        The brief's rule is to leave a source out when its doctrine is
+//                        The rule is to leave a source out when its doctrine is
 //                        unclear and say why, so that is what this is. It is NOT a finding
 //                        against them; it is the absence of a finding either way.
 //   - IBT (Institute for Bible Translation, ibtrussia.org) — NOT a pool, but the best LEAD
@@ -417,7 +417,7 @@ const NOT_SCANNED = 'api_bible, dbl, progress_bible, youversion'
 //                    "Akhvakh (ашвалӏи мицӏцІи)" to a code by NAME — the exact guess this
 //                    build removed when Doxa's own API made it unnecessary, and the guess
 //                    that would have handed Akha in Laos one of three sub-varieties.
-//                    WHAT IT IS WORTH ANYWAY: the Driver asked for the people who do the
+//                    WHAT IT IS WORTH ANYWAY: the ask was for the people who do the
 //                    translation work, so that a group with nothing can be handed to a team
 //                    that already has the linguistic work and the relationships. For the
 //                    Caucasus cluster, IBT is that team, by name. That belongs in a leads
@@ -435,7 +435,7 @@ const NOT_SCANNED = 'api_bible, dbl, progress_bible, youversion'
 //                      returns 2 versions for eng and 3 for deu, against the dozens each
 //                      really has. Shipping it would UNDERSTATE coverage while looking
 //                      authoritative, which is worse than leaving it out.
-//                    The honest route is a YouVersion API key, which is a Driver task and
+//                    The honest route is a YouVersion API key, which is an owner task and
 //                    not something an agent should work around. Until then this pool is
 //                    named in the unchecked list, never in the checked one.
 // GRN was the opposite case and is worth the contrast: also name-shy at first glance, but
@@ -761,7 +761,7 @@ const tierOfCode = (c) => {
      Measured on this corpus: 602 codes and 2,001 of 12,379 groups move 1 -> 2. Tier 0 does not
      move at all (1,592 before and after), so nothing about who has NOTHING changes — the gap
      lists, the 369 zero-access groups and the bridge-reach table are untouched by this.
-     Found from go-int's cross-check of 20 languages with "no NT in the pools": 13 of the 20 had
+     Found by a cross-check of 20 languages with "no NT in the pools": 13 of the 20 had
      readable text all along, on a record this function could not see. */
   const hasS = hasReadableScripture(c), hasF = !!c.f
   const hasD = !!(c.d && c.d.length)

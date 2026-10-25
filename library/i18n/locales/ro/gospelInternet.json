@@ -17,7 +17,8 @@
     "failed": "Tabelul vecinilor nu a putut fi încărcat, așa că acest grafic nu este desenat.",
     "reached": "Deja atinse, așadar în centru:",
     "unmatched": "Nu se află deloc în tabelul vecinilor, așadar nu sunt desenate:",
-    "unplaced": "Nicio relație găsită, așadar neașezate:"
+    "unplaced": "Nicio relație găsită, așadar neașezate:",
+    "shown": "Grupuri etnice pe inele:"
   },
   "centre": {
     "aria": "Afișează",
@@ -150,7 +151,7 @@
     "messaging": "Aplicația de mesagerie principală (țară)",
     "messagingNote": "Cea mai descărcată în App Store-ul Apple al țării: doar iOS, un clasament de descărcări, nu de utilizare.",
     "province": "India și China: stat sau provincie",
-    "provinceNote": "Aproximativ: plasat după locul unde trăiește un popor, nu un oraș.",
+    "provinceNote": "Aproximativ: dedus din punctul grupului pe hartă, nu dintr-un oraș.",
     "region": "Regiune",
     "religion": "Religie",
     "wayIn": "Cale de acces când nu există nimic în limba lor"
@@ -199,11 +200,11 @@
     "aria": "Harta grupurilor etnice, colorată după cât folosește internetul fiecare țară"
   },
   "notice": {
-    "pin": "Punctul arată unde trăiește acest popor în {country}, nu un oraș.",
-    "pins": "Un punct arată unde trăiește un popor în țara sa, nu un oraș. {n} grupuri împart un punct cu alt grup.",
+    "pin": "Punctul reprezintă acest popor, nu un oraș.",
+    "pins": "Un punct reprezintă un popor, nu un oraș. {n} grupuri împart un punct cu alt grup.",
     "shares": "Își împarte punctul cu alte {n} grup(uri).",
     "sources": "Surse:",
-    "standing": "Punctele sunt aproximative (unde trăiește un popor în țara sa, nu un oraș). Cifrele de internet sunt ale țării sau ale statului indian, niciodată ale grupului. „Găsit” înseamnă găsit în sursele verificate."
+    "standing": "Punctele sunt aproximative: un punct reprezintă un popor, nu un oraș. Cifrele de internet sunt ale țării sau ale statului indian, niciodată ale grupului. „Găsit” înseamnă găsit în sursele verificate."
   },
   "panel": {
     "charts": "Grafice",
@@ -284,7 +285,6 @@
     "posterOmitted": "{n} nume omise acolo unde s-ar suprapune peste altul; fiecare cerc este desenat.",
     "posterPrint": "Tipărește",
     "posterSizeAria": "Dimensiunea posterului",
-    "posterSvg": "Descarcă SVG",
     "posterTitle": "Accesul la Evanghelie, familie de limbi cu familie de limbi",
     "sources": "Arbore: Glottolog (CC BY 4.0). Resurse: eBible, Faith Comes By Hearing, Scripture Earth, PNG.Bible, filmul JESUS, Global Recordings și altele, după ISO 639-3.",
     "st": {

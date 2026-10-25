@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* check-provider-for.mjs — run as `bun run check:provider-for`. Source-only, headless, ~0.1s.
-   Placed in internal/ with studio's explicit authorisation for this one gate (END-STU-C3AB): it spans
+   Placed in internal/ by explicit decision for this one gate: it spans
    library/ plus three separate plugins, so no single plugin's scripts/ folder owns it. */
 // C3: do the library helpers behave like the raw-global code they replace, on BOTH engine shapes AND
 // on the ambiguous case that is neither?

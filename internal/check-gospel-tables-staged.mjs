@@ -64,6 +64,44 @@ for (const prefix of dirLike) {
   for (const file of named.filter((f) => f.endsWith(ext))) wanted.push(prefix + file)
 }
 
+/**
+ * ⚠ AN INTERPOLATED FILE NAME IS NOT A FILE EITHER. The field card fetches
+ * `${assetsBase.value}/tables/card-${cardShard(cardSlug)}.json`, so the parse above captures "tables/card-" and
+ * stops at the interpolation; read as a file it failed as "not staged" while all its shards were there. Its
+ * expected set comes from the SOURCE, as the rule above says, never from the tree: every roster row the card
+ * builder keeps (data/tables/doxa-people-groups.json, the same filter as build-field-cards.mjs) hashed with the
+ * leaf's own cardShard. This file carries a copy of that function and fails if the leaf's copy changes, so the
+ * two cannot drift apart; any other interpolated name is reported as unresolved, never passed.
+ */
+const SHARD_FN = 'let h = 5381 for (let i = 0; i < slug.length; i++) h = (((h << 5) + h) ^ slug.charCodeAt(i)) & 0xffffffff return ((h >>> 0) & 0xff).toString(16).padStart(2, \'0\')'
+const cardShard = (slug) => {
+  let h = 5381
+  for (let i = 0; i < slug.length; i++) h = (((h << 5) + h) ^ slug.charCodeAt(i)) & 0xffffffff
+  return ((h >>> 0) & 0xff).toString(16).padStart(2, '0')
+}
+function checkInterpolatedName(rel, missing) {
+  if (rel !== 'tables/card-') { missing.push(`${rel} — an interpolated file name this check cannot resolve`); return }
+  const leafFn = (src.match(/const cardShard = \(slug\) => \{([\s\S]*?)\n\}/) || [])[1]
+  if (!leafFn || leafFn.replace(/\s+/g, ' ').trim() !== SHARD_FN) {
+    missing.push('tables/card-*.json — the leaf\'s cardShard changed; update this check\'s copy (and build-field-cards.mjs) to match')
+    return
+  }
+  let rows = []
+  try { rows = JSON.parse(readFileSync(resolve(ROOT, 'data/tables/doxa-people-groups.json'), 'utf8')).rows || [] }
+  catch (e) { missing.push(`tables/card-*.json — could not read the roster: ${e.message}`); return }
+  const keys = [...new Set(rows.filter((r) => r && r.slug && r.mapped && r.lat != null && r.lng != null).map((r) => cardShard(r.slug)))].sort()
+  if (keys.length < 20) { missing.push(`tables/card-*.json — the roster gave only ${keys.length} shard key(s); the roster changed shape`); return }
+  let ok = 0, bytes = 0
+  for (const k of keys) {
+    const p = resolve(POOL, `tables/card-${k}.json`)
+    if (!existsSync(p)) { missing.push(`tables/card-${k}.json — not staged`); continue }
+    const b = statSync(p).size
+    if (b < 200) { missing.push(`tables/card-${k}.json — staged but only ${b} bytes`); continue }
+    ok++; bytes += b
+  }
+  console.log(`  ${ok === keys.length ? 'ok  ' : 'FAIL'} ${'tables/card-*.json'.padEnd(42)} ${ok}/${keys.length} shard(s) the roster needs, ${bytes} bytes`)
+}
+
 const missing = []
 for (const rel of wanted) {
   if (rel.endsWith('/')) {
@@ -73,6 +111,7 @@ for (const rel of wanted) {
     if (!found.length) missing.push(`${rel} — a dynamic fetch this check could not resolve to a file`)
     continue
   }
+  if (!/\.(?:geojson|json)$/.test(rel)) { checkInterpolatedName(rel, missing); continue }
   const p = resolve(POOL, rel)
   if (!existsSync(p)) { missing.push(`${rel} — not staged`); continue }
   const bytes = statSync(p).size

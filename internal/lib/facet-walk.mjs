@@ -18,7 +18,7 @@ function __walk(sel) {
   };
   visit(document); return out;
 }
-// THE MEASUREMENT: the map's own bubble source — the DOTS the Driver looks at — plus the paint
+// THE MEASUREMENT: the map's own bubble source — the DOTS a reader looks at — plus the paint
 // property that decides what each one LOOKS like.
 // ★ THE MAP HANDLE CAN GO STALE. The panel destroys and re-creates its Map on a re-render (and
 // the dev server's HMR does this freely), which leaves window.__rdashMap pointing at a torn-down

@@ -45,8 +45,8 @@ import { resolveAssetsBase } from '@map/utils/embedBase.js'
    and the shipped English catalogue is the fallback rather than a broken key. */
 // C4: the guard is library/composables/useOptionalT.js now. enLookup STAYS as the fallback, passed
 // in, so a bare host renders the same ENGLISH it always did -- routing this to the catalogue default
-// would make a bare host honour ?lang=ar, which is gospel-plugin's call and not this migration's.
-// C4 wave 3a, gospel-plugin's call (2026-09-26): take the LOCALE-HONOURING fallback rather than
+// would make a bare host honour ?lang=ar, which is the plugin owner's call and not this migration's.
+// C4 wave 3a, the plugin owner's call (2026-09-26): take the LOCALE-HONOURING fallback rather than
 // enLookup's English. A partner host that never installed vue-i18n now gets the reader's language,
 // with English as the last resort. tStatic resolves 'gospel.<key>' against the same catalogue.
 const tr = useOptionalT('gospel')
@@ -105,7 +105,7 @@ const languages = computed(() => {
       // listed only c.s and c.d, so film, audio, Bible video, tracts, Scripture Earth and
       // GRN never appeared here — a language whose only resource was a Words of Life
       // recording rendered with no links while the map offered a working one.
-      const res = resourceRows(c)
+      const res = resourceRows(c, tr)
       e = {
         iso: code,
         language: c.l || 'unknown',
@@ -204,7 +204,7 @@ const fmtShort = (n) => {
   return v >= 1e6 ? `${Math.round(v / 1e5) / 10}M` : v.toLocaleString()
 }
 
-/* ═══ NUMBER FORMAT IS HELD FOR THE DRIVER ════════════════════════════════════════════════
+/* ═══ NUMBER FORMAT IS HELD FLEET-WIDE ════════════════════════════════════════════════
  * This briefly formatted with the locale i18n resolved, which is almost certainly the right
  * answer — but it decides number format for THIS map alone, and the decision belongs to every
  * map at once or none. Reverted on that ground, not because the finding was wrong.
@@ -306,11 +306,11 @@ useShadowStyles(
   'padding:10px;border-bottom:1px solid rgba(0,0,0,.07)}' +
   '.is-dark .row{border-bottom-color:rgba(255,255,255,.08)}' +
   '.r-lang{font-size:14px;font-weight:700}' +
-  '.r-code{font-size:10.5px;opacity:.55;font-family:ui-monospace,monospace;margin-left:6px}' +
+  '.r-code{font-size:10.5px;opacity:.55;font-family:ui-monospace,monospace;margin-inline-start:6px}' +
   '.r-meta{font-size:11.5px;opacity:.68;margin-top:2px;line-height:1.45}' +
   '.r-credit{font-size:11.5px;color:#6d766e;margin-top:2px;line-height:1.35}' +
   '.is-dark .r-credit{color:#d1d4cd}' +
-  '.r-pop{font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}' +
+  '.r-pop{font-size:12.5px;font-variant-numeric:tabular-nums;text-align:end;white-space:nowrap}' +
   '.pill{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}' +
   '.pill.no{background:rgba(220,38,38,.13);color:#a12020}' +
   '.pill.nt{background:rgba(245,158,11,.16);color:#8a6414}' +
@@ -319,7 +319,7 @@ useShadowStyles(
   '.res a{color:#0b7a5b;text-decoration:none;font-weight:600}' +
   '.res a:hover{text-decoration:underline}' +
   // Two links on one row need separating, or "Holy Bible" and "JESUS Film" read as one string.
-  '.res a + a{margin-left:10px}' +
+  '.res a + a{margin-inline-start:10px}' +
   // The film link is a DIFFERENT KIND of resource from a scripture edition, so it is marked rather
   // than left to look like another Bible. Muted against the scripture green: a film is a real
   // resource but not a text, and this list is about text availability first.
@@ -404,7 +404,7 @@ useShadowStyles(
     <!-- The caveat is IN the UI, not buried in a data file. A reader acting on
          this needs to know what "none found" does and does not mean. -->
     <div class="caveat">
-      <b>What “no text” means.</b> <bdi dir="ltr">It is the TEXT Scripture gap, and nothing wider: a row
+      <b>{{ tr('gospel.list.noTextMeans') }}</b> <bdi dir="ltr">It is the TEXT Scripture gap, and nothing wider: a row
       pilled “no text” may still show audio Scripture, a film or a Bible video beside it, and
       several do. Not found in the resource pools checked so far —
       currently</bdi> <b>eBible.org</b> <bdi dir="ltr">({{ fmt(stats.ebible_translations) }} translations across
@@ -416,7 +416,7 @@ useShadowStyles(
       this build does not have. A pool nobody has queried shows as unknown, never as “no”.
       Languages are joined to people groups by exact ISO&nbsp;639-3 code.</bdi>
       <br><br>
-      This page lists <b><bdi dir="ltr">published resource availability only</bdi></b><bdi dir="ltr">. It carries no information
+      {{ tr('gospel.list.pageLists') }} <b><bdi dir="ltr">published resource availability only</bdi></b><bdi dir="ltr">. It carries no information
       about churches, believers or gatherings, by design.</bdi>
     </div>
   </div>

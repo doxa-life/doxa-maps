@@ -1,5 +1,5 @@
 {
-  "_comment": "Preset partner embeds of <gospel-internet-board> (SPEC-GOSPEL-INTERNET-DASHBOARD section 14). Keyless: provider 'auto' falls to MapLibre with no token. Each preset is a URL a partner can QR.",
+  "_comment": "Preset partner embeds of <gospel-internet-board> (see README.md: every view is a URL state, so a preset is just that URL). Keyless: provider 'auto' falls to MapLibre with no token. Each preset is a URL a partner can QR.",
   "instances": [
     {
       "id": "board",

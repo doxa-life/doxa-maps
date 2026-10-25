@@ -60,7 +60,7 @@ export function withUnassigned(nodes, allZoneIds, label = 'Unassigned') {
  * The value the legend emits. gospel's contract: a single SERIALISABLE id, so it survives ?zone=,
  * profile-config and a deep link, and stays usable across their four tab shapes.
  *
- * A leaf emits its zone id; a REGION row emits the region's own id (dx-shepherd: a region selects
+ * A leaf emits its zone id; a REGION row emits the region's own id (a region selects
  * the union of its zones). The consumer expands a region id to its zones using the zone data it
  * already holds — which is also where the diacritic-folding join lives, so there is no second copy
  * of it here to drift.
@@ -78,7 +78,7 @@ export function withUnassigned(nodes, allZoneIds, label = 'Unassigned') {
  * error, no empty state. check:list-selection FAILS ON PURPOSE at that moment.
  *
  * This component cannot fix it: the CONSUMER builds the tree, so only the consumer knows which rows
- * are regions. Found by gospel-plugin while wiring, who is namespacing their region rows; written
+ * are regions. Found while wiring a plugin that namespaces its region rows; written
  * here because the next consumer to build a tree from the same zone data inherits the same collision.
  */
 export function selectedId(node) {

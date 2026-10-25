@@ -84,7 +84,9 @@
     "asia": "Asia",
     "europe": "Europa",
     "latin_america_&_caribbean": "America Latină",
-    "oceania": "Oceania"
+    "oceania": "Oceania",
+    "middle_east": "Orientul Mijlociu",
+    "north_america_&_non-spanish_caribbean": "America de Nord și Caraibe nehispanice"
   },
   "sort_by_column_hint": "Sortează acest tabel după {column} — Shift+clic adaugă o a doua coloană. Sortarea ordonează doar tabelul; cardurile își păstrează propria ordine.",
   "fs_exit_hint": "Ieși din ecran complet (Esc) — înapoi la șapte rânduri",
@@ -92,5 +94,19 @@
   "fs_exit": "Ieși din ecran complet",
   "fs_open": "Deschide tabelul pe ecran complet",
   "export_selected_hint": "Exportă toate câmpurile — popoare selectate: {n}",
-  "export_all_hint": "Exportă toate câmpurile — popoare: {n}"
+  "export_all_hint": "Exportă toate câmpurile — popoare: {n}",
+  "map_init_failed": "Harta nu a putut porni. Verificați jetonul de acces și containerul hărții.",
+  "show_filters": "Arată filtrele",
+  "hide_filters": "Ascunde filtrele — mărește harta",
+  "show_charts": "Arată graficele",
+  "hide_charts": "Ascunde graficele — mărește harta",
+  "export_copied": "copiat în clipboard",
+  "export_done": "exportat",
+  "export_ready": "gata",
+  "export_toast": "✓ {rows} rânduri × {fields} câmpuri {how}",
+  "export_failed": "✕ Exportul a eșuat",
+  "pray_for_group": "Roagă-te pentru acest popor",
+  "more_information": "Mai multe informații",
+  "title": "Tablou de bord de cercetare",
+  "gospel_pending": "Încă nu este gata: cifra celor neatinși, cheia sursei de date și forma interfeței sunt încă de hotărât."
 }

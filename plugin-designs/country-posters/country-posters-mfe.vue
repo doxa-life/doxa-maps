@@ -7,8 +7,8 @@
  * poster wall behind a single view switcher, structured like the UPG-100 list. The switcher is
  * the library's shared ViewSelect, not a third hand-rolled copy.
  *
- * Driver: "Country Posters is supposed to have two tabs, structured like the
- * UPG-100 list."
+ * Country Posters has two tabs, structured like the
+ * UPG-100 list.
  *
  * ★ THE CONTROL IS SHARED, NOT COPIED. That is the whole point of the card: this
  * is the THIRD place the SELECT VIEW switcher is needed, and it uses the library's
@@ -25,15 +25,19 @@
  *   • one ShareButton in the header, per the recorded share policy
  *     (check:share-policy) — the MAP pane must not grow a second one
  *
- * LIST FIRST, MAP SECOND. The Driver's principle, already applied in upg-100-mfe:
- * "maps don't have to be primary. You can use lists and grids for the primary view
- * and maps as a secondary view… then they transition into the map." The poster wall
+ * LIST FIRST, MAP SECOND. The principle already applied in upg-100-mfe: a map need
+ * not be the primary view — a list or a grid can be, with the map secondary and
+ * reached as a transition from it. The poster wall
  * is the concrete artefact a newcomer can act on; the map is where it is placed.
  */
 import { ref, computed, inject, onMounted, onBeforeUnmount } from 'vue'
 import { buildPaneColumn, PANE_GRID_STYLES } from '@map/layouts/pane-wrapper/pane-wrapper.js'
+import { urlOwnerOf, ownAddress } from '@map/composables/useViewAddress.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import ViewSelect from '@map/components/ViewSelect.vue'
+import { countryName } from '@map/utils/countryName.js'
+import { previewOptedIn } from '@map/packet/countrySheet.js'
+import { getRuntimeLocale, detectLocale } from '@map/i18n/index.js'
 import ShareButton from '@map/components/map-controls/ShareButton.vue'
 import { useI18n } from 'vue-i18n'
 import enTabs from '@map/i18n/locales/en/tabs.json'
@@ -68,12 +72,22 @@ const spec = computed(() => ({
   // strip desynchronises from the scroll column.
   panes: [
     { id: 'wall', label: t('tabs.countryPosters'), at: [0, 0], config: { profile: 'country-poster-wall' } },
-    { id: 'map',  label: t('tabs.map'),             at: [1, 0], config: { profile: 'countries-map' } },
+    // the same DEV-gated read as countrySheet.js previewUnreleased() (dev server AND the explicit opt-in), INLINE so
+    // every build drops the pane entirely
+    ...(import.meta.env && import.meta.env.DEV && globalThis.DXM_PREVIEW_UNRELEASED === true && previewOptedIn() ? [INDIA_PANE] : []),
+    { id: 'map',  label: t('tabs.map'),             at: [2, 0], config: { profile: 'countries-map' } },
   ],
   // The switcher lives in this element's own header, so the layout's "… below ↓"
   // pill would be a second, redundant control (same call upg-100-mfe makes).
   paneHint: false,
 }))
+
+// INDIA: the whole-India poster (66x66 by default) on its own tab, the same wall filtered to India, labelled with
+// India's own name in the reader's language (Intl). Shown ONLY in an opted-in preview (countrySheet.js
+// previewUnreleased(): the pilot's dev server AND ?preview=india or localStorage 'dxm-preview'), because the poster is
+// not released; everywhere else (the pilot without the opt-in included) the tab is absent and India's card keeps the
+// withheld sentence.
+const INDIA_PANE = { id: 'india', label: countryName('IND', getRuntimeLocale() || detectLocale() || 'en') || 'India', at: [1, 0], config: { profile: 'country-poster-wall', countries: ['IND'] } }
 
 const stage = ref(null)
 // DERIVED from the pane order, never a hardcoded id — the same trap upg-100-mfe
@@ -91,6 +105,11 @@ const view = computed({
 })
 let column = null
 let offScroll = null
+let offOwn = null
+// The page address (useViewAddress): ?pane= is the open view ('map'; the first pane is the default and never written).
+// On this composite's own leaf it owns the address (ownAddress); nested in a shell it announces and the shell writes.
+// The India pane exists only in an opted-in preview, so ?pane=india names nothing anywhere else.
+const owner = () => urlOwnerOf(cfg.value)
 
 // PAGE-LEVEL config keys a pane INHERITS from the host page. A cap-4 composite
 // nests children as custom elements in THIS document, so anything the generator
@@ -136,7 +155,7 @@ function paneElement(pane) {
 // `inert` on every pane except the active one: the same contract as upg-100-mfe (4642e78d). The panes
 // are stacked in one scroll-snap column, so the hidden pane is still full-size geometry; inert tells
 // PosterWall (67e9ede5) the wall is out of view so it forgets its shown card, and a second
-// "Show on map" after Map -> back SHOWS the country again instead of toggling it off (rega row 79).
+// "Show on map" after Map -> back SHOWS the country again instead of toggling it off.
 // inert, not display:none: hiding would tear down the live map.
 function markActivePane(activeId) {
   if (!column || !activeId) return
@@ -170,7 +189,7 @@ function onShowOnMap(e) {
   if (d.instanceId && d.instanceId !== instanceId.value) return
   go('map')
   // ★ THE FORWARDING THAT WAS NEVER WRITTEN. This handler used to end at go('map'), so the tab
-  // changed and the map was never told anything at all -- rega measured exactly that: "the camera
+  // changed and the map was never told anything at all -- measured exactly: "the camera
   // stays at world view, nothing selected". It is not a timing bug and no amount of waiting fixes
   // it; the link simply did not exist.
   //
@@ -183,7 +202,10 @@ function onShowOnMap(e) {
   // The attribute carries the country ID, not its geometry: countries-map resolves the id against
   // the same library/data/country-posters.json the wall renders from, so the bbox has exactly one
   // source of truth rather than being copied through an attribute.
-  const countryId = d.listId ?? null
+  // An Indian state's card (the state table's ids are 'india-<code>') shows India: this map draws countries,
+  // not states, so framing the country is the honest answer rather than a world view with nothing selected.
+  const listId = d.listId ?? null
+  const countryId = typeof listId === 'string' && listId.startsWith('india-') ? 'country-ind' : listId
   const el = paneEls.map
   if (!el) return
   if (countryId) el.setAttribute('select-country', String(countryId))
@@ -193,8 +215,9 @@ function onShowOnMap(e) {
 
 onMounted(() => {
   if (!stage.value) return
-  column = buildPaneColumn(spec.value, { host: stage.value })
+  column = buildPaneColumn(spec.value, { host: stage.value, address: { owner } })
   if (!column) return
+  offOwn = ownAddress(stage.value, owner)
   for (const pane of column.panes) {
     if (!pane.config) continue
     // ★ KEEP THE ELEMENT. It used to be created and dropped on the same line, so there was no
@@ -220,6 +243,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener(SHOW_ON_MAP, onShowOnMap)
   offScroll?.()
+  offOwn?.()
   column?.destroy()
   column = null
 })
@@ -239,7 +263,7 @@ useShadowStyles(PANE_GRID_STYLES + `
    no such rule exists and every pane collapses to 0 — the "elements are not embedding"
    report. Declaring :host makes the element fill its slot in every deploy method. */
 :host{ display:block; width:100%; height:100%; min-height:420px; }
-/* ── palette: DX-life material light. NO AUTO-DARK (Driver 2026-09-20): a system set to
+/* ── palette: DX-life material light. NO AUTO-DARK (decided 2026-09-20): a system set to
    dark mode must not flip this element. ── */
 .cpmfe{
   --ui-bg:#ffffff; --ui-bg-elevated:#f3f3f1; --ui-bg-accented:#f3f3f1;
@@ -267,11 +291,11 @@ useShadowStyles(PANE_GRID_STYLES + `
       <ViewSelect
         :views="spec.panes"
         :current="view"
-        legend="Select View"
-        label="Views"
+        :legend="t('tabs.selectView')"
+        :label="t('tabs.views')"
         @select="go"
       />
-      <ShareButton :is-dark="isDark" :embed-path="SHARE_EMBED_PATH" />
+      <ShareButton :is-dark="isDark" :embed-path="SHARE_EMBED_PATH" shape="rounded-square" />
     </header>
     <div class="stage" ref="stage"></div>
   </div>

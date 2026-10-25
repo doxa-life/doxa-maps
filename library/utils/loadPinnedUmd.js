@@ -2,7 +2,7 @@
  * loadPinnedUmd — load a PINNED, integrity-checked UMD library and capture it WITHOUT touching the host
  * page's global of the same name. One copy of what pplr-data-maps (60faff1a) and the Wall carried twice.
  *
- * WHY THE TRAP (measured by rega on PPLR): a UMD build such as d3's writes its exports INTO an existing
+ * WHY THE TRAP (measured on PPLR): a UMD build such as d3's writes its exports INTO an existing
  * global — `(t = globalThis).d3 = t.d3 || {}` — so a host that owns a d3 had ours written over it (577
  * added keys, version '7.9.0' on the host's object) even though we "put it back" afterwards. So while OUR
  * script executes (document.currentScript === the tag), `window[globalName]` reads and writes a private

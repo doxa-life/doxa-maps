@@ -36,12 +36,12 @@ is never written to a log.
 
 **Your checkout has to be in a state where a fast-forward is safe.** All three of these:
 
-- you are on the branch it follows (`DX_SYNC_BRANCH`, default `main`)
+- you are on the branch it follows (`DX_SYNC_BRANCH`, default `development`)
 - you have no unsaved edits
 - you have no local commits of your own
 
 > **This is the one that surprises people.** If you have your own work in progress, the sync **stops
-> pulling** — it will not touch your files. It reports `main is N commits ahead` instead and waits.
+> pulling** — it will not touch your files. It reports `development is N commits ahead` instead and waits.
 >
 > That is deliberate and it is protecting you. But it means: **push your own work, or you will drift.**
 > If you leave local commits sitting for a day while your agent lands twenty changes, the pull you
@@ -51,7 +51,7 @@ Two optional dials:
 
 | | what it does | default |
 |---|---|---|
-| `DX_SYNC_BRANCH` | which branch to follow | `main` |
+| `DX_SYNC_BRANCH` | which branch to follow | `development` |
 | `DX_SYNC_INTERVAL` | seconds between checks | `5` |
 
 ---

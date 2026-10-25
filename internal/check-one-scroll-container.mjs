@@ -3,7 +3,7 @@
  * check-one-scroll-container — a plugin pinned into the gallery's pane must not assert a height FLOOR
  * the pane cannot honour.
  *
- * THE DEFECT THIS EXISTS FOR (Driver, 2026-09-28, "one of my least favorite bugs"): on DX Life's
+ * THE DEFECT THIS EXISTS FOR (2026-09-28, a much-disliked bug): on DX Life's
  * research page a capability-4 plugin with tabs at the top had an EXTRA element-level scrollbar, and
  * scrolling it scrolled the TAB HEADER out of view — on top of the plugin's own content scroll.
  *
@@ -21,7 +21,7 @@
  * (2) is the half that matters over time: a fixed shell plus a plugin that adds .foo{min-height:700px}
  * next month is the same bug again, and nobody would connect it to this.
  *
- * Source-level and headless BY DESIGN. Only rega runs a browser here, and the browser proof is rega's
+ * Source-level and headless BY DESIGN. This gate runs no browser, and the browser proof is a separate
  * scroll-container count. This is the cheap guard that keeps the class from coming back between runs.
  * ★ THIS GATE IS RED ON PURPOSE AT LANDING, and is NOT wired into gates:pre yet. gospel-internet's
  * .gb still carries min-height:640px; that fix belongs to its owner, not to me, and wiring a red gate
@@ -93,7 +93,7 @@ for (const bundle of readdirSync(DESIGNS)) {
 // ── ★ THE HOST-SIZED SCROLLER IS A THREE-LINE SHAPE, AND IT MUST BE PORTED WHOLE ────────────────
 // A pane that fills its host absolutely AND turns on overflow is also, necessarily, the thing that
 // scrolls whatever its child overflows by. library/ProfileLoader.vue floors EVERY profile at
-// `min-height: var(--profile-min-h, 100dvh)` -- a VIEWPORT measurement -- while such a pane measures
+// `min-height: var(--profile-min-h, 100svh)` -- a VIEWPORT measurement -- while such a pane measures
 // against its HOST. So on any page with chrome above it, the child is taller than the pane by exactly
 // the height of that chrome, and the pane scrolls the whole plugin, tab strip and all.
 //
@@ -103,7 +103,7 @@ for (const bundle of readdirSync(DESIGNS)) {
 //
 // ★ THIS IS GATED BECAUSE IT WAS ALREADY PORTED ONCE AND ARRIVED SHORT. doxa-maps-spa's .dms-pane was
 // copied from VerticalTabsLayout's .vtl-host -- its own comment says "porting the same proven shape" --
-// and took the first two lines. rega measured the result: 12 of 16 gallery tabs overflowing by exactly
+// and took the first two lines. A browser check measured the result: 12 of 16 gallery tabs overflowing by exactly
 // the DX-life header height, on plugins with no floor of their own. Two thirds of a fix reads as a
 // whole one in review, which is precisely why a reviewer cannot be the check.
 for (const [file, label] of [
@@ -124,7 +124,7 @@ for (const [file, label] of [
     if (!/--profile-min-h:\s*0/.test(r)) {
       const sel = r.slice(0, r.indexOf('{')).trim().split('\n').pop().trim()
       fails.push(`${file}: "${sel}" fills its host and owns the overflow but does NOT set --profile-min-h:0.\n`
-        + '      ProfileLoader floors every child at 100dvh (the VIEWPORT), so on a page with a header the\n'
+        + '      ProfileLoader floors every child at 100svh (the VIEWPORT), so on a page with a header the\n'
         + '      child is taller than this pane by the header height and this pane scrolls the whole plugin,\n'
         + '      tab strip included. The three lines are one shape: fill, scroll, release the floor.')
     }

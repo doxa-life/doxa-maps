@@ -17,5 +17,6 @@
   "ruleAll": "Cada linha dos dados de grupos étnicos do IMB: um grupo étnico em um país.",
   "ruleUnreached": "Prioridade de perdição do IMB de 0 a 2: menos de 2% evangélicos.",
   "ruleFrontier": "Prioridade de perdição do IMB 0: menos de 0,1% evangélicos. Um subconjunto dos não alcançados.",
-  "ruleDoxa": "Cada grupo da lista de oração da DOXA, associado aos dados do IMB por povo e país. Nem todos são de fronteira."
+  "ruleDoxa": "Cada grupo da lista de oração da DOXA, associado aos dados do IMB por povo e país. Nem todos são de fronteira.",
+  "about": "Sobre este mapa"
 }

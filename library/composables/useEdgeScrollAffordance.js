@@ -21,7 +21,7 @@
  *     either edge can be summoned where you reach for it. A HOVERED strip is
  *     pinned: it never auto-hides (even while you scroll) until you leave it.
  *
- * RIGHT is the primary side on EVERY form factor (design note, 2026-07-30): people
+ * RIGHT is the primary side on EVERY form factor (since 2026-07-30): people
  * expect a scrollbar on the right, and a scroll hint that moves between edges
  * depending on device is the one thing it must not do. An earlier version flipped
  * to LEFT on mobile for thumb reach; consistency won. Both strips stay summonable
@@ -71,7 +71,7 @@ export function useEdgeScrollAffordance(wrapper, opts = {}) {
   const show = (e) => { e.style.opacity = '1' }
   const hide = (e) => { e.style.opacity = '0' }
 
-  // Primary side: RIGHT on BOTH desktop and mobile (design note, 2026-07-30).
+  // Primary side: RIGHT on BOTH desktop and mobile (since 2026-07-30).
   // It used to flip to LEFT on mobile on a thumb-reach argument, but that made the
   // affordance appear on a different edge depending on device — the one place a
   // scroll hint must be predictable. People expect a scrollbar on the right, and

@@ -138,6 +138,8 @@ const r = await pg.evaluate(async ({ src, frame, packetRender, cardRender, qr, s
   // and check-packet-browser. Assert the passage BLOCK and its length, which holds in
   // any language.
   out.packetMark5Len = (pdoc.querySelector('.p4-passage') || { textContent: '' }).textContent.trim().length
+  // Point 4 prints THE HEAVENLY FATHER'S HEART (seven readings) in place of Mark 5:1-20 in full (2026-09-30).
+  out.packetHeartItems = pdoc.querySelectorAll('.p4-heart li').length
 
   // ── without a provider: must FAIL HONESTLY, not throw ────────────────────
   const noProv = usePosterPrints({ label: (i) => i.label })
@@ -164,19 +166,23 @@ if (!/no records provider/i.test(r.noProvMsg)) {
 if (r.packetSheets !== 4) fails.push(`the packet printed ${r.packetSheets} sheets, expected 4`)
 if (r.packetCards !== 2) fails.push(`the packet printed ${r.packetCards} people cards, expected 2`)
 if (r.packetWheel !== 12) fails.push(`the prayer wheel has ${r.packetWheel} segments, expected 12`)
-// The English passage is 2,141 chars; 1,200 is a floor no truncation or placeholder
-// survives, with room for languages that render the same text more compactly.
-if (r.packetMark5Len < 1200) {
+// Point 4 prints Mark 5:18-20 AND THE HEAVENLY FATHER'S HEART, seven readings, on the points page (2026-09-30).
+if (r.packetMark5Len < 250) {
   fails.push(r.packetMark5Len === 0
-    ? 'the packet is missing Mark 5:1-20 in full (no .p4-passage block)'
-    : `Mark 5:1-20 looks truncated: ${r.packetMark5Len} chars`)
+    ? 'the packet is missing Mark 5:18-20 (no .p4-passage block)'
+    : `Mark 5:18-20 looks truncated: ${r.packetMark5Len} chars`)
+}
+if (r.packetHeartItems !== 7) {
+  fails.push(r.packetHeartItems === 0
+    ? "the packet is missing point 4's reading list (no .p4-heart block)"
+    : `point 4's reading list prints ${r.packetHeartItems} of 7 readings`)
 }
 if (errs.length) fails.push(`${errs.length} page error(s): ${errs[0]}`)
 
 console.log(`  list print        : ${r.listRows} rows, checkbox=${r.listHasCheckbox}`)
 console.log(`  without provider  : phase=${r.noProvPhase} "${r.noProvMsg.slice(0, 60)}"`)
 console.log(`  packet            : ${r.packetSheets} sheets, ${r.packetCards} cards, `
-  + `${r.packetWheel} wheel segments, Mark5=${r.packetMark5Len} chars`)
+  + `${r.packetWheel} wheel segments, Mark5=${r.packetMark5Len} chars, point 4 list=${r.packetHeartItems}`)
 console.log(`  page errors       : ${errs.length}`)
 
 if (fails.length) {

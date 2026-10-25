@@ -126,8 +126,8 @@ export function exposeMap(map) {
   }
 }
 
-// Release the hook on unmount (a closure on window pins the whole app after the view is gone; rega
-// measured ~10 MB per mount). Only if it is still THIS map's: another view may have exposed its own since.
+// Release the hook on unmount (a closure on window pins the whole app after the view is gone; measured
+// at ~10 MB per mount). Only if it is still THIS map's: another view may have exposed its own since.
 export function releaseMap(map) {
   if (typeof window === 'undefined' || !map || _exposedMap !== map) return
   delete window.__pplrMap

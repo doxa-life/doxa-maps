@@ -3,13 +3,12 @@
 //   node osm-basemap.mjs <lat> <lng> <zoom> <outfile.png>
 //
 // ═══ WHY THIS EXISTS ════════════════════════════════════════════════════════
-// design note 2026-08-01: "city posters could learn from geo-steward's static image
-// generation on how to make them a bit more HD, because those will need streets
-// and data — while static image generation software is legacy, OLD OLD, so there
-// is probably a better alternative that does not require a mapbox token."
+// City posters need streets and data, at a higher resolution than the polygon
+// posters. An earlier static-image generator did this through Mapbox, but it is
+// legacy and needs a Mapbox token, so a token-free alternative is better.
 //
-// Both halves of that are right, and I verified them:
-//   - geo-steward's file is literally named `legacy-static-image-service.js` and
+// Both halves of that were verified:
+//   - the earlier generator's file is literally named `legacy-static-image-service.js` and
 //     hits `api.mapbox.com/styles/v...` with `static mapboxToken`.
 //   - The 100-list/country/city posters draw ADM0/ADM1 POLYGONS. That is correct
 //     at country scale and useless at city scale: a 9km cluster needs STREETS,

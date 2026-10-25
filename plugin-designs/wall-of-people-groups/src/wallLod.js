@@ -4,7 +4,7 @@
  * ★ WHY. The wall gave every one of its ~2,100 card images its full-size href at once, so the
  * browser fetched and DECODED every photo even when the whole 4000×3000 wall was on screen and each
  * photo was a few pixels wide. Decoded bitmaps are uncompressed, so that was the bulk of the ~1.4 GB
- * the Driver measured. A map never does this: it draws light tiles when zoomed out and loads detail
+ * measured in testing. A map never does this: it draws light tiles when zoomed out and loads detail
  * only for what is in view. Same rule here:
  *   - zoomed out (a card smaller than `minPx` on screen): NO photos, just the light image slot;
  *   - zoomed in: HD photos only for the cards in view (plus a margin), and they are UNLOADED again

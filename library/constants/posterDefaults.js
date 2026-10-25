@@ -71,6 +71,11 @@ export const posterDefaults = {
     fontSizePt: 10,
     color: '#222',
     // Caller may set left/right text; attribution is enforced by FooterSlot.
+    // ★ A FALLBACK OF LAST RESORT, NOT THE ANSWER. useMapPoster reads the credit from the map's
+    // LOADED sources (library/maps/map-attribution.js) and overrides this, because under the
+    // fleet's MapLibre default Mapbox serves nothing and this line would credit the wrong party.
+    // It stays non-empty only so a map that cannot be read still prints something: a licence
+    // footer may never be blank.
     attribution: '© Mapbox © OpenStreetMap',
     backgroundColor: 'rgba(255,255,255,0.92)',
   },

@@ -6,11 +6,12 @@ Your starting point. **Copy this folder, then build your map inside the copy** �
 blank. It's a tiny working bundle plus a `src/` sandbox laid out for your real code:
 
 - **`template-map-a.vue` is a real map.** It draws the points in `data/places.geojson` on a basemap,
-  shows one translated title, and follows the page's engine, language (including right-to-left) and
+  shows its text translated, and follows the page's engine, language (including right-to-left) and
   Mapbox token. **It needs no account**: with no token it runs on the free MapLibre engine. Swap in
   your own points and it is your map.
-- **`template-map-b.vue`** is a second, trivial screen (a coloured box). It only shows that one
-  bundle can hold several screens. Delete it if you want one.
+- **`template-map-b.vue`** is a second, trivial screen: a heading and two lines of translated text,
+  one of them a sentence that carries markup. It shows that one bundle can hold several screens, and
+  how a sentence is translated. Delete it if you want one.
 
 ## In plain English (read this first)
 
@@ -59,7 +60,9 @@ needs it — an expert move, not a first move. To see everything `library/` offe
    - the **tag** in `index.js` (`customElements.define('<your-map>', …)`),
    - the **tag + `profile` strings** in `index.html` (the staging page must mount your tag),
    - the **`.vue` filenames** — rename `template-map-a.vue` to your screen's name and delete
-     `template-map-b.vue` if you only want one screen (filename = the `profile` name).
+     `template-map-b.vue` if you only want one screen (filename = the `profile` name). Each `.vue` has a
+     **`.meta.json`** beside it (its name in the Plugin Studio): rename it with the `.vue` and change its
+     `label`. Without it your plugin builds but is not listed in the Studio.
    Nothing else. Check it: `bun run dev` → your map renders at
    `http://localhost:5173/plugin-designs/<your-map>/index.html`.
 2. **List what your map needs** — data, colors, controls (legend, search, share, fullscreen…).
@@ -98,11 +101,20 @@ Everything builds into **one** file: `public/dx-maps/template-bundle/template-bu
 | the pin colour | `src/colors/colors.json` → `pins.selected` | edit the hex |
 | the engine (Mapbox or MapLibre) | the page: `profile-config` `provider`, `?provider=`, or `window.MAP_PROVIDER`; no token → MapLibre | nothing: leave it to the page |
 | the language and right-to-left | the page's locale, given by the library's ProfileLoader | nothing: leave it to the page |
-| the title | `t('template.title')` from `library/i18n/locales/<lc>/template.json` | see below |
+| the words on screen (the title, the two error lines) | keys in `library/i18n/locales/<lc>/template.json`, shown with `t()` in the template | see below |
 
-**Your own text.** Translations live in `library/` (every locale in one place), so a new key there
-is a library change: ask the build owner to land it. Until then, a plain English string in your
-`.vue` is fine.
+**Your own text.** Every string a reader sees is a key, in all eleven locales. Translations live in
+`library/` (every locale in one place), so a new key there is a library change: ask the build owner
+to land it. Until then, a plain English string in your `.vue` is fine. Three habits keep it right:
+
+- **Call `t()` in the template**, not once at setup. `const title = t('template.title')` freezes the
+  first language; `{{ t('template.title') }}` follows a page that switches language later.
+- **Keep a message's KEY in state, not its words.** An error stores `'template.engineMissing'`, and the
+  template translates it when it shows (see `errorKey` in `template-map-a.vue`).
+- **A sentence is ONE key, even with markup in it.** `template-map-b.vue` renders "Served from {file}
+  in the {bundle} bundle." with `@map/composables/useSentence.js`; the two names go in as their own
+  `<code>` elements, so each language can put them where its grammar wants. Never build a sentence
+  from pieces ("Served from" + name + "in the" …): that fixes English word order in every language.
 
 ## The two ways you import
 

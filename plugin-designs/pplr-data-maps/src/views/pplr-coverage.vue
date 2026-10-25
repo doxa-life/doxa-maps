@@ -1,7 +1,7 @@
 <script setup>
 import { dataUrl, glFor, exposeMap, releaseMap, whenGeojsonDrawn } from '../utils/pplrData.js'
 import { usePplrT } from '../composables/usePplrT.js'
-import { formatCount } from '@map/utils/formatCount.js'   // counts stay fixed en-US: numerals are held for the Driver
+import { formatCount } from '@map/utils/formatCount.js'   // counts stay fixed en-US: numerals are held, pending a product decision
 import { tStatic } from '@map/i18n/index.js'
 /**
  * pplr-coverage.vue — Country choropleth: avg # of locales filled per PG in that country.
@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
 })
 
 const SCALE = [
-  { stop: '0',  color: '#7f1d1d', label: '0 locales' },
+  { stop: '0',  color: '#7f1d1d', label: '0' },    // the legend title names the unit (pplr.legendTitle.avgLocales)
   { stop: '4',  color: '#dc2626', label: '' },
   { stop: '8',  color: '#f59e0b', label: '8' },
   { stop: '12', color: '#84cc16', label: '' },

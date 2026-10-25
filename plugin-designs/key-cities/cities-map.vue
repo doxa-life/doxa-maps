@@ -3,7 +3,7 @@
  * cities-map.vue — THE KEY CITIES GLOBAL MAP.
  *
  * Every located population centre as a POINT, sized by how many people groups it
- * holds. Brief: "all these are missing maps."
+ * holds. One of the data maps this project adds.
  *
  * POINTS, NOT COUNTRY SHADING — this is the one dataset with real coordinates
  * (1,646 clusters, 277 of them gazetteer-named), so shading a country would throw
@@ -24,8 +24,8 @@
  *     geojson in the bundle would block first paint)
  *
  * ═══ WHAT A POINT IS, AND WHAT IT IS NOT ═══════════════════════════════════
- * A point is a CLUSTER OF PEOPLE-GROUP CENTROIDS within ~25km — not a municipal
- * boundary. Pins mark where a group is centred, not a settlement.
+ * A point is a CLUSTER OF PEOPLE-GROUP PINS within ~25km — not a municipal
+ * boundary. Each pin marks a people group, not a settlement.
  *
  * NAMED points were resolved by a cited gazetteer (Nominatim/OSM). UNNAMED ones
  * show as "unnamed location" with their coordinates rather than an invented
@@ -66,10 +66,11 @@ const selected = ref(null)
 const err = ref(null)
 
 // Bands, not a continuous ramp: a reader can hold four categories, not a gradient.
+// Labels are keyCities.map.bands.<id> (the legend translates them).
 const BANDS = [
-  { id: 'named',   label: 'named centre',      color: '#0b7a5b' },
-  { id: 'multi',   label: 'multi-group',       color: '#e07a2b' },
-  { id: 'single',  label: 'single group',      color: '#9aa2ad' },
+  { id: 'named',  color: '#0b7a5b' },
+  { id: 'multi',  color: '#e07a2b' },
+  { id: 'single', color: '#9aa2ad' },
 ]
 const bandColor = (b) => (BANDS.find((x) => x.id === b) || {}).color || '#9aa2ad'
 
@@ -85,7 +86,7 @@ async function load() {
   const res = await fetch(`${assetsBase.value}/tables/key-cities.json`)
   if (!res.ok) throw new Error(`key-cities table not found (${res.status})`)
   rows.value = (await res.json()).rows || []
-  // CITY-STAR LAYER (Brief: "better city display"). Fetched SEPARATELY — never a
+  // CITY-STAR LAYER (a richer city display). Fetched SEPARATELY — never a
   // static import, which would inline the table into the IIFE bundle (that trap
   // once took two bundles to 2.0/2.9MB). Failure here must NOT break the base map,
   // so it is caught: the city layer is an ENHANCEMENT, not a dependency.

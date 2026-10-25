@@ -4,7 +4,7 @@
  *
  * WHY: a page's own reduced-motion reset never crosses a shadow boundary, so a component rendered inside a
  * custom element's shadow root animates for a reader who asked for less motion unless the root carries its
- * own reset (regions-plugin, ProgressBar; ten legend and map-control components had none).
+ * own reset (ProgressBar; ten legend and map-control components had none).
  *
  * WHAT: (1) library/composables/useShadowStyles.js injects REDUCED_MOTION_CSS, a prefers-reduced-motion:
  * reduce block, once per shadow root; (2) every library/components/**.vue that declares a transition or an

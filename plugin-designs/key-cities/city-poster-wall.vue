@@ -19,6 +19,8 @@
  * Partial and correct beats complete and wrong. The wall shows only what exists.
  */
 import { computed, inject, ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { regionLabel } from './regionLabel.js'
 import PosterWall from '@map/components/poster/PosterWall.vue'
 import { resolveAssetsBase } from '@map/utils/embedBase.js'
 
@@ -46,12 +48,11 @@ const items = computed(() => rows.value
     bbox: null,
   })))
 
-const groupBy = (c) => c.region || 'Other'
+const { t } = useI18n()
+// PosterWall prints its section name as given, so the wall groups by the region's heading in the page's
+// language (as country-posters' wall does). 'Other' is the data guard dashboard.other projects.
+const groupBy = (c) => regionLabel(t, c.region || 'Other')
 const collapsedBy = (sec) => sec.total < 20
-
-const intro =
-  'A printable sheet for each population centre where unengaged people groups live — ' +
-  'named from a cited gazetteer, never inferred.'
 </script>
 
 <template>
@@ -63,7 +64,7 @@ const intro =
     event-name="doxa-key-cities:show-on-map"
     :heading="$t('keyCities.posters.heading')"
     :tag="$t('keyCities.posters.tag')"
-    :intro="intro"
+    :intro="$t('keyCities.posters.intro')"
     unit="UPG"
     :item-noun="$t('keyCities.posters.itemNoun')"
     :item-noun-plural="$t('keyCities.posters.itemNounPlural')"

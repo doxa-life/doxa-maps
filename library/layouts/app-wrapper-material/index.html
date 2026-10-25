@@ -699,13 +699,13 @@ function drawSeg(){
 const target = isMobile() ? 'mobile' : 'desktop'
 const tree = navForTarget(NAV, target)
 const open = new Map(tree.filter(n=>n.kind==='folder').map(n=>[n.id, !!n.open]))
-// The profile shown on first load (design note: the prayer map is the first map they see).
+// The profile shown on first load (the prayer map is the first map a reader sees).
 // Declared HERE, above its first use — a `const` further down the module would be in
 // the temporal dead zone at this point and throw.
 const DEFAULT_PROFILE = 'prayer-progress'
 
 // Which profile is showing is URL STATE, not just a variable — otherwise a reload
-// always snaps back to the default (reported: "reload loses which map I was on").
+// always snaps back to the default (a reload used to lose which map was open).
 // The hash is used rather than a path so the app stays drop-portable: it works
 // identically on file://, a CDN subpath, Railway, and inside Capacitor, none of
 // which can be relied on to rewrite server-side routes.
@@ -839,13 +839,12 @@ const PROFILES = {
     // (index.js does import.meta.glob('./*.vue'), so poster-wall.vue registers
     // itself). Same tag, same src, different `profile` value: one download serves
     // both panes and they share data/clusters.json rather than fetching twice.
-    // RESOURCES FIRST, MAP SECOND (Driver 2026-09-23). "By default the first tab
-    // shouldn't be the map. The first tab should be the prayer resources" — that pane
-    // already explains what a UPG-100 list IS at the top and shows the posters, so a
-    // new user needs no explanation for it; a choropleth of zones does. Stated by him
-    // as a general principle: "maps don't have to be primary. You can use lists and
-    // grids for the primary view and maps as a secondary view… then they transition
-    // into the map." Familiarity is the on-ramp.
+    // RESOURCES FIRST, MAP SECOND (2026-09-23). The first tab is the prayer resources,
+    // not the map: that pane already explains what a UPG-100 list IS at the top and
+    // shows the posters, so a new user needs no explanation for it; a choropleth of
+    // zones does. The general principle: maps do not have to be primary. Lists and
+    // grids can be the primary view and maps a secondary one that readers transition
+    // into. Familiarity is the on-ramp.
     //
     // Both panes carry an EXPLICIT `config.profile`, including the map. The mount code
     // used to rely on "pane 0 is the map" positionally — reordering under that rule
@@ -932,8 +931,8 @@ const PROFILES = {
   'gospel-resources': {
     tag:    'gospel-resources-map',
     src:    './doxa-maps/gospel-resources/gospel-resources.js',
-    // MAP IS PANE 0. Brief: "mapping out the gospel resources is super important
-    // for me… all these are missing maps." The map is the app's ONE WebGL pane;
+    // MAP IS PANE 0. The gospel resources need a map first, ahead of the lists.
+    // The map is the app's ONE WebGL pane;
     // the list and tables below it are DOM.
     config: { profile:'resources-map', instanceId:'wrapper-gospel-resources' },
     paneHint: false,

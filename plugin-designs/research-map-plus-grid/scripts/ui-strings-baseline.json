@@ -110,7 +110,6 @@
       "groups (",
       "groups doxa.life publishes a page for can appear here at all.",
       "groups have nothing ·",
-      "groups share this coordinate, so the position tells you the locality and not which group is where.",
       "groups sharing this language.",
       "groups with nothing ·",
       "groups ·",
@@ -142,7 +141,6 @@
       "way in:"
     ],
     "plugin-designs/key-cities/cities-list.vue": [
-      "A cluster of people-group centroids within ~25km —",
       "Internet figures are NATIONAL",
       "Nominatim/OpenStreetMap",
       "This page carries people-group locations and connectivity only — no church, believer or meeting-point data, by design.",
@@ -157,7 +155,7 @@
     ],
     "plugin-designs/plugin-studio/plugin-studio.vue": [
       "https://doxa.life/api/maps/token",
-      "pk.eyJ…"
+      "MAPBOX_PUBLIC_TOKEN…"
     ],
     "plugin-designs/plugin-studio/src/StudioTree.vue": [
       "CAP"
@@ -380,7 +378,7 @@
       "Scripture",
       "Show all groups",
       "Showing",
-      "The dot marks where this people is found, not a town or a boundary.",
+      "The dot marks a people group, not a town or a boundary.",
       "link checked"
     ],
     "plugin-designs/pplr-data-maps/pplr-data-maps.vue": [

@@ -534,7 +534,7 @@ function connect() {
   clearTimeout(retry)
   try { es?.close() } catch {}
   // No EventSource (a headless mount, an old WebView): show the engine-not-running state instead of throwing
-  // in the mounted hook, which failed check:profiles-mount for every lane (go-int, END-DXS-ESRC).
+  // in the mounted hook, which failed check:profiles-mount for every lane.
   if (typeof window === 'undefined' || typeof window.EventSource !== 'function') {
     engineError.value = 'The desktop engine is not running.'
     return
@@ -665,7 +665,7 @@ function releaseMic() {
   media = null
   actx = null
 }
-// Stop: the mic goes off and the widget is idle at once (rega: it read "Stop" for 12 s+ while a loaded
+// Stop: the mic goes off and the widget is idle at once (it read "Stop" for 12 s+ while a loaded
 // server caught up). The socket stays open so the last words still land in the box; the engine closes the
 // session with "recording false". Record again meanwhile simply lets go of that tail.
 function stopBrowser() {
@@ -790,7 +790,7 @@ function onKey(ev) {
   if (ev.ctrlKey && ev.shiftKey && ev.code === 'Space') { ev.preventDefault(); toggle() }
 }
 
-// The status also by plain request: a proxy that buffers the event stream (rega's harness did) must not
+// The status also by plain request: a proxy that buffers the event stream (as a test harness did) must not
 // leave the page guessing whether this server is meant to have an engine.
 async function fetchStatus() {
   try { const r = await fetch(apiBase.value + '/status'); if (r.ok) applyStatus(await r.json()) } catch {}
@@ -830,7 +830,12 @@ let speakingUntil = 0, activityTimer = null, lastActivity = ''
 function sendActivity() {
   activityTimer = null
   const speaking = recording.value && Date.now() < speakingUntil
-  const tail = recording.value ? draft.value.trim().split(/\s+/).slice(-5).join(' ') : ''
+  // ★ READ THE TAIL, NOT THE WHOLE TRANSCRIPT. This split the ENTIRE draft to take five words, on
+  // every activity tick while recording — O(n) in a string that only grows. Measured at 3,000 words:
+  // 1.61ms per tick against 0.051ms for a bounded tail, 31x. 300 characters is far more than five
+  // words of any language this dictates, so the answer is identical; trim() comes BEFORE the slice
+  // because the draft ends in a space and slicing first would drop a word.
+  const tail = recording.value ? draft.value.trim().slice(-300).split(/\s+/).slice(-5).join(' ') : ''
   const key = speaking + '|' + tail
   if (key === lastActivity) return
   lastActivity = key
@@ -1124,7 +1129,16 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .icon-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .icon-btn[aria-expanded='true'], .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
 .compact .controls .mic { display: none; }
-.compact .compose { flex: 1 1 0; min-height: 120px; }
+/* ★ NO FLOOR ON A SHORT PANEL. min-height:120px kept the compose column from shrinking, so when a
+   notice makes the header tall the draft is pushed past the panel's clip and its last line cannot be
+   reached — its own scrollbar is useless, because the overflow is OUTSIDE the scrollable area.
+   Measured in the corner widget with the engine offline (header 237px): at 390x560 the panel leaves
+   99px and the floor forces 120, overflowing by exactly 21px; at 375x450 it leaves 33px and overflows
+   by 87. Both numbers were reproduced independently.
+   The floor is unconditional and must stay so: a viewport-height guard would not help, because what
+   eats the room is the HEADER, and a notice can make that 237px at any viewport. The draft already
+   carries min-height:0 and overflow-y:auto, so a floor here buys nothing a flex basis does not. */
+.compact .compose { flex: 1 1 0; min-height: 0; }
 .compact.more .compose { flex: 0 0 auto; height: 200px; }
 .compact .draft { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   resize: none; padding: 10px 12px; font-size: 16px; line-height: 1.5; }
@@ -1134,13 +1148,43 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .compact .bottom .mic.sm { padding: 9px 18px; font-size: 15px; gap: 6px; border-radius: 999px; }
 .compact .bottom .mic.sm:not(.on) { background: var(--accent); color: #04121c; border-color: var(--accent); }
 .compact .bottom .mic.sm.on { background: var(--rec); color: #fff; border-color: var(--rec); }
-.compact .notice, .compact .hint { order: 0; font-size: 12.5px; padding: 8px 10px; }
+/* ★ NOTICES SIT BELOW THE DRAFT IN THE CORNER PANEL, for the same reason they do on a phone: the
+   panel is short, and an engine-offline notice is several lines, so above the draft it eats the room
+   the draft needs. This used to say `order: 0`, which SILENTLY CANCELLED the phone rule below —
+   `.compact .notice` is (0,2,0) and the media query's `.notice` is (0,1,0), and a media query adds no
+   specificity, so the more specific rule won at every width and the notice stayed on top. The phone
+   rule (bac2431d0, 19:59) was already there; the corner widget (4e94e9216, 21:58) overrode it two
+   hours later without meaning to. Ordering it here fixes the widget at EVERY width, not only under
+   480px, because the corner panel is short regardless of the viewport. No floor is involved: a floor
+   is what clipped the draft in the first place. */
+.compact .notice, .compact .hint { order: 1; font-size: 12.5px; padding: 8px 10px; }
+/* ★ AND THE NOTICE YIELDS. Ordering it below the draft fixes the reading order but NOT the height:
+   .notice is flex:0 1 auto and .compact .compose is flex:1 1 0, so the draft still gives up whatever
+   the notice's content asks for. Measurement showed the result at 375x450 — a 20px draft whose wheel moves
+   nothing. The engine-offline notice is the long one (apiBase, Go 1.22, the setup command), ~132px at
+   375 and ~179px at 390, and it is REFERENCE text: a reader needs it once, not a third of a short
+   panel forever. Capping it and letting it scroll gives the draft 58px at 375x450 and 124px at
+   390x560, measured against the 60vh panel the corner widget actually gets (plugin-studio.vue:466),
+   not the viewport — sizing off the viewport is what made my first estimate wrong by 58px.
+   Again: no floor anywhere. A floor is what clipped the draft to begin with. */
+.compact .notice { max-height: 96px; overflow-y: auto; overscroll-behavior: contain; }
 .compact .debug { order: 4; }
 /* A phone-sized panel: less padding, and a shorter draft so it stays in view below the controls. */
 @media (max-width: 480px) {
-  .rudder { min-height: 100%; padding: 12px; gap: 10px; }
-  .compose { min-height: 200px; }
-  .draft { min-height: 180px; }
+  /* ★ THE TEXT AREA GETS THE LEFTOVER SPACE AND SCROLLS. On a phone the header can take most of the panel, leaving the draft unscrollable and its
+     last lines unreachable. The
+     panel is capped at 60vh here, and a min-height on the draft cannot fix that: a MINIMUM makes
+     the box refuse to shrink, so whatever the header takes is pushed off the bottom and the
+     draft's own scrollbar never appears. Lowering it from 240 to 180 only moved the threshold.
+     So the column owns the height (min-height:0 is what lets a flex child shrink BELOW its
+     content, and is the whole fix), the draft takes what is left and scrolls inside it, and the
+     header gives back the space it was holding. */
+  .rudder { min-height: 0; height: 100%; padding: 10px; gap: 8px; display: flex; flex-direction: column; }
+  .compose { min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; }
+  .draft { min-height: 0; flex: 1 1 0; overflow-y: auto; resize: none; padding: 10px; }
+  .top { gap: 8px; row-gap: 6px; }
+  .bar .name { font-size: 13px; }
+  .bar .status { padding: 2px 7px; font-size: 11.5px; }
   /* Notices (engine offline, mic muted, …) sit below the draft here, so the draft stays in view. */
   .notice, .hint { order: 1; }
   .bottom { order: 2; }

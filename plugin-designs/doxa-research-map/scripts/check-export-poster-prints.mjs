@@ -4,9 +4,9 @@
  * with the poster in it, on ONE click, in its own leaf AND inside the Research Gallery, in en AND ar.
  * It must NEVER hand over a file.
  *
- * ★ THE RULE CHANGED, AND THIS GATE ASSERTED THE OLD ONE (the Driver, 2026-09-28: "an export-poster
+ * ★ THE RULE CHANGED, AND THIS GATE ASSERTED THE OLD ONE (ruled 2026-09-28: "an export-poster
  * button must open the print dialog with a poster preview, never a direct download"). It was
- * check-export-one-click, and it passed while the button did exactly what the Driver has now ruled
+ * check-export-one-click, and it passed while the button did exactly what has now been ruled
  * against: render a PNG and drop it in the downloads folder. A gate that encodes a superseded ruling
  * is worse than no gate — it defends the defect. The earlier history is still why the click path is
  * measured so carefully: before 2026-09-25 one click produced NOTHING, no dialog, no file, no error.
@@ -18,8 +18,10 @@
  *      and in Arabic the button could not be clicked at all;
  *   2. within 120s and with no further click, some frame calls window.print();
  *   3. the printing document IS the poster: an <img> at the print size (US Letter at 200 DPI =
- *      1700x2200) on an @page sized 8.5in x 11in. A dialog over a blank or letter-defaulted sheet is
- *      not a preview of what was rendered;
+ *      1700x2200) on an @page sized 8.5in x 11in, or both turned (2200x1700 on 11in x 8.5in), because
+ *      the paper turns landscape when the map is wider than it is tall. The image and the sheet must
+ *      turn TOGETHER. A dialog over a blank or letter-defaulted sheet is not a preview of what was
+ *      rendered;
  *   4. NO download arrives. This is the half that encodes the new rule, and it is asserted for the
  *      whole run rather than at a moment, because a download that lands late is still a download;
  *   5. 0 page errors.
@@ -130,9 +132,14 @@ try {
     if (prints.length) {
       const pr = prints[0]
       info = `${pr.imgW}x${pr.imgH} on @page ${pr.page || '(none)'}`
-      // The poster, at the size it was rendered, on the sheet it was rendered for.
-      if (pr.imgW < 1600 || pr.imgH < 2100) errs.push(`the printed document is not the poster (${info})`)
-      if (!/8\.5in\s+11in/.test(pr.page || '')) errs.push(`the sheet is not the poster's page size (@page ${pr.page || 'missing'})`)
+      // The poster, at the size it was rendered, on the sheet it was rendered for. Either orientation
+      // (research-map.vue turns the paper to match the map), but the image's shape must be the sheet's.
+      // A negated <= so a missing image (NaN) fails rather than passes.
+      const sheet = /(\d+(?:\.\d+)?)in\s+(\d+(?:\.\d+)?)in/.exec(pr.page || '')
+      const [sw, sh] = sheet ? [+sheet[1], +sheet[2]] : [0, 0]
+      if (Math.min(pr.imgW, pr.imgH) < 1600 || Math.max(pr.imgW, pr.imgH) < 2100) errs.push(`the printed document is not the poster (${info})`)
+      if (Math.min(sw, sh) !== 8.5 || Math.max(sw, sh) !== 11) errs.push(`the sheet is not the poster's page size (@page ${pr.page || 'missing'})`)
+      else if (!(Math.abs(pr.imgW / pr.imgH - sw / sh) <= 0.02)) errs.push(`the poster and its sheet are not the same shape (${info})`)
     } else {
       for (const c of consoleErrs.filter(c => /poster|print|useMapPoster/i.test(c)).slice(-2)) errs.push(c)
       // SLOW or DEAD? A button still busy at the deadline is a render still running; an idle one is an

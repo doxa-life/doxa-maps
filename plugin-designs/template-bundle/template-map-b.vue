@@ -14,18 +14,36 @@
  * The host chooses which one to show with the `profile` field:
  *
  *   <template-bundle profile-config='{"profile":"template-map-b"}'></template-bundle>
+ *
+ * Its text shows the two ways a string reaches the catalogue (library/i18n/locales/<lc>/template.json):
+ *   - a plain label or line: t('template.profileB.title') in the template;
+ *   - a SENTENCE that carries markup: ONE key with named placeholders ("Served from {file} in the
+ *     {bundle} bundle."), rendered by library/composables/useSentence.js. The file and bundle names
+ *     are passed in as their own left-to-right <code> islands, so a translator can move them anywhere
+ *     in the sentence and never has to copy markup. Building it from pieces ("Served from" + <code> +
+ *     "in the" …) would fix English word order into every language.
+ * The host's note is content, not interface: it is shown as given, inside a translated line.
  */
-import { inject, computed } from 'vue'
+import { inject, computed, h } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { sentenceParts, keep } from '@map/composables/useSentence.js'
 
+const { t } = useI18n()
 const config = inject('profileConfig', null)
-const note = computed(() => config?.value?.note || '(no note passed in profile-config)')
+const note = computed(() => config?.value?.note || '')
+const code = (text) => h('code', { dir: 'ltr' }, text)
+// A computed VNode, so it re-renders when the language changes (t() reads the current locale).
+const servedFrom = computed(() => h('p', sentenceParts(
+  t('template.profileB.servedFrom', keep('file', 'bundle')),
+  { file: code('template-map-b.vue'), bundle: code('template-bundle') },
+)))
 </script>
 
 <template>
   <div class="tpl tpl--b">
-    <h2>Profile B</h2>
-    <p>Served from <code>template-map-b.vue</code> in the <code>template-bundle</code> bundle.</p>
-    <p class="note">note: {{ note }}</p>
+    <h2>{{ t('template.profileB.title') }}</h2>
+    <component :is="servedFrom" />
+    <p class="note">{{ note ? t('template.profileB.note', { note }) : t('template.profileB.noNote') }}</p>
   </div>
 </template>
 

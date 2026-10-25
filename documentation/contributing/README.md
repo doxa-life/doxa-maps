@@ -7,14 +7,15 @@ being duplicated.
 
 ## The one rule that keeps everything clean
 
-> **Parameterized + genuinely reused by more than one map → the shared library**
+> **Could serve more than one map → build it in the shared library**, parameterized
 > (`library/`, alias `@map`).
-> **Not reused → it lives in your app-profile folder** (`plugin-designs/<your-map>/`).
+> **One-off or experimental → it lives in your app-profile folder** (`plugin-designs/<your-map>/`).
 
-"**Local by default, promote deliberately.**" When in doubt, keep your change local to your
-own map; something graduates into the shared library only once a *second* map genuinely
-needs it. Full reasoning — the promotion / orphan-audit rule — is in
-[`../documentation/explanation.md`](../explanation.md).
+**Reusable by default.** If a component could serve more than one map, build it once in the shared
+library, driven by props, and land it through the build owner, so other maps adopt it instead of
+copying it. A one-off or experimental piece stays in your map's folder. A new pattern starts as a pilot
+on one plugin, is approved, and is then rolled out by each owner. The rule in full:
+[`skills/plugin-designer`](../../skills/plugin-designer/SKILL.md), section 3.
 
 ## Start here
 

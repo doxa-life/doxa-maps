@@ -31,7 +31,8 @@
     "readyRosetta": "Gata · repere: {pins} · eșantioane Rosetta: {samples} (★ aurie)",
     "readyPins": "Gata · repere: {pins} · dați clic pe un reper",
     "readyLanguage": "Gata · repere: {pins} · acoperirea familiilor {coverage}% · top 25 = {top}%",
-    "readyReligion": "Repere: {pins} · cea mai frecventă: {religion} ({count})"
+    "readyReligion": "Repere: {pins} · cea mai frecventă: {religion} ({count})",
+    "d3Failed": "Biblioteca de grafice nu a putut fi încărcată."
   },
   "ui": {
     "chooseView": "Alegeți o vedere",
@@ -56,7 +57,8 @@
     "sunburst": "Ierarhia ROP · bloc de afinitate → grup de popoare · derulați pentru zoom",
     "pins": "Toate reperele popor-țară · dați clic pentru identificatorii sistemelor",
     "coverage": "Acoperirea traducerilor · nuanța = media limbilor completate pe țară · dați clic pe un reper sau pe o țară",
-    "rosetta": "Rosetta identificatorilor · culoare = identificatorii existenți · ★ = rând de exemplu"
+    "rosetta": "Rosetta identificatorilor · culoare = identificatorii existenți · ★ = rând de exemplu",
+    "translations": "Numele poporului · {n} limbi · dați clic pe un punct"
   },
   "legendTitle": {
     "avgLocales": "Media limbilor / {n}",
@@ -88,5 +90,10 @@
   },
   "card": {
     "nameInLocales": "Numele în {n} limbi"
+  },
+  "title": "Hărți de date PPLR",
+  "index": {
+    "title": "Validarea datelor PPLR",
+    "help": "Dați clic pe o casetă sau alegeți o vizualizare de mai sus."
   }
 }

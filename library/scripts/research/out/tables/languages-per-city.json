@@ -3,7 +3,7 @@
   "title": "Languages per City x Resources",
   "grain": "one row per location cluster x language spoken there",
   "why": "399 of 1,646 clusters are multi-language — a city-level bridge can exist that a country average hides.",
-  "place_caveat": "A location is a cluster of people-group centroids within ~25km, NOT a municipal boundary. An empty place_name is an unnamed cluster, never an invented one.",
+  "place_caveat": "A location is a cluster of people-group pins within ~25km, NOT a municipal boundary. An empty place_name is an unnamed cluster, never an invented one.",
   "resolution_caveat": "resolved:false means the language LABEL did not match an ISO 639-3 record here — its resource status is UNKNOWN, not absent.",
   "pools_caveat": "Resource status is from eBible + JESUS Film only. GRN and FCBH audio are key-blocked."
  },

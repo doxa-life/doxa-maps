@@ -19,7 +19,11 @@
  *   - WITH NO TOKEN it runs on keyless MapLibre, so a first copy works with no account at all.
  *   - one DATA layer from this bundle's own data/ folder (a static import ships it inside the bundle,
  *     so it loads on any host with no extra request);
- *   - one TRANSLATED string: t('template.title'), from library/i18n/locales/<lc>/template.json;
+ *   - its TEXT from the catalogue: every string a reader sees is a key in
+ *     library/i18n/locales/<lc>/template.json (title, and the two error lines), in all eleven locales;
+ *     t() runs IN THE TEMPLATE, so the words follow a host that changes the language after mount. A
+ *     label computed once at setup (`const title = t('template.title')`) stays in the first language
+ *     forever; an error keeps its KEY in state (errorKey), not its English sentence;
  *   - label fonts and emissive paint that are right on either engine (labelFont, emissivePaint).
  *   - a pin colour from THIS bundle's src/colors/colors.json: your own code is a RELATIVE import;
  *     @map/... is only for the shared library. Edit the hex and rebuild to recolour.
@@ -44,7 +48,10 @@ const asked = resolveMapProvider(profileConfig)
 const provider = asked === 'mapbox' && !mapboxToken.value ? 'maplibre' : asked
 
 const mapEl = ref(null)
-const error = ref('')
+// The KEY of what went wrong, not its words: the template translates it, in whatever language is
+// current when it is shown. errorDetail is the engine's own message, passed in as a value.
+const errorKey = ref('')
+const errorDetail = ref('')
 const { map, initializeMap, destroy } = useMapInstance({
   containerRef: mapEl,
   accessToken: mapboxToken.value,
@@ -69,9 +76,9 @@ function addPlaces(m) {
 }
 
 onMounted(async () => {
-  try { await initializeMap() } catch (e) { error.value = String(e?.message || e); return }
+  try { await initializeMap() } catch (e) { errorKey.value = 'template.mapFailed'; errorDetail.value = String(e?.message || e); return }
   const m = map.value
-  if (!m) { error.value = 'map engine not loaded'; return }
+  if (!m) { errorKey.value = 'template.engineMissing'; return }
   // add the data once the style is ready (it may already be, so do not wait for an event that passed)
   if (m.isStyleLoaded()) addPlaces(m)
   else m.once('load', () => addPlaces(m))
@@ -83,7 +90,7 @@ onBeforeUnmount(() => destroy())
   <div class="tpl-map">
     <div ref="mapEl" class="tpl-map__canvas"></div>
     <div class="tpl-map__title">{{ t('template.title') }}</div>
-    <div v-if="error" class="tpl-map__error">{{ error }}</div>
+    <div v-if="errorKey" class="tpl-map__error" role="alert">{{ t(errorKey, { detail: errorDetail }) }}</div>
   </div>
 </template>
 

@@ -25,7 +25,10 @@ import { getCurrentInstance, onMounted } from 'vue'
  * Idempotent — uses a data-attribute key to avoid duplicate injection.
  *
  * @param {string} css      - Raw CSS text to inject
- * @param {string} [label]  - Optional label for the <style> tag (for debugging)
+ * @param {string} [label]  - The <style> tag's KEY in its shadow root, not a debugging name: a second call
+ *                            with the same label and different CSS OVERWRITES the first one's sheet. Use a
+ *                            label no other call uses (the file's own name); a copied or forked component
+ *                            must get a new one. Enforced by check:shadow-style-labels-unique.
  */
 export function useShadowStyles(css, label) {
   // Captured in setup (onMounted's callback cannot see it reliably).
@@ -48,7 +51,7 @@ export function useShadowStyles(css, label) {
     // return here used to keep the OLD CSS after an edit, under a label.
     // REDUCED MOTION, once per shadow root. A page's own prefers-reduced-motion reset never crosses a shadow
     // boundary, so every animating library component (legends, map controls, hints) slid and faded for
-    // readers who asked for less motion (regions-plugin found it on ProgressBar; ten components carried
+    // readers who asked for less motion (found first on ProgressBar; ten components carried
     // transitions with no guard). Injecting the reset here covers every component that styles itself
     // through this composable, including ones written later, without each having to remember.
     if (!root.querySelector('style[data-shadow-styles="reduced-motion"]')) {

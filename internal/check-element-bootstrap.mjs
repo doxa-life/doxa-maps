@@ -12,7 +12,7 @@
  *
  * Nothing throws, because the t() shim falls back to its key. So it reads as "a few strings not
  * translated yet" and it survived in country-posters, key-cities, gospel-resources, cities-internet and
- * my-upg-100-list simultaneously — confirmed independently by regions-plugin, who censused all 19 entry
+ * my-upg-100-list simultaneously — confirmed independently by a census of all 19 entry
  * files and found the same five and no sixth.
  *
  * ★ AND A CENSUS THAT COUNTED FUNCTION BODIES SAW FOUR OF SIXTEEN. That is why this gate greps for the

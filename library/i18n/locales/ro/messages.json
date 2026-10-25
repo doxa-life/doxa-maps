@@ -3,7 +3,7 @@
   "pinHint": {
     "tapDot": "Atinge un punct colorat — cineva are încă nevoie de rugăciune"
   },
-  "upg100WallHeading": "Lista mea UPG 100 — Liste de rugăciune și afișe",
+  "upg100WallHeading": "Lista mea UPG100 — Liste de rugăciune și afișe",
   "upg100WallTag": "Mobilizare pentru rugăciune",
   "upg100WallIntroA": "Cum ai hrăni o mulțime de cinci mii? Isus i-a așezat în grupuri de cincizeci și de o sută, iar imposibilul a devenit împărțibil (Luca 9:14). Am făcut la fel cu cele 2.106 popoare neatinse: 27 de liste de aproximativ cincizeci până la o sută. Fiecare listă se tipărește ca pachet de rugăciune și afiș, ca 27 de ucenici, biserici sau lideri locali să poarte fiecare câte una — rugându-se pentru ei ",
   "upg100WallIntroEmph": "pe numele poporului lor",
@@ -31,5 +31,15 @@
   "territoriesSelected": "Teritorii: {count}",
   "bandInRange": "✓ interval 50–100",
   "bandOutOfRange": "interval 50–100",
-  "mapContextLost": "Această hartă a fost descărcată pentru a elibera memoria grafică."
+  "mapContextLost": "Această hartă a fost descărcată pentru a elibera memoria grafică.",
+  "nOfTotal": "{n} din {total}",
+  "mapInitFailed": "Harta nu a putut fi inițializată — verificați tokenul și containerul",
+  "countryWallIntroA": "Câte un afiș pentru fiecare țară, gata de rugăciune, de tipărit și de pus pe perete — rugându-ne pentru ei ",
+  "countryWallIntroB": ". Regiunile și țările sunt ordonate după câte popoare neatinse cuprind, pentru ca nevoia cea mai mare să fie prima.",
+  "countryWallSoon": "În curând: pentru fiecare țară va fi generată o listă de rugăciune care numește fiecare popor neatins din ea.",
+  "countryWallHeading": "Afișe pe țări — Liste de rugăciune și afișe",
+  "largerScreenNotice": "Această hartă experimentală este făcută pentru ecrane mari. Se deschide aici, dar unele părți s-ar putea să nu încapă sau să nu funcționeze bine pe telefon.",
+  "desktopOnlyNotice": "{label} funcționează doar pe desktop — deschideți pagina pe un computer pentru a-l folosi.",
+  "noticeDismiss": "Închide",
+  "countryPosterTooMany": "Prea multe popoare pentru a încăpea lizibil pe un singur afiș — lucrăm la o soluție."
 }

@@ -3,7 +3,7 @@
  * check-no-silent-engine-substitution — a profile must never fall back to a DIFFERENT map engine than
  * the one its provider asked for.
  *
- * THE DEFECT, found by regions' C3 read and routed by dx-shepherd (END-SHEP-C3C, 2026-09-26):
+ * THE DEFECT, found by the C3 review (2026-09-26):
  *
  *     const gl = engineGlobal(provider) || window.mapboxgl
  *
@@ -72,7 +72,7 @@ function scan(text) {
   // documented what they removed in a /* */ block whose second line begins with a BACKTICK:
   //       `engineGlobal(grProvider) || window.mapboxgl`. engineGlobal already defaults to mapbox, so
   // The prefix test saw no comment marker, matched the quoted pattern, and reported gospel as the last
-  // remaining offender at main 9df086e5. I relayed that to dx-shepherd as fact and it was wrong: the
+  // remaining offender at main 9df086e5. That was relayed as fact and it was wrong: the
   // line number had also moved three times (1490 -> 1505 -> 1509) purely because their file grew, which
   // is what made a stale card look like a live defect.
   // ★ A GATE THAT FAILS ON THE EXPLANATION OF A FIX IS WORSE THAN NO GATE. It tells the one person who

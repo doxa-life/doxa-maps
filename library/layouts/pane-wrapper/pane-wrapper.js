@@ -34,6 +34,8 @@
  * see every pane laid out like posters on a wall.
  */
 
+import { readViewKeys, claimView, onAddressChange } from '../../composables/useViewAddress.js'
+
 export const PANE_GRID_STYLES = `
 /* The column that scrolls. Vertical neighbours stack here and the user scrolls
    between them; scroll-snap makes each pane settle cleanly instead of stopping
@@ -56,9 +58,31 @@ export const PANE_GRID_STYLES = `
 .pane{
   position:relative; width:100%; height:100%;
   scroll-snap-align:start; scroll-snap-stop:always;
+  /* ★ A PANE NEVER PAINTS OUTSIDE ITS OWN BOX. The UPG-100 wall's first card row runs past the list
+     pane's bottom (a measured census: cards to y 142 against a pane ending at 57, 14 wall elements inside
+     the map area at 1440, on every surface), and on the standalone leaf the tapes' z-index painted
+     that overflow OVER the map pane below. Whatever stacking context differs between surfaces, content
+     outside a pane is not the reader's to see: clip at the pane. overflow, NOT contain/isolation —
+     those would make each pane the containing block / stacking context for position:fixed modal
+     scrims and trap them under a host's nav rail (VerticalTabsLayout records that regression).
+     clip, with hidden as the fallback for engines without it: hidden alone leaves the pane a scroll
+     container, so focus() or scrollIntoView() on content in the overflowing row would scroll the PANE
+     and shift the wall inside it. clip only clips paint. Neither makes a containing block for fixed. */
+  overflow:hidden;
+  overflow:clip;
 }
 /* The live custom element fills its pane. */
-.pane > .pane-mount{ position:absolute; inset:0; }
+.pane > .pane-mount{
+  position:absolute; inset:0;
+  /* ★ THE PANE ALREADY SIZES ITS ELEMENT, SO THE ELEMENT OPTS OUT OF THE VIEWPORT FLOOR. ProfileLoader's
+     wrapper has min-height: var(--profile-min-h, 100dvh) (library/ProfileLoader.vue), and a host that
+     gives the element a definite height sets --profile-min-h:0 — the Gallery (.dms-pane), VerticalTabs
+     and plugin-studio all do. The pane column never did, so on the standalone leaf each pane's wrapper
+     was 100dvh (900) inside an 843 pane: the wall scroller ran 57 px past its pane (its tapes painted
+     over the map, and Tab into row 1 scrolled the COLUMN instead of the wall). Inherited, so it crosses
+     into each element's shadow root, where no selector here can reach. */
+  --profile-min-h:0;
+}
 /* Placeholder copy for a pane whose profile is not built yet — same card styling
    as the wrapper's own placeholder so an unbuilt pane never looks broken. */
 .pane-placeholder{
@@ -90,9 +114,14 @@ export const PANE_GRID_STYLES = `
  * @param {(pane:Object, mountEl:HTMLElement) => Promise<void>} opts.mountPane
  *        called for each pane that should be LIVE; the caller owns element creation
  *        so this layout never needs to know about bundles, tags or tokens.
- * @returns {{ panes:Object[], scrollTo:(paneId:string)=>void, destroy:()=>void }}
+ * @param {{ owner: () => string }} [opts.address]  OPT-IN: the open pane is in the page address as ?pane=
+ *        (library/composables/useViewAddress.js). owner() is the composite's urlOwner, read per write: on its own
+ *        leaf the composite writes; nested in a shell it announces, and the shell writes. The first pane is the
+ *        default and is never written. A click (scrollTo) is a push; where the reader's own scroll settles is a
+ *        replace; a link opens its pane; Back / Forward scroll to the address's pane and never write.
+ * @returns {{ panes:Object[], scrollTo:(paneId:string, o?:{write?:boolean, push?:boolean, changes?:Object})=>void, destroy:()=>void }}
  */
-export function buildPaneColumn(spec, { host, mountPane }) {
+export function buildPaneColumn(spec, { host, mountPane, address }) {
   const panes = Array.isArray(spec?.panes) ? spec.panes : []
   // No pane declaration → not a pane profile. The caller falls back to its
   // original single-mount path, so nothing changes for existing profiles.
@@ -134,8 +163,7 @@ export function buildPaneColumn(spec, { host, mountPane }) {
     // The header already carries a Map | Posters view switcher, so on a profile
     // where that is visible this pill is a second, redundant control that just
     // sits on top of the map. Left ON by default so existing profiles are
-    // unchanged. (design note 2026-08-01: "component that says posters below should
-    // not exist.")
+    // unchanged. Apps whose next pane is already visible turn the "posters below" pill off.
     if (i < column.length - 1 && spec?.paneHint !== false) {
       const more = document.createElement('div')
       more.className = 'pane-more'
@@ -148,22 +176,83 @@ export function buildPaneColumn(spec, { host, mountPane }) {
 
   host.appendChild(col)
 
+  const paneEl = (id) => col.querySelector(`.pane[data-pane-id="${id}"]`)
+  const known = (id) => column.some((p) => p.id === id)
+  const current = () => {
+    const tops = column.map(p => ({ id: p.id, d: Math.abs((paneEl(p.id)?.offsetTop ?? 0) - col.scrollTop) }))
+    tops.sort((a, b) => a.d - b.d)
+    return tops[0]?.id || column[0].id
+  }
+  // The first pane is the default, so it is never written: '' removes ?pane=.
+  const claimPane = (id, push, changes) => address && claimView({ pane: id === column[0].id ? '' : id, ...changes }, { owner: address.owner(), el: host, push })
+  const show = (id, behavior) => { const t = paneEl(id); if (t) col.scrollTo({ top: t.offsetTop, behavior }) }
+  const offs = []
+  if (address) {
+    // A link opens its pane. Reading writes nothing, and the default needs no write. ★ NOT AT ONCE. MEASURED in a
+    // browser (a fresh load with ?pane=<second pane>, on Country Posters and Regions): when the column is built it
+    // has no layout yet, so the pane's offsetTop is 0 and the column stayed on its first pane. The link waits until
+    // the column has a height and the pane a top, then shows it, once. 'instant': 'auto' would take the column's CSS
+    // smooth scrolling.
+    const linked = readViewKeys(typeof location !== 'undefined' ? location.search : '').pane
+    let pending = known(linked) && linked !== column[0].id ? linked : ''
+    const openLink = () => {
+      if (!pending || !col.clientHeight || !(paneEl(pending)?.offsetTop > 0)) return
+      show(pending, 'instant')
+      pending = ''
+    }
+    openLink()
+    // Retried by the ResizeObserver below, by every settled scroll, and by a bounded rAF loop that runs even WITH an
+    // observer: the observer fires only when the COLUMN resizes, and a pane's height can arrive later (styles adopted
+    // late in a shadow root).
+    if (pending && typeof requestAnimationFrame !== 'undefined') {
+      let n = 0
+      const tick = () => { openLink(); if (pending && ++n < 120) requestAnimationFrame(tick) }
+      requestAnimationFrame(tick)
+    }
+    // Where the reader's own scroll settles is a REPLACE, so a copied link opens what is on screen without a Back
+    // step per scroll. A column with no height (a hidden tab) has no "where", and a link still waiting to open must
+    // not be overwritten, so neither writes.
+    let t = null
+    const settle = () => { if (t) clearTimeout(t); t = setTimeout(() => { openLink(); if (col.clientHeight && !pending) claimPane(current(), false) }, 120) }
+    col.addEventListener('scroll', settle, { passive: true })
+    offs.push(() => { if (t) clearTimeout(t); col.removeEventListener('scroll', settle) })
+    offs.push(onAddressChange(({ pane }) => show(known(pane) ? pane : column[0].id, 'smooth')))
+    // A KEPT-ALIVE column shown again (a shell switched back to its tab: no height, then height). The tab change
+    // dropped ?pane= while the column kept its pane, so the screen claims it again (a replace). An address that names
+    // a pane wins: Back to an entry of this tab is applied while the column had no layout to scroll.
+    if (typeof ResizeObserver !== 'undefined') {
+      let h = null
+      const ro = new ResizeObserver(() => {
+        openLink()
+        const was = h
+        h = col.clientHeight
+        if (was !== 0 || !h) return
+        const asked = readViewKeys(location.search).pane
+        if (known(asked) && asked !== current()) show(asked, 'instant')
+        else if (!asked) claimPane(current(), false)
+      })
+      ro.observe(col)
+      offs.push(() => ro.disconnect())
+    }
+  }
+
   return {
     panes: column,
     /** Animate to a pane by id — this is what the View fieldset tabs call. */
-    scrollTo(paneId) {
-      const target = col.querySelector(`.pane[data-pane-id="${paneId}"]`)
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // ★ SCROLL THE COLUMN, NEVER THE PAGE. scrollIntoView() scrolls EVERY scrollable ancestor, the embedding
+    // page included: on another site, "Map" / "Show on map" moved the host's own page so the map's top met the
+    // window's top, and a host shorter than the window then showed its white space under the map. The column is
+    // the scroller (position:absolute; overflow-y:auto) and each pane's offsetParent, so its offsetTop is exactly
+    // the scroll position that puts the pane at the top.
+    // With `address`, the reader's choice is also written (a push). `changes` rides along in the SAME write, so a
+    // click that opens a pane AND selects in it is one Back step. write:false is for a caller re-showing a pane.
+    scrollTo(paneId, o) {
+      const { write = true, push = true, changes = {} } = o || {}
+      show(paneId, 'smooth')
+      if (write && known(paneId)) claimPane(paneId, push, changes)
     },
     /** Which pane is currently filling the viewport (for URL sync). */
-    current() {
-      const tops = column.map(p => {
-        const el = col.querySelector(`.pane[data-pane-id="${p.id}"]`)
-        return { id: p.id, d: Math.abs((el?.offsetTop ?? 0) - col.scrollTop) }
-      })
-      tops.sort((a, b) => a.d - b.d)
-      return tops[0]?.id || column[0].id
-    },
+    current,
     onScroll(cb) {
       let t = null
       const h = () => { if (t) clearTimeout(t); t = setTimeout(cb, 120) }
@@ -171,6 +260,6 @@ export function buildPaneColumn(spec, { host, mountPane }) {
       return () => { if (t) clearTimeout(t); col.removeEventListener('scroll', h) }
     },
     mountEl: (paneId) => mounts.get(paneId) || null,
-    destroy() { col.remove(); mounts.clear() },
+    destroy() { offs.forEach((off) => off()); col.remove(); mounts.clear() },
   }
 }

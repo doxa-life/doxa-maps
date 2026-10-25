@@ -2,7 +2,7 @@
  * check-gospel-engine-contract.mjs — the map must use the engine it was ASKED for, or say nothing
  * at all. Never a different one.
  *
- * THE DEFECT THIS IS WRITTEN AGAINST (regions' C3 read + upg100's addendum, 2026-09-26).
+ * THE DEFECT THIS IS WRITTEN AGAINST (the C3 review and its addendum, 2026-09-26).
  * resources-map resolved its engine as `engineGlobal(provider) || window.mapboxgl`. engineGlobal
  * already defaults to mapbox, so that fallback could only fire for provider 'maplibre' — and then
  * it returned MAPBOX. A page that chose the keyless engine silently got the one that needs a

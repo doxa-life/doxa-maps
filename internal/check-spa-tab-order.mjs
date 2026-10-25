@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * check-spa-tab-order.mjs — the cap-5 product SPA must open on the Big Picture, in the Driver's order.
+ * check-spa-tab-order.mjs — the cap-5 product SPA must open on the Big Picture, in the specified order.
  *
- * WHAT THIS PROTECTS. The Driver specified the rail explicitly: "cap-5 tab order (Big Picture,
- * UPG-100, Prayer Progress, Gospel Resources)". Tab 1 is not a preference — it is the LANDING
+ * WHAT THIS PROTECTS. The rail's order is PUBLISHED (the Deep Research page, 2026-09-29) and must not
+ * change: Big Picture, Simple Research, Regions · Prayer Progress, UPG-100 List · Cities with Internet,
+ * Gospel Resources, then the Experimental folder. Tab 1 is not a preference — it is the LANDING
  * SURFACE, the first thing anyone opening doxa-maps-spa sees, and the opening step of the
  * onboarding ramp. Today that ordering is held only by the order of entries in a source array and
  * by comments explaining why; nothing fails if someone reorders them.
@@ -18,7 +19,7 @@
  * ★ IT ASSERTS THE RENDERED RAIL, NOT THE SOURCE ARRAY. Parsing NAV_MODEL is what I tried first and
  * it returned an EMPTY list — the entries do not carry the `id:` shape I assumed, and a regex over
  * a 300-line commented array is guesswork either way. The rail is the thing the user sees, it is
- * what the Driver described, and reading it requires no assumption about how it is built. A source
+ * what was described, and reading it requires no assumption about how it is built. A source
  * parse could also pass while a rendering bug shows a different order.
  *
  * ORDER, NOT MEMBERSHIP. Checking that four names are present would pass on a rail that opens on
@@ -42,9 +43,9 @@ const BASE = process.env.BASE_URL || `http://127.0.0.1:4173/${TREE_NAME}`
 // Measure THIS checkout, or measure nothing (exit 75 = NOT MEASURED; see _serves-this-tree.mjs).
 await __treeGuard(BASE, __ROOT, 'SPA-TAB-ORDER')
 
-// The Driver's sequence, verbatim from the open-work brief. Prefix-matched (case-insensitive,
+// The specified sequence, verbatim from the open-work brief. Prefix-matched (case-insensitive,
 // whitespace-collapsed) so a row may carry its subtitle.
-// The Driver's four, asserted as a RELATIVE ORDER rather than as positions 1-4.
+// The specified four, asserted as a RELATIVE ORDER rather than as positions 1-4.
 //
 // ⚠ THIS USED TO DEMAND A FOUR-ROW RAIL, and it had been FAILING ever since the rail gained its
 // three-section structure (4c74bd7, 2026-09-23, "Restore three-section tab structure:
@@ -52,14 +53,18 @@ await __treeGuard(BASE, __ROOT, 'SPA-TAB-ORDER')
 // SEVEN rows —
 //   Big Picture · Simple Research · Regions · UPG-100 List · Prayer Progress ·
 //   Cities with Internet · Gospel Resources
-// — and the Driver's four are ALL PRESENT, at 0/3/4/6, in their specified relative order. The
+// — and the specified four are ALL PRESENT, at 0/3/4/6, in their specified relative order. The
 // product honours the instruction; this gate was asserting a shape the instruction never named.
-// It quoted the Driver correctly and then over-read it: "(Big Picture, UPG-100, Prayer Progress,
+// It quoted the brief correctly and then over-read it: "(Big Picture, UPG-100, Prayer Progress,
 // Gospel Resources)" names an ORDER, not a row count, and nothing there forbids a row between.
 //
 // So: assert what was actually specified. Tab 1 must still be Big Picture — that IS positional,
 // it is the landing surface — and the other three must appear after it, in order.
-const EXPECTED = ['Big Picture', 'UPG-100', 'Prayer Progress', 'Gospel Resources']
+// ★ ALL SEVEN SINCE 2026-09-29. The published Deep Research order names every production row, so the
+// gate asserts every one of them, in order; the earlier four-name list had UPG-100 before Prayer
+// Progress, which the published order reverses. As before, the order is relative: a row between two
+// named ones is allowed, a named row out of order is not; tab 1 is positional.
+const EXPECTED = ['Big Picture', 'Simple Research', 'Regions', 'Prayer Progress', 'UPG-100', 'Cities with Internet', 'Gospel Resources']
 
 const WALK = `(sel)=>{const o=[],s=new Set();const w=(r)=>{if(!r||s.has(r))return;s.add(r);try{o.push(...r.querySelectorAll(sel))}catch(e){};for(const e of r.querySelectorAll('*'))if(e.shadowRoot)w(e.shadowRoot)};w(document);return o}`
 
@@ -114,7 +119,7 @@ const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 const at = EXPECTED.map((want) => rows.findIndex((r) => norm(r).startsWith(norm(want))))
 const fails = []
 
-// 1. PRESENCE. A name the Driver specified must be in the rail at all.
+// 1. PRESENCE. A specified name must be in the rail at all.
 EXPECTED.forEach((want, i) => {
   if (at[i] === -1) fails.push(`"${want}" is not in the rail at all`)
 })
@@ -129,12 +134,12 @@ if (at[0] > 0) {
 for (let i = 1; i < EXPECTED.length; i++) {
   if (at[i] !== -1 && at[i - 1] !== -1 && at[i] < at[i - 1]) {
     fails.push(`"${EXPECTED[i]}" (row ${at[i] + 1}) comes before "${EXPECTED[i - 1]}" `
-      + `(row ${at[i - 1] + 1}) — the Driver's order is reversed here`)
+      + `(row ${at[i - 1] + 1}) — the specified order is reversed here`)
   }
 }
 
 if (fails.length) {
-  console.error(`SPA-TAB-ORDER: FAIL — ${fails.length} problem(s) with the Driver's rail order.\n`)
+  console.error(`SPA-TAB-ORDER: FAIL — ${fails.length} problem(s) with the specified rail order.\n`)
   for (const f of fails) console.error('  - ' + f)
   console.error('\n  Rendered rail:')
   rows.forEach((r, i) => console.error(`    ${i + 1}. ${r.slice(0, 52)}`))
@@ -146,7 +151,7 @@ if (fails.length) {
 }
 
 console.log(`SPA-TAB-ORDER: PASS — the rail opens in the specified order (${rows.length} rows total).`)
-// Print the WHOLE rendered rail and mark the Driver's four, so a reader can see the rows that
+// Print the WHOLE rendered rail and mark the specified four, so a reader can see the rows that
 // sit between them rather than only the names being asserted. A gate that prints just its own
 // four would hide the very structure that made the old positional assertion wrong.
 rows.forEach((r, i) => {

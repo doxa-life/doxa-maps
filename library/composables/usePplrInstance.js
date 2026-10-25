@@ -43,9 +43,8 @@ export function createPplrInstance(instanceId) {
      * that shares an instance store the `defaultTab` prop was DEAD — declared, passed,
      * seeding a local ref, and named in a watch fallback, yet never able to win.
      * MEASURED 2026-09-24: my-upg-100-list passes :default-tab="1" (the UPG-100 Lists tab)
-     * and opened on Region at BOTH widths, which is the Driver's first complaint about this
-     * legend verbatim — "it shouldn't have me sitting there on Regions, I don't know what to
-     * do, it's confusing."
+     * and opened on Region at BOTH widths, which was the first complaint about this legend:
+     * opening on Regions left the reader not knowing what to do.
      * A sentinel rather than a different initial value: changing activeTab's default would
      * move every other profile's landing tab as a side effect.
      */

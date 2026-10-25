@@ -5,14 +5,14 @@
  * ★ WHAT IT ASSERTS, and why each assertion exists rather than the obvious one.
  *
  *   THE OBVIOUS ASSERTION — "selecting a facet changes the map's feature COUNT" — PASSES TODAY AND
- *   PASSED WHILE THE DRIVER COULD SEE THE BUG. That is measured, not hypothetical: selecting
+ *   PASSED WHILE THE BUG WAS PLAINLY VISIBLE. That is measured, not hypothetical: selecting
  *   "Has Prayer" already narrowed rd-bubbles 2107 -> 689 features, disjoint from "Needs Prayer"
  *   (1418), summing exactly to 2107 and round-tripping on clear. The filter was never broken.
  *   What was broken is that every dot was painted the SAME flat orange ('circle-color' read back
  *   off the live layer as the bare string '#ef6c00', not an expression), so a prayer question got
- *   an answer with no prayer information in it. The Driver's words are a COLOUR request:
- *     "when I sort by has prayer it needs to SHOW ME WHICH ONES HAVE PRAYER AND WHICH ONE…
- *      The dots are not changing based on that filter."
+ *   an answer with no prayer information in it. The report was a COLOUR request:
+ *     sorting by Has Prayer must SHOW WHICH ONES HAVE PRAYER AND WHICH DO NOT, and the dots
+ *     were not changing with that filter.
  *   So this gate asserts BOTH halves, because either one alone is a false pass:
  *     1. SET     — the selection changes WHICH dots are on the map (count + identity).
  *     2. MEANING — the surviving dots all genuinely satisfy the selected level.
@@ -20,14 +20,14 @@
  *                  not a flat literal, and it reads the property the features actually carry.
  *
  *   ★ ASSERTION 3 IS THE ONE THAT WOULD HAVE CAUGHT THE REPORTED BUG. Assertions 1 and 2 were
- *   already green when the Driver reported it.
+ *   already green when it was reported.
  *
  * ★ IDENTITY, NOT JUST COUNT. The first five slugs are BYTE-IDENTICAL before and after, because
  *   the filter removes from the tail of an alphabetical list. A gate that eyeballed the head of the
  *   list, or that compared only counts, would report "looks the same" / "looks fine" for the wrong
  *   reason. We compare SETS of slugs and require a strict, non-empty subset relation.
  *
- * ★ WHY THE COLOUR CHECK IS CONDITIONAL. Orange (#ef6c00) is a Driver decision with a contrast
+ * ★ WHY THE COLOUR CHECK IS CONDITIONAL. Orange (#ef6c00) is a product decision with a contrast
  *   analysis behind it and is correct with NO prayer filter active; the 3-tier prayer ramp is
  *   correct WITH one. So the gate requires a literal before and an expression after — asserting the
  *   SWITCH, which is the actual contract, rather than hardcoding either colour as always-right.
@@ -96,7 +96,7 @@ const PATH_ = process.env.PROBE_PATH || '/'
 const TAB = process.env.PROBE_TAB || 'research-dashboard'
 const SELF_TEST = process.argv.includes('--self-test')
 // WHICH HALF OF THE FIX TO REVERT in --self-test. Default 'colour' reverts ONLY the paint, leaving
-// the feature properties intact — that is the EXACT bug the Driver reported (a correct filter whose
+// the feature properties intact — that is the EXACT bug reported (a correct filter whose
 // dots all look the same), and it isolates assertion 3, the one assertions 1-2 cannot catch.
 // 'props' strips peoplePraying instead; 'both' does the lot; 'frozen' blocks the source update
 // entirely, simulating "the filter never reaches the map" and negative-testing assertion 1.
@@ -196,7 +196,7 @@ const run = async () => {
       const f = __srcFeatures(m, 'rd-bubbles'); return !!(f && f.length > 0);
     })()`, { timeout: 90000 })
   } catch (e) {
-    // ★ DISTINGUISH "I CANNOT MEASURE THIS ENGINE" FROM "THE PRODUCT IS BROKEN".
+    // ★ DISTINGUISH "THIS ENGINE CANNOT BE MEASURED HERE" FROM "THE PRODUCT IS BROKEN".
     // This gate reads the source's CURRENT GeoJSON off `_data`, a private Mapbox internal. MEASURED
     // on one dashboard, one build, only the engine differing, by calling the app's own setData() to
     // shrink 2107 features to 5:

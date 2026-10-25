@@ -104,8 +104,8 @@ const menuStyle = ref({})
  * tab: every trigger read dLeft=256 dTop=111, with the ancestor walk naming the culprit
  * `div.vtl-content [contain:layout paint]`. The same dropdowns in the STANDALONE dashboard read
  * dLeft=0 dTop=4. Same component, same CSS, two hosts, opposite results — which is why a probe
- * that only ever measured the standalone composite passed six times while the Driver, who uses
- * the SPA, kept reporting the menu "in a random spot further down to the right". It was never
+ * that only ever measured the standalone composite passed six times while the SPA kept showing the
+ * menu in what looked like a random spot, further down and to the right. It was never
  * random: it was the rail width plus the header height, exactly.
  *
  * ★ WHY NOT JUST DROP `contain` FROM THE LAYOUT. It is load-bearing there for a different reason
@@ -165,8 +165,8 @@ function positionMenu() {
   // unreachable menu is worse than a detached one. That last case cannot mislead: the
   // trigger is not on screen to look detached FROM.
   // ── ★ THE MENU IS NOT THE TRIGGER'S WIDTH (card BUILD-SLIM-FILTERS-NARROW-TRIGGER-WIDE-MENU) ──
-  // DRIVER: "Make the filters very NARROW, but then the dropdown menu that opens up can be as wide
-  // as you want it to be… so you can fit MORE OF THEM ON ONE ROW WITHOUT WORD WRAPPING."
+  // The filters are very NARROW, and the dropdown menu that opens can be as wide as it needs to
+  // be, so MORE OF THEM FIT ON ONE ROW WITHOUT WORD WRAPPING.
   //
   // THE COUPLING THAT MADE THAT IMPOSSIBLE was this one line: the menu was `min(r.width, …)` — the
   // TRIGGER's measured width. The two boxes have OPPOSITE constraints and were sharing one number:
@@ -371,8 +371,8 @@ onBeforeUnmount(() => {
 /* ── ★ THE TRIGGER IS A FIXED BOX — IT MUST NOT GROW ON SELECTION ──
    (card BUILD-FILTERS-FIXED-WIDTH-ELLIPSIS-NOT-GROWING)
 
-   DRIVER: "when you select something from the drop down it should not make the filter wider.
-   The filter should stay the same width. They should just use dot dot dot instead."
+   Selecting something from the dropdown must not make the filter wider: the filter stays the
+   same width and truncates with an ellipsis instead.
 
    MEASURED BEFORE, in BOTH hosts (standalone leaf + cap-5 studio shell), 1600x900:
      empty : [160, 160, 160, 160, 160, 160]  total 960
@@ -388,7 +388,7 @@ onBeforeUnmount(() => {
    tighter range — it is to stop negotiating: ONE fixed width, and the label ellipsises inside it.
 
    WHY THIS IS NOT COSMETIC. The selections row sits UNDERNEATH this one. A trigger that grows
-   reflows the row below it, so the centred stack the Driver asked for could not hold still even
+   reflows the row below it, so the centred stack could not hold still even
    once it was centred. Fixing the width here is what makes the alignment above it STRUCTURAL.
 
    --dx-filter-w is a TOKEN, not a literal, for the same reason every colour here is: this
@@ -398,14 +398,14 @@ onBeforeUnmount(() => {
    second word".
 
    ── ★ 168px -> 128px: THE TRIGGER AND THE MENU ARE SIZED SEPARATELY NOW ──
-   (card BUILD-SLIM-FILTERS-NARROW-TRIGGER-WIDE-MENU) DRIVER, four times: "the filters are way too
-   wide. Make the filters very NARROW… so you can fit MORE OF THEM ON ONE ROW WITHOUT WORD WRAPPING.
-   And that way we can decrease the thickness of the headers."
+   (card BUILD-SLIM-FILTERS-NARROW-TRIGGER-WIDE-MENU) Asked four times: the filters were far too
+   wide. Very NARROW filters fit MORE OF THEM ON ONE ROW WITHOUT WORD WRAPPING, and that in turn
+   lets the headers get thinner.
 
    The trigger no longer has to carry the SELECTED VALUE legibly, because positionMenu() now floors
    the open menu at 240px independent of this width (see its MENU_MIN note). That is what unlocks
    the narrowing: the full value is always readable in the menu, so the closed trigger only has to
-   carry the AXIS NAME plus an ellipsis hint — which is all the Driver ever reads it for.
+   carry the AXIS NAME plus an ellipsis hint — which is all a reader uses it for.
 
    128px IS MEASURED, NOT PICKED — and the first number tried (116px) was measured WRONG, which is
    why the measurement is recorded here rather than the conclusion alone. The chrome budget is:
@@ -427,8 +427,8 @@ onBeforeUnmount(() => {
    allowed to move (below). If an axis longer than "Engagement" is ever added, re-measure rather
    than letting it truncate.
 
-   ★ THE FONT-SIZE IS NOT A LEVER. The Driver has rejected shrinking it twice ("super tiny text
-   that cannot be read"). Width, padding and TRIGGER-label truncation are the only tools; 0.875rem
+   ★ THE FONT-SIZE IS NOT A LEVER: shrinking it has been rejected twice, because text too small to
+   read is not an option. Width, padding and TRIGGER-label truncation are the only tools; 0.875rem
    on .filter-dropdown__trigger is load-bearing and must not be traded for density. */
 .filter-dropdown { position: relative; flex: 0 0 auto;
   width: var(--dx-filter-w, 128px); min-width: var(--dx-filter-w, 128px); max-width: var(--dx-filter-w, 128px); }

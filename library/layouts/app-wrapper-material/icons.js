@@ -52,6 +52,8 @@ const P = {
   search:   '<circle cx="10.5" cy="10.5" r="7.5"/><line x1="15.8" y1="15.8" x2="20.5" y2="20.5"/>',
   // `book` = Gospel Access (an open book / the Word reaching a place).
   book:     '<path d="M12 6.5C12 6.5 9.5 4.5 4 4.5v13C9.5 17.5 12 19.5 12 19.5"/><path d="M12 6.5C12 6.5 14.5 4.5 20 4.5v13C14.5 17.5 12 19.5 12 19.5"/>',
+  // `home` = the host site's homepage (VerticalTabsLayout's optional "Back to homepage" link): a house.
+  home:     '<path d="M3 11 12 3l9 8"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
   // `wifi` = Cities with Internet (connectivity arcs + node). Local, no CDN.
   wifi:     '<path d="M3.5 9a13 13 0 0 1 17 0"/><path d="M6.8 12.4a8.5 8.5 0 0 1 10.4 0"/><path d="M10 15.7a4 4 0 0 1 4 0"/><circle cx="12" cy="19" r="1"/>',
 }

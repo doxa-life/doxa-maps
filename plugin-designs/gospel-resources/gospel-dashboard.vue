@@ -12,7 +12,7 @@
  * HTML is what gets loaded, and only findable on a built tree.
  * @description The gospel map and its tables as one scrolling element: 12,379 people-group pins with the real Scripture, film and Bible-story links for each group's own language, above every resource with its URL and the 1,613 groups where nothing was found, exportable as CSV.
  *
- * WHY A COMPOSITE AND NOT A THIRD DATASET. The Driver asked for "a gospel resources
+ * WHY A COMPOSITE AND NOT A THIRD DATASET. The ask was for "a gospel resources
  * dashboard if possible", and the two halves already existed as separate profiles that a
  * reader had to know to visit separately: the map answers "where", the tables answer
  * "what exactly, and give me the list". Neither is improved by being rebuilt; they are

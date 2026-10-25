@@ -1,6 +1,6 @@
 {
   "_what": "Provenance for the Mark 5:1-20 passage on packet page 8 (prayer point 4), per locale.",
-  "_rule": "Scripture is NEVER machine-translated and never reproduced from memory. Each text is a published PUBLIC-DOMAIN translation fetched from a citable source that ships licence metadata, stored with the translation's NAME. dx-shepherd END-DXS-MK5GO, 2026-09-27.",
+  "_rule": "Scripture is NEVER machine-translated and never reproduced from memory. Each text is a published PUBLIC-DOMAIN translation fetched from a citable source that ships licence metadata, stored with the translation's NAME (added 2026-09-27).",
   "_verified": "Verse numbering checked against the English (World English Bible): all five extract exactly verses 1-20, verse 1 matches 'they came to the other side of the sea, into the country of the Gadarenes' and verse 20 ends at 'Decapolis ... everyone marveled'.",
   "_api": "https://bible.helloao.org/api/<id>/MRK/5.json",
   "locales": {

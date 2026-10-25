@@ -18,14 +18,14 @@
  * DEV ONLY (`apply: 'serve'`). A production build never starts or bundles a backend.
  */
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync, rmSync, chmodSync, renameSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync, rmSync, chmodSync, renameSync, createWriteStream } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { connect } from 'node:net'
 import { inflateRawSync } from 'node:zlib'
 import { resolve } from 'node:path'
 
 // PocketBase, the backend for plugins that need one: the SAME pinned version as the cloud container
-// (deployment/cloud/Dockerfile), SHA-256 from the release's checksums.txt. Downloaded on the first
+// (the repo-root Dockerfile), SHA-256 from the release's checksums.txt. Downloaded on the first
 // `bun run dev` into backend/bin (gitignored); its data lives in .pb/dev (gitignored).
 const PB_VERSION = '0.40.4'
 const PB_SHA256 = {
@@ -52,7 +52,7 @@ export function devBackends(env = process.env) {
     // This server is SUPPOSED to run the engine (a server deployment with the engine switched on): while it
     // is down, the plugin says "not running yet" instead of "runs on your own computer".
     expected: () => process.env.RUDDER_ENGINE === '1' || process.env.RUDDER_AUDIO === 'browser',
-    // RUDDER_ENGINE=0 (a server where Rudder is laptop-only, the Driver 2026-09-27): never start it, even if a
+    // RUDDER_ENGINE=0 (a server where Rudder is laptop-only, 2026-09-27): never start it, even if a
     // binary built by an earlier engine-on deploy is still there — it would offer to record a server's mic.
     disabled: () => process.env.RUDDER_ENGINE === '0',
   },
@@ -153,9 +153,24 @@ function start(root, b, logger, restarts = 0) {
   const child = spawn(resolve(root, b.bin), b.args || [], { cwd: root, env: { ...process.env, ...b.env }, stdio: ['ignore', 'pipe', 'pipe'] })
   const entry = { child, restarts, logger }
   REG.procs.set(b.name, entry)
-  const out = (d) => String(d).trim().split('\n').forEach((l) => l && entry.logger.info(`${tag} ${l}`))
+  // ★ THE FULL LOG GOES TO A FILE; THE TERMINAL GETS WHAT A PERSON MUST ACT ON. PocketBase prints about
+  // 230 lines of startup SQL, which scrolled Vite's "➜ Local:" address out of view for a fresh reader of the
+  // README. Every line still lands in .pb/logs/<name>.log (gitignored). Errors, warnings and "address already
+  // in use" (the line the README and HOWTO tell a reader to watch for before setting DX_PB_PORT) are
+  // forwarded exactly as before.
+  const logDir = resolve(root, '.pb', 'logs')
+  mkdirSync(logDir, { recursive: true })
+  const sink = createWriteStream(resolve(logDir, `${b.name}.log`), { flags: 'a' })
+  // The first-run "create your first superuser" link is forwarded too: it is a step a person must take,
+  // and the HOWTO's admin screen at /api/pb/_/ is unusable on a fresh .pb without it.
+  const LOUD = /\b(error|fail(ed|ure)?|panic|fatal|warn(ing)?|refused|denied|in use|cannot|unable|superuser|pbinstall?)\b/i
+  const out = (d) => {
+    sink.write(d)
+    String(d).trim().split('\n').forEach((l) => l && LOUD.test(l) && entry.logger.info(`${tag} ${l}`))
+  }
   child.stdout.on('data', out)
   child.stderr.on('data', out)
+  child.on('exit', () => sink.end())
   child.on('exit', (code) => {
     if (REG.procs.get(b.name) !== entry) return
     REG.procs.delete(b.name)
@@ -170,7 +185,7 @@ function start(root, b, logger, restarts = 0) {
       }, 2000)
     }
   })
-  logger.info(`${tag} started → ${b.route} on 127.0.0.1:${b.port}`)
+  logger.info(`${tag} started → ${b.route} on 127.0.0.1:${b.port} (full log: .pb/logs/${b.name}.log)`)
 }
 
 export function backendDevPlugin(root, env = process.env) {
@@ -179,7 +194,7 @@ export function backendDevPlugin(root, env = process.env) {
     name: 'dx-backend-dev',
     apply: 'serve',
     configureServer(server) {
-      // ENGINE NOT RUNNING, QUIETLY (dx-shepherd, R500): with no backend process the proxy answered
+      // ENGINE NOT RUNNING, QUIETLY (R500): with no backend process the proxy answered
       // 500 ECONNREFUSED, which every page showed as console errors. While a backend is down its routes get
       // well-formed answers instead: /events streams ONE status event saying the engine is offline (the
       // plugin renders its own "engine not running" state from it), anything else returns an empty JSON

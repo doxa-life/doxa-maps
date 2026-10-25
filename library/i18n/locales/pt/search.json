@@ -23,5 +23,12 @@
     "within": "Dentro de {selection}",
     "allData": "Todos os dados DOXA"
   },
-  "upg100Placeholder": "Procurar povo, lista UPG-100 ou região…"
+  "upg100Placeholder": "Procurar povo, lista UPG100 ou região…",
+  "tabPlaceholder": {
+    "languageFamilies": "Pesquisar família linguística, idioma, dialeto/variedade",
+    "affinityBlocks": "Pesquisar bloco de afinidade, agrupamento, povo",
+    "regions": "Pesquisar região, país, povo",
+    "religion": "Pesquisar religião, povo"
+  },
+  "placeholderRegions": "Procurar região, país ou povo"
 }

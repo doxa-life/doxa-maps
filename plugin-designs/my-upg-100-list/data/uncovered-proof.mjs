@@ -53,7 +53,7 @@ const PLAIN_CACHE = '/tmp/upg-live-records.json';
 // Swap-back baseline: dropping `uncovered_lists` and re-serialising must reproduce
 // the rest of clusters.json byte-for-byte — proving the 7 uncovered zones are the
 // ONLY thing this proof's edits touch. 09b-asia-contiguity-v2 re-cut `asia_lists`
-// (the sanctioned design note re-partition: IN-A/B/C/D + NAS-B), so the baseline rolls
+// (the sanctioned re-partition: IN-A/B/C/D + NAS-B), so the baseline rolls
 // from the pre-09b-5 snapshot (3aa10103, OLD India zones) to the post-v2 value
 // below. The uncovered_lists themselves are unchanged (nepal:34, himalaya:15,
 // sa-west:43, central-asia:6, mongolia:3, japan:6, scatter:8) — verified by the

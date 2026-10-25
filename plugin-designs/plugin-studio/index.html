@@ -35,7 +35,9 @@
         real tag; map elements nest as their own SPA. Switch with no page reload.</p>
     </div>
     <div class="frame">
-      <plugin-studio id="ps" title="Plugin Studio"></plugin-studio>
+      <!-- This page is the app, so Studio owns the address: a clicked tab is written to ?tab=,
+           a reload keeps it and a sent link opens it. The built leaf page bakes the same key. -->
+      <plugin-studio id="ps" title="Plugin Studio" profile-config='{"urlOwner":"app"}'></plugin-studio>
     </div>
   </div>
 

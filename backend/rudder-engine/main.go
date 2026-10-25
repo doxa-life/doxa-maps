@@ -423,7 +423,7 @@ func (e *engine) startWith(lang, device string, src *recorderProc, sink func(eve
 		recMu.Unlock()
 		writeMu.Lock()
 		// The streaming model holds back the last fraction of a second (its right context) until more audio
-		// or a pause arrives, and a commit alone does not flush it (rega: a Stop mid-sentence lost "what
+		// or a pause arrives, and a commit alone does not flush it (measured: a Stop mid-sentence lost "what
 		// your country…"). 1.2 s of silence first lets it finish the words already spoken.
 		silence := make([]byte, 3200)
 		for i := 0; i < 12; i++ {
@@ -750,7 +750,7 @@ func (e *engine) startWith(lang, device string, src *recorderProc, sink func(eve
 					e.logs.add("speech server error: %s", string(msg))
 					emit(event{"type": "error", "message": string(msg)})
 				case t == "input_audio_buffer.committed":
-					// The commit acknowledges Stop; the words for the audio before it can still follow (rega: a
+					// The commit acknowledges Stop; the words for the audio before it can still follow (measured: a
 					// Stop mid-word lost "what your country…"). Keep reading until the final text or 6 s of quiet (a loaded server can take seconds per backlog chunk).
 					committed = true
 					e.logs.add("speech server committed the stream; reading its last words")

@@ -60,7 +60,7 @@ export function loadNearRows(cfg = {}) {
  *
  * ⚠ THE COUNTRY KEY IS `iso3`, NOT `country`. This read `g.country` and shipped: on these rows
  * `country` is the country's NAME ("Malaysia") while the table keys on ISO 3166 alpha-3 ("MYS"),
- * so the pair never matched and the rop3 path never fired either — the Driver saw
+ * so the pair never matched and the rop3 path never fired either — the failure seen was
  * "not drawn: 2,104" on both set charts.
  *
  * It survived my own check because I measured the join with the PROVINCE table standing in for

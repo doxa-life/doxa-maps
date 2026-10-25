@@ -10,7 +10,7 @@
  * and Simple Research, both in the Research Gallery). Every structural gate passed. This gate runs
  * the thing that failed: the composite's own setup, and its mounted hooks.
  *
- * HOW. No browser (fleet policy: only rega launches one). Vite loads each composite .vue through
+ * HOW. No browser (by design: this gate runs headless). Vite loads each composite .vue through
  * ssrLoadModule with the repo's alias and the same vue({ customElement: true }) plugin, and
  * @vue/runtime-core mounts it on a no-op renderer. The SSR compile gives the component an
  * ssrRender rather than a render, so the renderer draws nothing and no CHILD is set up: this

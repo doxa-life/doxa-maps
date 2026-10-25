@@ -2,9 +2,9 @@
 // browser, on click.
 //
 // ★ WHY: 378 posters were committed as .webp — 41 MB in every clone, shipped to
-// every reader whether or not they open one. Driver: "it would be a big win to not
-// have to have 80mb of images in a public folder and let the posters get generated
-// by the website." A publish was ALREADY rejected once at a 74 MB asset tree
+// every reader whether or not they open one. Not shipping ~80 MB of images in a
+// public folder, and letting the website generate the posters, is a big win.
+// A publish was ALREADY rejected once at a 74 MB asset tree
 // (git-packed to 57 MiB), which is what not doing this costs.
 //
 // THE MOVE IS NOT A REWRITE. generate.mjs is 2,816 lines with 26 Node touchpoints;
@@ -39,12 +39,23 @@ export function inlineSvg(posterHtml) {
 }
 
 /**
+ * ⚠ AN EXTERNAL IMAGE CAN NEVER DRAW IN THAT ISOLATED DOCUMENT. An SVG loaded through <img> fetches no external
+ * resource by spec, and no people-group photo host sends CORS headers, so a photo cannot be inlined as data: in
+ * the browser either. Left in, each one rasterises as the browser's broken-image glyph (measured on the large
+ * side-lane sheet's photos). So the raster drops every <image> whose href is not data: (the basemap tiles, which
+ * ARE data:, stay); a sheet that carries photos PRINTS AS A DOCUMENT instead, where they load (hasExternalImages).
+ */
+const EXTERNAL_IMAGE = /<image\b[^>]*?\bhref="(?!data:)[^"]*"[^>]*?\/>/g;
+export function hasExternalImages(posterHtml) { return /<image\b[^>]*?\bhref="(?!data:)/.test(posterHtml || ''); }
+export function stripExternalImages(svg) { return svg.replace(EXTERNAL_IMAGE, ''); }
+
+/**
  * Rasterise a poster to a Blob in the browser.
  * @param {string} posterHtml  the poster document (posters/<id>.html)
  * @param {object} opts  scale (default 2), type ('image/webp'|'image/png'), quality
  */
 export async function rasterPoster(posterHtml, { scale = 2, type = 'image/webp', quality = 0.85 } = {}) {
-  const svg = inlineSvg(posterHtml);
+  const svg = stripExternalImages(inlineSvg(posterHtml));
   // encodeURIComponent, not btoa: the posters carry non-Latin-1 characters (people
   // group and place names), and btoa throws on those.
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

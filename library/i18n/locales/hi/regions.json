@@ -23,7 +23,7 @@
   "Hide country posters": "देश के पोस्टर छिपाएँ",
   "Intercessors": "मध्यस्थ",
   "Load More": "और लोड करें",
-  "Loading results...": "परिणाम लोड हो रहे हैं..।",
+  "Loading results...": "परिणाम लोड हो रहे हैं...",
   "Map": "नक्शा",
   "Mobilize 100+ people praying daily for each DOXA people group": "प्रत्येक DOXA जनसमूह के लिए प्रतिदिन प्रार्थना करने हेतु 100+ लोगों को सक्रिय करें।",
   "No One Praying": "कोई प्रार्थना नहीं कर रहा",
@@ -73,6 +73,7 @@
   "The map could not start. This is a map-token or connection problem, not a filter — the figures above are unaffected.": "नक्शा शुरू नहीं हो सका। यह नक्शा-टोकन या कनेक्शन की समस्या है, फ़िल्टर की नहीं — ऊपर के आंकड़े प्रभावित नहीं हैं।",
   "Countries: %count%": "देश: %count%",
   "Regions: %count%": "क्षेत्र: %count%",
-  "countryCount": "{n} देश | {n} देश | {n} देश",
-  "regionCount": "{n} क्षेत्र | {n} क्षेत्र | {n} क्षेत्र"
+  "countryCount": "{n} देश | {n} देश",
+  "regionCount": "{n} क्षेत्र | {n} क्षेत्र",
+  "Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it.": "जल्द आ रहा है — हर देश के लिए एक प्रार्थना सूची बनाई जाएगी, जिसमें उसके भीतर के हर अछूते जनसमूह का नाम होगा।"
 }

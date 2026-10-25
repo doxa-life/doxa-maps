@@ -42,7 +42,10 @@ const read = (loc, area) => {
   try { return flat(JSON.parse(readFileSync(p, 'utf8'))) } catch { return undefined }
 }
 
-const locales = readdirSync(ROOT).filter((d) => existsSync(join(ROOT, d)))
+// A locale is a DIRECTORY. The old existsSync() test was true for anything readdir returned,
+// including a file, so adding a README beside the folders made it read as a locale missing all
+// 1,685 keys. Documentation belongs next to the thing it documents; the filter is what was wrong.
+const locales = readdirSync(ROOT, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
 if (!locales.includes('en')) { console.error('I18N-PARITY: FAIL — no English catalog to compare against'); process.exit(1) }
 const areas = readdirSync(join(ROOT, 'en')).filter((f) => f.endsWith('.json'))
 
@@ -65,6 +68,11 @@ const areas = readdirSync(join(ROOT, 'en')).filter((f) => f.endsWith('.json'))
 // translations, add the locale here with its count and lower it as they arrive.
 // Never raise a number; never add a locale that is already complete.
 const DEBT = {
+  // 2026-10-03, the Share menu's 10 new share.json keys (shareable pages P3): localization is English-only for now.
+  // tStatic falls back to the English text, so these locales show English until the translations arrive;
+  // lower each to 0 then, and empty the map again.
+  // + the Embed tab's 9 keys (URL / Iframe / JavaScript, P3b), the same English-only rule.
+  ar: 19, de: 19, es: 19, fr: 19, hi: 19, it: 19, pt: 19, ro: 19, ru: 19, zh: 19,
 }
 
 const fails = []
@@ -130,6 +138,12 @@ const zhTrad = []
     else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walk(v, p ? `${p}.${k}` : k, area)
   }
   if (existsSync(join(ROOT, 'zh'))) for (const a of areas) { const p = join(ROOT, 'zh', a); if (existsSync(p)) walk(JSON.parse(readFileSync(p, 'utf8')), '', a) }
+  // ★ AND THE PACKET'S OWN CATALOGUE. The printed prayer packet reads packet-strings.json, not these
+  // areas, so its zh block was outside this arm entirely — and drifted to 18 Traditional keys (the
+  // whole wheel and all 12 prayer points among them) while this arm stayed green. A Chinese packet
+  // then switched script partway through the document.
+  const PACKET = join(ROOT, '..', '..', 'scripts', 'posters', 'packet-strings.json')
+  if (existsSync(PACKET)) { const zhp = JSON.parse(readFileSync(PACKET, 'utf8')).zh; if (zhp) walk(zhp, '', 'packet-strings') }
 }
 if (zhTrad.length) {
   console.log(`\nI18N-PARITY: FAIL — ${zhTrad.length} zh value(s) contain Traditional-only characters; zh is Simplified:`)

@@ -14,7 +14,7 @@
  *   g  a New Testament or full Bible found: eBible (nt/full flags), a link whose scope is New
  *      Testament, Full Bible, or 27/66 parts (FCBH, Scripture Earth, PNG.Bible, Door43), or FCBH's own
  *      verse scope (people-group-pins codes[iso].au.vsc) of 27 or 66 parts
- *   y  something found in their own language (gospel-plugin's access ladder), but no New Testament
+ *   y  something found in their own language (the access ladder), but no New Testament
  *   r  nothing found in their own language in the sources checked
  * A DIALECT is never coloured on its own evidence: every source catalogues by language, never by dialect.
  * It carries its language's colour with `inh:1`, and the board draws it lighter and says so.
@@ -53,9 +53,9 @@ const NT_SCOPE = /^(New Testament|Full Bible)$|^(27|66) parts/
 for (const r of links) if (NT_SCOPE.test(r.scope || '')) ntFound.add(r.iso639_3)
 // Faith Comes By Hearing's own verse scope for its fileset (people-group-pins codes[iso].au.vsc, shaped
 // "N parts, FIRST to LAST"): the same 27|66-parts rule. FCBH's published claim, recorded as cited, not
-// counted book by book (gospel-plugin, 2026-09-27: 4 full Bibles + 5 NTs this adds).
+// counted book by book (2026-09-27: 4 full Bibles + 5 NTs this adds).
 for (const [iso, c] of Object.entries(T('people-group-pins.json').codes || {})) if (/^(27|66) parts/.test((c && c.au && c.au.vsc) || '')) ntFound.add(iso)
-const langAccess = new Map()            // iso -> 'some' | 'none' (from the rows: gospel-plugin's ladder)
+const langAccess = new Map()            // iso -> 'some' | 'none' (from the rows: the access ladder)
 const groupsBy = new Map()              // iso -> groups on the roster
 for (const r of gi.rows) {
   const some = (r.access_detail || 'none') !== 'none'
@@ -174,7 +174,7 @@ let ext = 1
 for (const p of placed) ext = Math.max(ext, Math.abs(p.x) + p.R, Math.abs(p.y) + p.R)
 // The tapestry spans ~34% of the Mercator square. The engines stop at zoom 0 (the whole square), so the
 // smaller the drawing, the further a reader can zoom OUT from its opening view: at 68% there was about
-// one level of room (Driver, 2026-09-27: "I need to be able to zoom out a bit more"); now there are two.
+// one level of room (2026-09-27: one more level of zoom-out was needed); now there are two.
 const K = 0.17 / ext
 const toLngLat = (u, v) => {
   const X = 0.5 + u * K, Y = 0.5 - v * K
@@ -243,7 +243,7 @@ const treeDoc = {
   nodes,
 }
 const resDoc = {
-  meta: { title: 'Gospel resources for the languages on the board', source: 'gospel-resource-links.json (gospel-plugin): every link already screened', rows: resources.length },
+  meta: { title: 'Gospel resources for the languages on the board', source: 'gospel-resource-links.json: every link already screened', rows: resources.length },
   rows: resources,
 }
 

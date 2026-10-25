@@ -32,7 +32,7 @@ import { resolve as _resolvePath, dirname as _dirnamePath } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIR = process.env.POSTER_DIR || join(__dirname, 'out', 'posters');
 const PREFIX = process.argv[2] || '';
-const ROOT = _resolvePath(_dirnamePath(_fileURLToPath(import.meta.url)), '../../..')
+const ROOT = _resolvePath(_dirnamePath(fileURLToPath(import.meta.url)), '../../..')
 
 // ★ MEASURE THIS BUILD, OR MEASURE NOTHING. Several worktrees run on one machine and a default port
 // belongs to whichever server started first — measured 2026-09-24 on :4173, where browser gates

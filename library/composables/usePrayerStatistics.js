@@ -26,6 +26,7 @@
  * Uses the same shared data config as the rest of the app (sources.json activeSource
  * endpoint + getApiBaseUrl); no DOM, shadow-DOM safe.
  */
+import { retryFetch } from './retryFetch.js'
 import { ref } from 'vue'
 import { getApiBaseUrl } from '../api/apiBaseUrl.js'
 import sourcesConfig from '../api/sources.json'
@@ -49,7 +50,7 @@ async function load() {
       const src  = sourcesConfig?.sources?.[sourcesConfig.activeSource] || {}
       const base = getApiBaseUrl()
       const endpoint = src.endpoints?.statistics || '/api/people-groups/statistics'
-      const res = await fetch(`${base}${endpoint}`, { cache: 'no-store' })
+      const res = await retryFetch(`${base}${endpoint}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`statistics HTTP ${res.status}`)
       const d = await res.json()
       total.value = Number(d.total || 0)

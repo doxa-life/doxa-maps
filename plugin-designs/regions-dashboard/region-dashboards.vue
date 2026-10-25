@@ -25,20 +25,22 @@
  * rather than imported, which was true before the port and false afterwards.
  */
 import { inject, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { readViewKeys, claimView, urlOwnerOf, commitUrl, onAddressChange } from '@map/composables/useViewAddress.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { applyPeopleGroupList } from '@map/lists/peopleGroupList.js'
 // ar renders right-to-left. RTL_LOCALES is the shared set and :dir on our own root is the
 // house pattern (doxa-simple-map.vue:18, :246, :1346) — an EMBEDDED element must not reach for
 // document.documentElement.dir, which belongs to the host page.
 import { RTL_LOCALES, localeFromUrl } from '@map/i18n/index.js'
-import { resolveAssetsBase } from '@map/utils/embedBase.js'
+import { resolveAssetsBase, resolveEmbedBase } from '@map/utils/embedBase.js'
+import { loadScriptOnce, whenTagDefined } from '@map/utils/embedScript.js'
 import { useDocumentFont, BEBAS_NEUE_FACES, POPPINS_FACES, FIGTREE_FACES, OSWALD_FACES } from '@map/composables/useDocumentFont.js'
 import FilterDropdown from '@map/components/search/FilterDropdown.vue'
 import UupgsList from './src/UupgsList.vue'
-// Their strings, via their own English keys (see src/useRegionsI18n.js). The goal sentences,
+// Their strings, via their own English keys (see @map/i18n/useRegionsI18n.js). The goal sentences,
 // the stat labels and the table headers are all t() calls on their page; hardcoding the
 // English was the last thing keeping this clone monolingual.
-import { useRegionsI18n } from './src/useRegionsI18n.js'
+import { useRegionsI18n } from '@map/i18n/useRegionsI18n.js'
 import { splitLastWord } from './src/useLastWordHighlight.js'
 // Region colours come from the shared strategy (check:one-palette), and REGION_ORDER is the
 // order its CVD separation was validated in — the legend must render in it for that to hold.
@@ -46,7 +48,7 @@ import { PALETTE as REGION_PALETTE, WAGF_REGIONS, REGION_ORDER } from '@map/colo
 // DX-life's spacing/type scales under THEIR token names. Prepended to this
 // component's shadow CSS so every var() below resolves inside the shadow root.
 import { DXLIFE_TOKENS } from './dxlife-tokens.js'
-import RegionCountryMap from './src/RegionCountryMap.vue'
+import RegionCountryMap from '@map/components/maps/RegionCountryMap.vue'
 // The ONE print mechanism (five copies of this busy state exist in the repo; this is the shared one).
 import { printWhenReady } from '@map/composables/printInPlace.js'
 // REGLIB batch 2: the stat card, the three goal cards and their bars are library components now.
@@ -58,6 +60,8 @@ import ProgressBar from '@map/components/charts/ProgressBar.vue'
 import BackToTopButton from '@map/components/BackToTopButton.vue'
 import { SHADOW_BOX_SIZING_RESET } from './src/shadowReset.js'
 import { summarizeRegions, emptyStats, toNumber, PEOPLE_GROUP_LIST_FIELDS } from '@map/utils/countries-meta.js'
+import { peopleGroupPoints, PEOPLE_GROUP_POINT_FIELDS } from '@map/utils/peopleGroupPoints.js'
+import { cyrillicHeading } from '@map/styles/portedGlobals.js'
 
 const props = defineProps({
   profileConfig: { type: String, default: '' },
@@ -142,7 +146,7 @@ useDocumentFont('Bebas Neue', BEBAS_NEUE_FACES, fontAssetsBase)
 // wider per glyph. Registered the same way and for the same reason as Bebas.
 useDocumentFont('Poppins', POPPINS_FACES, fontAssetsBase)
 // Figtree stands in for Brandon Grotesque, which is commercial and must not ship in a public
-// giveaway (Driver, 2026-09-24). @font-face is DOCUMENT-scoped, so it registers here beside
+// giveaway. @font-face is DOCUMENT-scoped, so it registers here beside
 // the other two rather than inside the shadow root that uses it.
 useDocumentFont('Figtree', FIGTREE_FACES, fontAssetsBase)
 // Oswald, for CYRILLIC HEADINGS ONLY. base/_globals.scss:35-44 switches every h1/h2/h3 to
@@ -172,8 +176,8 @@ const points = ref([])
 const scrollEl = ref(null)
 const loading = ref(true)
 
-// ★ PRINT (Driver test round 2, #2 — the half the @media print rules could not do). The complaint
-// was "no loading indicator on a click": the reader presses Print, the dialog takes a second to
+// ★ PRINT — the half the @media print rules could not do. The reported complaint was
+// "no loading indicator on a click": the reader presses Print, the dialog takes a second to
 // rise, and nothing on the page says anything is happening. Worse on this page than most, because
 // what the dialog is waiting for is a MAP — press it a moment early and the sheet carries a grey
 // rectangle where the map should be.
@@ -217,7 +221,7 @@ const sel = ref({
 // that is what we had cloned. The two are different prose: location_description says where a
 // people live, imb_people_description describes the people. So our popup was showing the wrong
 // paragraph — visible content, not a field-name detail.
-const FIELDS = 'name,slug,rop1,religion,imb_people_description,image_url,has_photo,' + PEOPLE_GROUP_LIST_FIELDS
+const FIELDS = PEOPLE_GROUP_POINT_FIELDS + ',' + PEOPLE_GROUP_LIST_FIELDS
 
 function formatNumber(n) {
   // THEIRS, RegionDetail.vue:16: `n.toLocaleString(`${locale.value}-u-nu-latn`)` — locale
@@ -240,6 +244,65 @@ const selectedCountry = computed(() => {
   const pool = r ? r.countries : regions.value.flatMap((x) => x.countries)
   return pool.find((c) => c.slug === sel.value.countrySlug) || null
 })
+
+// ★ THE COUNTRY'S POSTER, UNDER ITS MAP. The country view carries the Regions list's own disclosure,
+// "View country posters". Opening it loads the Country Posters bundle ONCE, as its own element (so this
+// bundle does not grow by a poster wall), and mounts that wall filtered to this one country: its
+// profile-config `countries` filter, flat, one card with the Regions list's print row. A new country closes
+// it, because the wall belongs to the country it was opened for. The asset pool goes over ABSOLUTE
+// (resolveAssetsBase): a relative base would resolve against whichever page hosts this dashboard.
+const POSTER_WALL_TAG = 'country-posters-map'
+const POSTER_WALL_KEYS = ['apiBaseUrl', 'prayBaseUrl', 'tokenUrl', 'dataSource', 'locale', 'lang', 'languageCode', 'isDark', 'provider', 'embedBaseUrl']
+const postersOpen = ref(false)
+const postersHost = ref(null)
+// One wall per country, and per dashboard: the id scopes the wall's "Show on map" event to this one.
+const posterWallId = (iso3) => `${instanceId.value || 'region-dashboards'}-poster-${String(iso3).toLowerCase()}`
+function posterWallConfig(iso3) {
+  const c = cfg.value || {}
+  // columns:1 — one card, centred under the toggle by .rd-posters__wall (a two-column grid left it off to one side).
+  const out = { profile: 'country-poster-wall', countries: [iso3], columns: 1, instanceId: posterWallId(iso3), assetsBase: resolveAssetsBase(c) }
+  for (const k of POSTER_WALL_KEYS) if (c[k] != null && c[k] !== '') out[k] = c[k]
+  if (!out.languageCode && languageCode.value) out.languageCode = languageCode.value
+  return out
+}
+async function togglePosters() {
+  postersOpen.value = !postersOpen.value
+  const iso3 = selectedCountry.value?.code
+  const host = postersHost.value
+  if (!postersOpen.value || !iso3 || !host || host.firstElementChild) return
+  try {
+    if (!customElements.get(POSTER_WALL_TAG)) {
+      const base = resolveEmbedBase(cfg.value)
+      await loadScriptOnce(`${base ? base + '/' : ''}country-posters/country-posters.js`)
+      await whenTagDefined(POSTER_WALL_TAG, 15000)
+    }
+    // The reader may have moved on while the bundle loaded.
+    if (selectedCountry.value?.code !== iso3 || host.firstElementChild) return
+    const el = document.createElement(POSTER_WALL_TAG)
+    el.setAttribute('profile-config', JSON.stringify(posterWallConfig(iso3)))
+    host.appendChild(el)
+  } catch (e) {
+    // Offline or blocked: the disclosure closes again, and the next tap retries (loadScriptOnce forgets a
+    // failed load). No sentence of its own: one new catalogue key would change every bundle's locale data.
+    postersOpen.value = false
+    console.warn('[region-dashboards] the country poster wall did not load:', e && e.message)
+  }
+}
+watch(() => selectedCountry.value?.code, () => {
+  postersOpen.value = false
+  if (postersHost.value) postersHost.value.replaceChildren()
+})
+// The card's "Show on map": the country is already this view's subject, so it brings the map above back into
+// view. Only this dashboard's own wall (its instanceId) answers here; clearing the toggle (listId null) does not.
+const POSTER_WALL_EVENT = 'doxa-country-posters:show-on-map'
+function onPosterShowOnMap(e) {
+  const d = e?.detail || {}
+  const iso3 = selectedCountry.value?.code
+  if (!iso3 || !d.listId || d.instanceId !== posterWallId(iso3)) return
+  const el = mapEl.value && mapEl.value.$el
+  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
+}
 
 // The subject line — a country if one was clicked, else the region, else everything.
 const subject = computed(() => {
@@ -516,42 +579,22 @@ const mapNote = computed(() => {
 // of ours. It fetches and filters the people groups itself, exactly as theirs does, so there is
 // no countryTable computed here any more.
 
-// ── URL <-> SELECTION: what makes this a standalone app rather than a widget ─
-// MEASURED before this existed (_qa-cycle/02-builder-cycle/_probe-standalone-app.mjs): 4 of 10
-// app properties OK. Five of the six failures were ONE missing thing — the URL never reflected
+// ── ADDRESS <-> SELECTION: what makes this a standalone app rather than a widget ─
+// MEASURED before this existed: 4 of 10 app properties OK. Five of the six failures were ONE missing thing — the URL never reflected
 // the selection, so nothing was linkable, a reload lost the subject, Back unmounted the element,
 // a deep link did nothing, and Share shared the index. DX-life gets all of that free from Nuxt
 // routing (/regions/oceania IS the state); a custom element has to do it deliberately.
 //
-// THE HASH, NOT THE PATH. A leaf page is a static file at a fixed URL and there is no server to
-// route /regions/oceania, so the subject lives in the hash — and the hash is also the only part
-// an EMBEDDED element may touch without fighting its host page. Slugs are DX-life's own
-// (#oceania, #cameroon), so a link reads the way theirs does.
-// replaceState on the first paint, pushState on a user choice: that is what makes Back mean
-// "the previous subject" instead of "leave the page".
-const URL_SYNC = typeof window !== 'undefined' && typeof history !== 'undefined'
-
-// ★ URL SYNC IS THE HOST'S TO REFUSE. The two capabilities above are ours when we ARE the page,
-// and NOT ours when we are one tab inside someone else's. Nested in the Research Gallery this
-// element rewrote the HOST page's #anchor through writeUrl() and retitled the host's tab through
-// syncTitle() -- reported by rega's embed sweep, and carried as two routed entries in
-// check:gallery-embed's NEIGHBOUR_KNOWN (regions-dashboard:url and :title), deleted in this same
-// commit now that it is honoured.
-// The gallery passes profile-config.urlSync:false for exactly this. It is a COMPUTED rather than a
-// second const because the injected profile-config arrives after this module evaluates, so a
-// snapshot taken here would read `undefined` and sync anyway -- the same late-injection trap that
-// made every value read off the string prop fall back to its default.
-// DELIBERATELY NOT GUARDED: slugFromHash(), the boot-time READ. The complaint is about WRITING to a
-// host we do not own, and refusing to read would change which subject a standalone deep link opens.
-// The residual is narrow and worth stating: on a host whose own #anchor happens to equal one of
-// their slugs, a nested Regions would open that subject instead of the chooser.
-const urlSyncEnabled = computed(() => URL_SYNC && cfg.value.urlSync !== false)
-
-function slugFromHash() {
-  if (!URL_SYNC) return ''
-  return decodeURIComponent(String(window.location.hash || '').replace(/^#/, '')).trim()
-}
-
+// THE SUBJECT IS ?place=<slug> (library/composables/useViewAddress.js, the page address every shell and composite
+// shares). Slugs are DX-life's own (oceania, cameroon), so a link reads the way theirs does. It used to be the HASH,
+// written here with this element's own pushState; one writer per page replaces that:
+//   on its OWN leaf (urlOwner 'app') this element writes ?place= itself;
+//   nested (in Regions, a shell, DX Life) it ANNOUNCES the choice, and the page's owner writes it with its own keys,
+//     so a nested Regions no longer touches a host's #anchor at all, and Regions inside the Research Gallery gets
+//     its own link (?tab=…&pane=dashboard&place=angola);
+//   on a partner's page nothing is written; a link is still READ.
+// Replace on the first paint, push on a reader's choice, nothing on Back/Forward: Back means "the previous subject".
+// An old #<slug> link still opens its subject; on our own leaf the first paint rewrites it to ?place=.
 // A slug may name a region OR a country — DX-life's [slug].vue matches region slugs first, then
 // country slugs, and 404s on neither. Same order here; "neither" lands on the chooser rather
 // than an error, because the chooser is a legitimate state for this element.
@@ -570,38 +613,27 @@ function currentSlug() {
   return sel.value.countrySlug || sel.value.regionSlug || ''
 }
 
-// Write the subject into the URL. push:true for a user choice (Back should undo it), false for
-// the initial read (Back should leave the page, not replay the boot).
-function writeUrl(push) {
-  if (!urlSyncEnabled.value) return
-  const slug = currentSlug()
-  const url = window.location.pathname + window.location.search + (slug ? '#' + encodeURIComponent(slug) : '')
-  // WRITE ONLY WHEN THE URL WOULD ACTUALLY CHANGE. This is what makes Back and Forward work, and
-  // it replaces a flag that could not do the job. MEASURED before the fix, drilling
-  // All Regions -> Africa -> Angola and then pressing Back three times and Forward twice:
-  //   back 1    -> Africa   (correct)
-  //   back 2    -> Africa   (WRONG, should be All Regions)
-  //   back 3    -> Africa
-  //   forward 1 -> Africa   (WRONG, should be Angola)
-  // history.length stayed 4 throughout: every Back pushed a REPLACEMENT entry, which discards the
-  // forward stack and pins the position — the classic loop the note below warns about.
-  // The old guard set applyingHistory=true, assigned sel, then cleared it SYNCHRONOUSLY, while
-  // the watcher that calls this is { flush: 'post' } and therefore runs after the DOM update,
-  // by which time the flag was already false. A scheduling-dependent flag cannot guarantee this;
-  // comparing the URL can. After a popstate the address bar already holds the target, so there is
-  // nothing to write and no entry is created.
-  const current = window.location.pathname + window.location.search + window.location.hash
-  if (url === current) { syncTitle(); return }
-  try { push ? history.pushState({ slug }, '', url) : history.replaceState({ slug }, '', url) } catch (_) {}
-  syncTitle()
+// The OLD form of a link, #<slug>. Read only when the address has no place.
+function slugFromHash() {
+  if (typeof location === 'undefined') return ''
+  try { return decodeURIComponent(String(location.hash || '').replace(/^#/, '')).trim() } catch (_) { return '' }
 }
+const placeInAddress = () => readViewKeys(typeof location !== 'undefined' ? location.search : '').place
+
+function claimPlace(push) {
+  claimView({ place: currentSlug() }, { owner: urlOwnerOf(cfg.value), el: scrollEl.value, push })
+}
+
+// ★ urlSync:false NOW GUARDS THE TAB TITLE ONLY. A shell passes it so a nested Regions does not retitle the host's
+// tab; the address no longer needs it, since only the page's owner writes the address.
+const titleSyncEnabled = computed(() => typeof document !== 'undefined' && cfg.value.urlSync !== false)
 
 // Their page sets the document title per subject (useSeoMeta in [slug].vue: `${title} — Doxa`).
 // A standalone app should too: it is what a bookmark, a tab strip and a shared link all show.
 function syncTitle() {
   if (typeof document === 'undefined') return
-  // The host owns its tab title when we are nested; see urlSyncEnabled.
-  if (!urlSyncEnabled.value) return
+  // The host owns its tab title when we are nested; see titleSyncEnabled.
+  if (!titleSyncEnabled.value) return
   const t = subject.value?.title
   // COMPARE AGAINST THE TRANSLATED VALUE, not the English literal. The subject title is now
   // t('All Regions'), so at ar it is 'جميع المناطق' and a comparison with the English string
@@ -613,26 +645,27 @@ function syncTitle() {
   try { document.title = t && t !== allLabel ? t + ' — ' + suffix : suffix } catch (_) {}
 }
 
-// popstate WRITES the selection, and the watcher below then runs — but it can no longer create an
-// entry for it, because writeUrl() refuses to write a URL the address bar already holds. The flag
-// that used to guard this is GONE rather than patched: it was cleared synchronously while the
-// watcher it guarded is { flush: 'post' }, so it was never in effect when it mattered.
-function onPopState() {
-  // A host that refused URL sync also owns its own history entries.
-  if (!urlSyncEnabled.value) return
-  sel.value = selectionForSlug(slugFromHash())
-  syncTitle()
+// Back / Forward: re-apply the address's subject. Never writes: the watcher below then claims the same subject, which
+// the address already holds, so nothing is written and the forward stack survives.
+function onAddress({ place }) {
+  sel.value = selectionForSlug(place || slugFromHash())
 }
 
-// One watcher rather than a writeUrl() call at each of the five places a selection is made
+// One watcher rather than a claim at each of the five places a selection is made
 // (tab-1 event, table row, region dropdown, country dropdown, back-link) — those would drift.
+// ★ A NEW SUBJECT OPENS AT ITS TOP. Picking a region from the all-regions table, or a country from a region,
+// kept the old scroll height, so the reader landed at the bottom of the new page (reported on a phone). The
+// scroller is this dashboard's own <main>, the one the Back-to-top button drives. Switching to the list and
+// back selects nothing new, so the selected dashboard keeps its place there. A string key, because an array
+// literal is a new object on every run and would fire on no change.
+watch(() => `${sel.value.regionSlug}|${sel.value.countrySlug}`, () => {
+  const el = scrollEl.value
+  if (el && el.scrollTop > 0) el.scrollTo({ top: 0, behavior: 'auto' })
+}, { flush: 'post' })
+
 watch(() => [sel.value.regionSlug, sel.value.countrySlug], () => {
-  // No guard needed: writeUrl() is idempotent, so the call this watcher makes after a popstate
-  // writes nothing. (Deleting the declaration while leaving `if (applyingHistory) return` here
-  // threw a ReferenceError inside the watcher, which silently stopped the URL being written at
-  // all — the hash never changed and Back left the page. Caught by re-running the measurement
-  // rather than by trusting the fix.)
-  writeUrl(true)
+  claimPlace(true)
+  syncTitle()
 }, { flush: 'post' })
 
 // ── in-dashboard navigation ─────────────────────────────────────────────────
@@ -674,21 +707,9 @@ async function loadRegions() {
     // Only the groups of this page's people-group LIST (library/lists/).
     const posts = await applyPeopleGroupList(Array.isArray(data.posts) ? data.posts : [], injectedCfg)
     regions.value = summarizeRegions(posts)
-    points.value = posts.map((p) => ({
-      name: p.name || '', slug: p.slug || '',
-      code: p.country_code?.value || '', country: p.country_code?.label || '',
-      // the wagf_region VALUE (e.g. 'latin_america_&_caribbean'), which is what
-      // library/colors/wagf-region.js keys its palette on
-      region: p.wagf_region?.value || '',
-      lng: parseFloat(p.longitude), lat: parseFloat(p.latitude),
-      committed: toNumber(p.people_committed), population: toNumber(p.population),
-      // Their popup's fields, mapped exactly as CountryMap.vue:107-115 maps them — including the
-      // has_photo GATE on the image, which is theirs: a row can carry an image_url that is a
-      // placeholder, and they only show it when the flag says there is a real photo.
-      rop1: p.rop1?.label || '', religion: p.religion?.label || '',
-      description: p.imb_people_description ?? '',
-      imageUrl: (p.has_photo && p.image_url) ? p.image_url : '',
-    })).filter((p) => Number.isFinite(p.lng) && Number.isFinite(p.lat))
+    // The mapping moved to @map/utils/peopleGroupPoints.js when country-map became its second
+    // consumer — same fields, same has_photo gate, same drop of rows without finite coordinates.
+    points.value = peopleGroupPoints(posts, toNumber)
   } catch (error) {
     console.error('[region-dashboards] fetch error:', error)
     loadFailed.value = true
@@ -704,20 +725,45 @@ async function loadRegions() {
 // first paint.
 watch(languageCode, () => { loadRegions() })
 
+let offAddress = null
+let reshown = null
 onMounted(async () => {
   window.addEventListener(SELECT_EVENT, onSelect)
-  if (URL_SYNC) window.addEventListener('popstate', onPopState)
-  // The hash can only be resolved to a subject once the regions are known, so it is applied
+  window.addEventListener(POSTER_WALL_EVENT, onPosterShowOnMap)
+  offAddress = onAddressChange(onAddress)
+  // The address can only be resolved to a subject once the regions are known, so it is applied
   // after the fetch rather than on mount — otherwise a deep link silently lands on the chooser.
   await loadRegions()
-  const slug = slugFromHash()
-  if (slug) sel.value = selectionForSlug(slug)
-  writeUrl(false)
+  const place = placeInAddress()
+  const legacy = place ? '' : slugFromHash()
+  if (place || legacy) sel.value = selectionForSlug(place || legacy)
+  // First paint is a REPLACE. An old #<slug> link becomes ?place= on our own leaf, and its hash goes, so the address
+  // has ONE form. Nested, the hash is the host's and stays.
+  claimPlace(false)
+  if (legacy && currentSlug() && urlOwnerOf(cfg.value) === 'app') commitUrl({ hash: '' })
+  syncTitle()
+  // A KEPT-ALIVE Regions shown again (a shell switched back to its tab: no height, then height). The tab change
+  // dropped ?place= while this element kept its subject, so the screen claims it again (a replace). An address that
+  // names a subject wins (Back already applied it).
+  if (typeof ResizeObserver !== 'undefined' && scrollEl.value) {
+    let h = null
+    reshown = new ResizeObserver(() => {
+      const was = h
+      h = scrollEl.value?.clientHeight || 0
+      if (was !== 0 || !h) return
+      const place = placeInAddress()
+      if (place && place !== currentSlug()) sel.value = selectionForSlug(place)
+      else if (!place) claimPlace(false)
+    })
+    reshown.observe(scrollEl.value)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener(SELECT_EVENT, onSelect)
-  if (URL_SYNC) window.removeEventListener('popstate', onPopState)
+  window.removeEventListener(POSTER_WALL_EVENT, onPosterShowOnMap)
+  offAddress?.()
+  reshown?.disconnect()
 })
 
 // Palette is DX-life material light, matching regions-list.vue tab-for-tab so swapping between
@@ -741,7 +787,7 @@ useShadowStyles(
   // xl 31.3 / 2xl 41.6 / 3xl 55.3.  Type is the 1.25 scale off 10px: sm 15.6 / md 19.5 /
   // lg 24.4 / 2xl 38.1 / 3xl 47.7 / 4xl 59.6 / 5xl 74.5.
   // NO BACKTICKS in this string, including comments (house style: one terminates the literal).
-  ':host{ display:block; width:100%; height:100%; min-height:320px; }' +
+  ':host{ display:block; position:relative; width:100%; height:100%; min-height:320px; }' +
   '.rd-root{ position:absolute; inset:0; display:flex; flex-direction:column; min-height:0;' +
   // tokens/semantic/_colors.scss. --color-brand-lighter is declared TWICE there; the second
   // wins, so it is green-300 #6d766e, not green-200.
@@ -820,7 +866,7 @@ useShadowStyles(
   '  margin-left:auto; margin-right:auto; }' +
   '.rd-status{ padding:var(--spacing-xl); text-align:center; color:var(--dx-muted); font-size:var(--font-size-md); }' +
 
-  // ── ★ PRINT: LET THE DOCUMENT FLOW ONTO PAGES (Driver test round 2, #2) ──────────────────────
+  // ── ★ PRINT: LET THE DOCUMENT FLOW ONTO PAGES ───────────────────────────────────────────────
   // "The header and footer don't show properly" has a structural cause, not a styling one. This
   // page is an app shell: .rd-root is position:absolute inset:0 and .rd-scroll owns the scroll.
   // On paper there is no viewport to be absolute INSIDE and no scrollbar to move, so the browser
@@ -843,7 +889,7 @@ useShadowStyles(
   // interchangeable (a child's margin-top:auto can override a margin and cannot override a gap),
   // and the extended live diff then caught the residue: their .stack rowGap computes to `normal`
   // because the spacing is margin, while ours read 17.689px. Same pixels, different code — and the
-  // DRIVER asked for the code to match, not just the screenshot. Converted, so the next
+  // requirement is that the CODE match, not just the screenshot. Converted, so the next
   // margin-overriding child anywhere on this page behaves as it does on their page.
   // .stack .stack--xs — --spacing-xs is 1rem at their 10px root.
   '.rd-printrow{ margin:0; }' +
@@ -895,18 +941,18 @@ useShadowStyles(
   // ── .region-stats: RegionDetail.vue's scoped block. The GRID stays here and the CARD went to the
   //    library, deliberately: how many stats there are and how they wrap is this page's decision,
   //    while the look of one stat is the reusable part. See library/components/regions/StatCard.vue.
-  // ★ auto-FILL WITH A CAPPED TRACK MINIMUM. Driver test round 2: the Population card — the LAST
-  // of four — was centred in a box four times too wide on a tablet. Cause: auto-FIT collapses the
+  // ★ auto-FILL WITH A CAPPED TRACK MINIMUM. Reported: the Population card — the LAST of four —
+  // was centred in a box four times too wide on a tablet. Cause: auto-FIT collapses the
   // empty tracks, so at 3 columns the lone card in row 2 stretched across the whole row. Desktop
   // fits all four, which is why only desktop looked right.
   //   auto-fill alone fixes that and breaks desktop: at 1200px it makes SIX tracks for four cards,
-  //   leaving two empty on the right and squeezing the cards to their 180px floor (dx-shepherd).
+  //   leaving two empty on the right and squeezing the cards to their 180px floor.
   // So the track minimum is also capped at a quarter of the row: at most four tracks ever, and the
   // orphan is never stretched. Measured at 1200/1000/900/800/768/700/600/500/390 — four columns
   // down to 800, three to 600, two below, no empty tracks at any of them.
   // ⚠ THIS NOW DIFFERS FROM dx-life, deliberately. Theirs is the same auto-fit rule
-  // (RegionDetail.vue:176) and stretches the same card; the Driver reported it, and dx-shepherd is
-  // telling him it diverges.
+  // (RegionDetail.vue:176) and stretches the same card, so the clone diverges here deliberately;
+  // the divergence is being carried back as a product question.
   '.rd-stats{ display:grid;' +
   '  grid-template-columns:repeat(auto-fill, minmax(max(180px, calc((100% - 3 * var(--spacing-md)) / 4)), 1fr));' +
   '  gap:var(--spacing-md); }' +
@@ -931,7 +977,7 @@ useShadowStyles(
   // instead of ~190 — about 50% more map on load. It does NOT get the whole map above the fold,
   // and nothing that leaves the map at 780px can: you would need the map under ~320px tall. That
   // fix exists (bound .rcm by viewport height) but it changes the map's rendered SIZE, which is a
-  // change to what the Campaign Server shows, so it is the Driver's call and not mine.
+  // change to what the Campaign Server shows, so it is PROVISIONAL, pending a product decision.
   //
   // SCOPED TO THE ALL-REGIONS PAGE ONLY (.rd-root--all), and at >=1200px only. That page is ours;
   // the region and country pages are the clone, and their vertical rhythm is measured against
@@ -947,6 +993,35 @@ useShadowStyles(
   '.rd-mapnote{ margin:0; text-align:center; color:#92b195; font-weight:700; font-size:var(--font-size-md); }' +
   // .rounded-xlg on their <CountryMap>; the child takes border-radius:inherit from here.
   '.rd-mapframe{ border-radius:var(--dx-radius); overflow:hidden; }' +
+  // The poster disclosure: a 44px pill in their brand green, the Regions list's chevron (down closed, up open).
+  '.rd-posters{ display:flex; flex-direction:column; }' +
+  '.rd-posters__toggle{ align-self:center; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 18px;' +
+  '  border:1px solid #92b195; border-radius:100px; background:#fff; color:#3b463d; font:inherit; font-weight:700; cursor:pointer; }' +
+  '.rd-posters__toggle:hover{ background:#f3f6f3; }' +
+  '.rd-posters__toggle:focus-visible{ outline:2px solid #2563eb; outline-offset:2px; }' +
+  '.rd-posters__toggle svg{ width:12px; height:12px; fill:currentColor; transform:rotate(180deg); }' +
+  '.rd-posters__toggle[aria-expanded="true"] svg{ transform:none; }' +
+  '.rd-posters__wall{ margin-top:12px; width:100%; max-width:520px; align-self:center; }' +
+  // ★ ON PHONES THE MAPS ARE HALF AGAIN AS TALL AS THEY ARE WIDE (height = 1.5 x width), all regions, a region
+  // and a country. A square was asked for first, then proved too small to use a people-group popup in.
+  // RegionCountryMap keeps DX Life's cloned 1/2 portrait under 768px for its other consumer (the country
+  // page's country-map), so the override lives HERE, scoped to this dashboard's frame: two classes outrank the
+  // component's one (and .rcm--chooser's). Desktop is untouched.
+  // ★ AND ON THESE SMALL MAPS: the LEFT scroll-past strip is off (a thumb pinches from the right edge too, and
+  // two strips left almost no map to pinch), and the people-group popup is compact and lets a pinch through
+  // (its body passes touches to the map; its links and close button still take them).
+  // ★ THE CARD FILLS THE COMPACT BOX. RegionCountryMap's card is a fixed 240px (their desktop popup), so inside the
+  // 220px box it overhung by 40px: the stat values, the second button and, in Arabic, the name under the close
+  // button, cut off at the edge (embedded and in the gallery alike). Here the box is 220px and the card takes its
+  // inner width; the name keeps clear of the close button, which sits top-right in both directions.
+  '@media (max-width:768px){ .rd-mapframe .rcm{ aspect-ratio:2/3; }' +
+  '  .rd-mapframe .map-scroll-edge--left{ display:none; }' +
+  '  .rd-mapframe .maplibregl-popup-content, .rd-mapframe .mapboxgl-popup-content{ width:220px; max-width:220px; padding:8px 10px; font-size:12.5px; pointer-events:none; }' +
+  '  .rd-mapframe .cm-popup{ width:auto; }' +
+  '  .rd-mapframe .cm-popup__name{ padding-right:18px; }' +
+  '  .rd-mapframe .maplibregl-popup-content a, .rd-mapframe .mapboxgl-popup-content a,' +
+  '  .rd-mapframe .maplibregl-popup-close-button, .rd-mapframe .mapboxgl-popup-close-button{ pointer-events:auto; }' +
+  '  .rd-mapframe .maplibregl-popup-content img, .rd-mapframe .mapboxgl-popup-content img{ max-height:90px; width:auto; max-width:100%; } }' +
   // The region key. Their token scale throughout so the one screen we add does not look
   // foreign next to the clone: --spacing-xs/sm gaps, --font-size-sm, the 100px pill radius
   // their chips use, and --color-brand-lighter for the count.
@@ -1015,9 +1090,11 @@ useShadowStyles(
   // BOTH TAG FORMS, deliberately: their site tags the document ru-RU while our i18n locale is `ru`,
   // and a host page embedding this element may set either. A selector that matched only one would
   // work on their site and fail on ours, or the reverse, depending on who set the attribute.
-  '[lang="ru"] .rd-title, [lang="ru-RU"] .rd-title,' +
-  '[lang="ru"] .rd-h2, [lang="ru-RU"] .rd-h2{ font-family:"Oswald","Arial Narrow",BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;' +
-  '  letter-spacing:-0.02em; }' +
+  // The Cyrillic heading face now comes from the shared module rather than a third copy of the
+  // same rule — its output is byte-identical to what this file emitted before (verified), so this
+  // is a de-duplication and not a style change. See library/styles/portedGlobals.js for the
+  // measurement history and for the one global it DELIBERATELY does not port.
+  cyrillicHeading('.rd-title', '.rd-h2') +
   // .rd-big / .rd-big-label / .rd-goal and the .stack--xs that separates a bar from its legend are
   // in library/components/regions/GoalCard.vue and library/components/charts/ProgressBar.vue now,
   // together with the measurement history that fixed each value. The `strong` rule below STAYS:
@@ -1050,8 +1127,8 @@ useShadowStyles(
   // ★ base/_globals.scss:99-105 — the part of their table that is NOT in RegionDetail's
   // scoped block and was therefore missed: every <table> on their site is a rounded,
   // ring-outlined WHITE card, and every <td> carries a 1px gridline (:205-207). Ours was a
-  // bare borderless table on the page background. That is what the DRIVER meant by 'the
-  // tbabel compoent is not the same' — the rule lived in a global stylesheet, not next to
+  // bare borderless table on the page background. So the table component was NOT the same, and the
+  // reason it was missed is that the rule lived in a global stylesheet, not next to
   // the markup, so reading RegionDetail.vue alone could not show it.
   // overflow:hidden is what makes border-radius clip the header's own background.
   '.rd-table{ width:100%; min-width:560px; border-collapse:collapse; font-size:var(--font-size-md);' +
@@ -1193,8 +1270,17 @@ useShadowStyles(
             />
           </div>
 
-          <!-- THE REGION KEY — chooser only, and it is a CONTROL as well as a key: the Driver
-               asked for a map that "would show the regions and countries and let you select one".
+          <!-- The country's poster: the Regions list's disclosure, under this country's map (see POSTER_WALL_TAG). -->
+          <div v-if="selectedCountry" class="rd-posters">
+            <button type="button" class="rd-posters__toggle" :aria-expanded="String(postersOpen)" @click="togglePosters">
+              {{ postersOpen ? t('Hide country posters') : t('View country posters') }}
+              <svg viewBox="0 0 489.67 289.877" aria-hidden="true" focusable="false"><path d="M439.017,211.678L263.258,35.919c-3.9-3.9-8.635-6.454-13.63-7.665-9.539-2.376-20.051.161-27.509,7.619L46.361,211.632c-10.323,10.323-10.323,27.056,0,37.379,10.323,10.323,27.056,10.323,37.379,0l161.068-161.068,161.068,161.068c10.323,10.323,27.056,10.323,37.379,0,10.277-10.324,10.277-27.011-.238-37.333Z" /></svg>
+            </button>
+            <div v-show="postersOpen" ref="postersHost" class="rd-posters__wall" />
+          </div>
+
+          <!-- THE REGION KEY — chooser only, and it is a CONTROL as well as a key: the requirement
+               is a map that shows the regions and countries AND lets a reader select one.
                Rendered in REGION_ORDER because that is the order the palette's CVD separation was
                validated in. Buttons, not swatches with click handlers, so the keyboard reaches
                them and check:a11y-button-names has a name to find. -->

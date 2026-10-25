@@ -2,8 +2,8 @@
 /**
  * check-upg-map-data-painted — the UPG-100 map must have OUR DATA on it, not just a basemap.
  *
- * THE DEFECT THIS CATCHES. Driver 2026-09-24: "the polygons for the map and map colors and pins
- * are not showing up". Nothing in the gate suite could answer that. verify-map-paint asserts a live
+ * THE DEFECT THIS CATCHES. Reported 2026-09-24: the map's polygons, its colours and its pins were
+ * not showing up. Nothing in the gate suite could answer that. verify-map-paint asserts a live
  * GL context, zero console errors and that Mapbox emitted attribution — every one of which is TRUE
  * of a perfectly-painted basemap carrying none of our zones, polygons or pins. "The map engine
  * booted and tiles are loading" and "my data is on it" are two different properties, and only the

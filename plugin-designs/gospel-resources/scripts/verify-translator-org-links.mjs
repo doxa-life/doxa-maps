@@ -13,9 +13,9 @@
  * here, where every entry was screened by hand, or it does not ship at all.
  *
  * ⚠ WHAT IS DELIBERATELY ABSENT. National Bible Societies hold 89+ of the credits and NONE of
- * them is linked here. Not doubt about the Societies — the brief's filter is "only the 66-book
- * canon", and several UBS members publish editions that include the deuterocanonicals, so
- * whether a Society CONTACT is inside or outside that line is a product ruling to make and not
+ * them is linked here. Not doubt about the Societies — the filter is the 66-book canon only,
+ * and several UBS members publish editions that include the deuterocanonicals, so
+ * whether a Society CONTACT is inside or outside that line is a product decision to make and not
  * this script's. They stay named-without-a-link until it is made, and the count is reported so the
  * gap is visible rather than quiet. Same for the orgs whose doctrine I could not establish: they
  * are listed in `unscreened` with the reason, never linked.

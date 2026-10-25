@@ -1,6 +1,7 @@
 <script setup>
 import { dataUrl, glFor, exposeMap, releaseMap, whenGeojsonDrawn, setProjectionFor } from '../utils/pplrData.js'
 import { usePplrT } from '../composables/usePplrT.js'
+import { useOptionalT } from '@map/composables/useOptionalT.js'
 import { religionFamilyLabel } from '@map/colors/religion.js'
 import { tStatic } from '@map/i18n/index.js'
 /**
@@ -30,6 +31,7 @@ const mapboxToken = inject('mapboxToken')
 const mapContainer = ref(null)
 const profileRoot  = ref(null)   // FullscreenControl target — fullscreens .profile so chrome stays visible
 const t = usePplrT()
+const tShared = useOptionalT()   // unqualified: buttons.* and mapui.* are shared areas
 const status = ref(t('pplr.status.loading'))
 const PIN_LAYER = 'rel-pins'
 const showSettings = ref(false)
@@ -70,9 +72,8 @@ function setBasemap(key) {
 
 function setupLayers() {
   if (!pgData.value || !map.value) return
-  // Religion profile: polygons hidden on BOTH themes (per user 2026-05-02 "I
-  // kind of just want you on the religion map to remove the blue borders on
-  // dark mode... remove the polygons"). Only pins + basemap show.
+  // Religion profile: polygons hidden on BOTH themes (no blue borders, in dark
+  // mode too). Only pins + basemap show.
   addCountryPolygons(map.value, {
     fillColor: 'rgba(0,0,0,0)', fillOpacity: 0,
     lineColor: 'rgba(0,0,0,0)', lineOpacity: 0,
@@ -122,7 +123,7 @@ const { map, isMapReady, initializeMap, destroy } = useMapInstance({
   projection:   'mercator'  // pinned at construct time — no globe→mercator reproject flash
 })
 
-// Color palette per user spec 2026-05-02:
+// Color palette:
 //   - Christianity is the ONLY blue group (navy-ish)
 //   - Ethnoreligion → pink (was purple)
 //   - Judaism → purple (was cyan-blue; cannot share Christianity's hue)
@@ -268,7 +269,7 @@ onMounted(async () => {
   map.value.on('load', async () => {
     // The constructor's projection:'mercator' is only a request: on Mapbox the style's own projection
     // (globe) wins, so the map booted as a globe while this view's state and button said Mercator, and
-    // the first "Switch to Globe" click did nothing (rega, C2). The style is ready here, on both
+    // the first "Switch to Globe" click did nothing (C2). The style is ready here, on both
     // engines, so apply the state to the map.
     setProjectionFor(map.value, projection.value)
     try {
@@ -286,7 +287,7 @@ onMounted(async () => {
       pgData.value.features.forEach(f => { const g = f.properties.rg; counts[g] = (counts[g] || 0) + 1 })
       religionCounts.value = counts
       const dominant = RELIGION_GROUPS.reduce((a, b) => (counts[a.key] || 0) > (counts[b.key] || 0) ? a : b)
-      // Per user 2026-05-02: drop the "Ready" prefix — it was unclear and chewed up width.
+      // No "Ready" prefix: it was unclear and chewed up width.
       status.value = t('pplr.status.readyReligion', { pins: pgData.value.features.length.toLocaleString(), religion: groupLabel(dominant), count: (counts[dominant.key]||0).toLocaleString() })
       // keep the LoadingGlobe up until the pins are actually drawn, not merely added
       await whenGeojsonDrawn(map.value)
@@ -338,7 +339,7 @@ const REL_CSS = POPUP_CSS + `
 
     <!-- Toolbar — rounded pill controls -->
     <div class="map-toolbar">
-      <button class="toolbar-btn round" :title="`Theme: ${currentBasemap === 'dark' ? 'Dark' : 'Light'} (click to toggle)`"
+      <button class="toolbar-btn round" :title="tShared(currentBasemap === 'dark' ? 'buttons.switchToLightMode' : 'buttons.switchToDarkMode')" :aria-label="tShared(currentBasemap === 'dark' ? 'buttons.switchToLightMode' : 'buttons.switchToDarkMode')"
         @click="toggleTheme">
         <svg v-if="currentBasemap === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -348,7 +349,7 @@ const REL_CSS = POPUP_CSS + `
           <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn round" :title="projection === 'globe' ? 'Switch to Mercator' : 'Switch to Globe'"
+      <button class="toolbar-btn round" :title="tShared(projection === 'globe' ? 'mapui.disableGlobe' : 'mapui.enableGlobe')" :aria-label="tShared(projection === 'globe' ? 'mapui.disableGlobe' : 'mapui.enableGlobe')"
         @click="toggleProjection">
         <span class="toolbar-icon">{{ projection === 'globe' ? '🌐' : '🗺' }}</span>
       </button>
@@ -364,7 +365,7 @@ const REL_CSS = POPUP_CSS + `
           <button v-for="b in BASEMAPS" :key="b.key" class="basemap-opt" :class="{ active: currentBasemap === b.key }" @click="setBasemap(b.key)">{{ b.label }}</button>
         </div>
       </div>
-      <!-- Data sources — moved into the toolbar to match ROP-tree (per user 2026-05-02) -->
+      <!-- Data sources — moved into the toolbar to match ROP-tree -->
       <div class="settings-wrap">
         <button class="toolbar-btn round" :title="t('pplr.ui.dataSources')" @click="showSettings = !showSettings">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">

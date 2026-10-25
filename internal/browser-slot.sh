@@ -168,7 +168,7 @@ done
 
 # Everything busy: keep POLLING EVERY SLOT until the deadline, and report a timeout as UNMEASURED
 # rather than as a verdict. This used to queue on slot 1 alone (flock -w on slot 1), so a slot that
-# freed up was never taken: measured 2026-09-25 (dx-shepherd), ten waiters were piled on slot 1 while
+# freed up was never taken: measured 2026-09-25, ten waiters were piled on slot 1 while
 # slot 2 sat free, and with slot 1 held 12 s and slot 2 freed at ~3 s a caller waited 11.5 s — the
 # two-slot semaphore had collapsed into ONE queue. Polling takes the first slot that frees (~4 s in
 # the same test). Trade-off, accepted: polling is not first-come-first-served, so under heavy

@@ -2,7 +2,7 @@
 /**
  * check-published-tree-weight — the tree we publish has a weight, and nothing was watching it.
  *
- * THE DEFECT THIS CATCHES. A publish was ALREADY BLOCKED ONCE at a 74MB asset tree (Forgejo
+ * THE DEFECT THIS CATCHES. A publish was ALREADY BLOCKED ONCE at a 74MB asset tree (the git host
  * rejected the pack). Nothing has measured the tree since. MEASURED 2026-09-25: public/assets is
  * 134MB, against the 94MB recorded when BUILD-POSTERS-GENERATE-ON-DEMAND-DROP-52MB was written —
  * it grew 40MB, and no one noticed, because size is the classic property that only becomes visible
@@ -109,7 +109,7 @@ if (existsSync(posters)) {
 
 if (total > MAX_MB * MB) {
   console.error(`\nTREE-WEIGHT: FAIL — public/${TREE_NAME}/assets is ${mb(total)}MB, over the ${MAX_MB}MB ceiling.`)
-  console.error('  A publish was already blocked once at a 74MB asset tree (Forgejo rejected the pack),')
+  console.error('  A publish was already blocked once at a 74MB asset tree (the git host rejected the pack),')
   console.error('  and nothing has measured it since; it grew from 94MB to 134MB unnoticed.')
   console.error('  Before deleting anything, read the split above: the city posters are the heavy half')
   console.error('  AND the half that cannot be regenerated. The reproducible half is worth less than')

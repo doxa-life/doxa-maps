@@ -84,7 +84,9 @@
     "asia": "Asien",
     "europe": "Europa",
     "latin_america_&_caribbean": "Lateinamerika",
-    "oceania": "Ozeanien"
+    "oceania": "Ozeanien",
+    "middle_east": "Naher Osten",
+    "north_america_&_non-spanish_caribbean": "Nordamerika und nicht-spanische Karibik"
   },
   "sort_by_column_hint": "Tabelle nach {column} sortieren – Umschalt-Klick fügt eine zweite Spalte hinzu. Die Sortierung ordnet nur die Tabelle; die Karten behalten ihre eigene Reihenfolge.",
   "fs_exit_hint": "Vollbild beenden (Esc) — zurück zu sieben Zeilen",
@@ -92,5 +94,19 @@
   "fs_exit": "Vollbild beenden",
   "fs_open": "Tabelle im Vollbild öffnen",
   "export_selected_hint": "Alle Felder exportieren — ausgewählte Volksgruppen: {n}",
-  "export_all_hint": "Alle Felder exportieren — Volksgruppen: {n}"
+  "export_all_hint": "Alle Felder exportieren — Volksgruppen: {n}",
+  "map_init_failed": "Die Karte konnte nicht starten. Prüfen Sie das Zugriffstoken und den Kartencontainer.",
+  "show_filters": "Filter einblenden",
+  "hide_filters": "Filter ausblenden — Karte vergrößern",
+  "show_charts": "Diagramme einblenden",
+  "hide_charts": "Diagramme ausblenden — Karte vergrößern",
+  "export_copied": "in die Zwischenablage kopiert",
+  "export_done": "exportiert",
+  "export_ready": "bereit",
+  "export_toast": "✓ {rows} Zeilen × {fields} Felder {how}",
+  "export_failed": "✕ Export fehlgeschlagen",
+  "pray_for_group": "Für diese Volksgruppe beten",
+  "more_information": "Weitere Informationen",
+  "title": "Forschungs-Dashboard",
+  "gospel_pending": "Noch nicht so weit: die Zahl der Unerreichten, der Schlüssel zur Datenquelle und die Gestaltung werden noch entschieden."
 }

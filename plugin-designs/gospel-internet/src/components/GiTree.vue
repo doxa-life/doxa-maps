@@ -10,7 +10,7 @@ function setGlobal(name, value) {
  * GiTree.vue — the LANGUAGE TREE, on a whiteboard: every family our people groups belong to, as a radial
  * tree (family -> branches -> languages -> dialects), the families packed like cells in a dish.
  *
- * WHY THE MAP ENGINE AND NOT D3/SVG (Driver, 2026-09-27: "snappy, lightweight, lower definition when
+ * WHY THE MAP ENGINE AND NOT D3/SVG (2026-09-27: snappy, lightweight, lower definition when
  * zoomed out"): the same MapLibre / Mapbox the board already loads draws the tree on the GPU. It tiles the
  * GeoJSON per zoom level, so zoomed out it draws LESS; its label placement never lets two labels overlap
  * and shows them in priority order as you zoom (families, then languages, then branches, then dialects).
@@ -32,12 +32,14 @@ import { labelFont } from '@map/maps/label-font.js'
 import MapToolbar from '@map/components/map-controls/MapToolbar.vue'
 import ZoomInButton from '@map/components/map-controls/ZoomInButton.vue'
 import ZoomOutButton from '@map/components/map-controls/ZoomOutButton.vue'
+import HelpButton from '@map/components/map-controls/HelpButton.vue'
 import { useBoardState } from '../useBoard.js'
 import { useGiT } from '../useGiT.js'
-import { createBoardMap, reducedMotion } from '../boardEngine.js'
+import { createWhiteboardMap, reducedMotion } from '@map/maps/whiteboard-map.js'
 import { treeScope, TREE_COLOR } from '../model.js'
 import { buildTreePoster, posterPrintHtml } from '../treePoster.js'
-import { openPrintFrame } from '@map/composables/printInPlace.js'
+import { printDocument } from '@map/composables/printInPlace.js'
+import { tStatic } from '@map/i18n/index.js'
 import { listLabel } from '@map/lists/peopleGroupList.js'
 
 const T = useGiT()
@@ -50,7 +52,7 @@ const mapRef = shallowRef(null)
 const err = ref('')
 const ready = ref(false)
 const hoverId = ref('')
-// the Driver: legends start collapsed, one tap on "Legend" opens them; the embed knob legend:"open" opens them
+// Legends start collapsed, one tap on "Legend" opens them; the embed knob legend:"open" opens them
 const legendOpen = ref(board.profileConfig.value?.legend === 'open')
 let unmounted = false
 let ro = null
@@ -224,7 +226,7 @@ function frame(coords) {
 async function build() {
   const t = await board.loadTree()
   if (unmounted || !el.value || mapRef.value) return
-  const made = await createBoardMap(el.value, board.profileConfig.value, { whiteboard: true, boundaries: false, center: [0, 0], zoom: 1, token: injectedToken?.value || '' })
+  const made = await createWhiteboardMap(el.value, board.profileConfig.value, { whiteboard: true, boundaries: false, center: [0, 0], zoom: 1, token: injectedToken?.value || '' })
   if (made.error) { err.value = T('messages.engineMissing', `The ${made.error} map engine did not load.`, { engine: made.error }); return }
   if (unmounted) { try { made.map.remove() } catch (_) {} return }
   const map = made.map
@@ -309,17 +311,17 @@ function makePoster() {
 }
 function printPoster() {
   const p = makePoster()
-  if (p) openPrintFrame(posterPrintHtml(p.svg, p.size, T('gospelInternet.tree.posterTitle', 'Gospel access, language family by language family')), { autoprint: true })
+  // printDocument: the in-place frame on desktop, the page itself on a phone (printInPlace.js says why).
+  if (p) printDocument(posterPrintHtml(p.svg, p.size, T('gospelInternet.tree.posterTitle', 'Gospel access, language family by language family')),
+    { labels: { print: tStatic('wall.hud.printNow') || 'Print', close: tStatic('buttons.close') || 'Close' } })
 }
-function downloadPoster() {
-  const p = makePoster()
-  if (!p) return
-  try {
-    const url = URL.createObjectURL(new Blob([p.svg], { type: 'image/svg+xml;charset=utf-8' }))
-    const a = document.createElement('a'); a.href = url; a.download = `gospel-language-tree-${p.size}in.svg`; a.style.display = 'none'
-    document.body.appendChild(a); a.click(); setTimeout(() => { try { URL.revokeObjectURL(url); a.remove() } catch (_) {} }, 200)
-  } catch (_) { /* a sandbox without downloads: the print path still works */ }
-}
+// ★ NO DOWNLOAD BUTTON HERE. This used to write gospel-language-tree-<size>in.svg to disk beside the
+// Print button. A poster action opens the PRINT DIALOG and never downloads a file, and there was no
+// case for an exception here: printPoster above builds the same poster from the same
+// makePoster(), so the download was a second route to one artefact rather than a capability only it
+// could offer. A reader who needs a file prints to PDF — the system's own dialog, not a silent write.
+// check:poster-action-print (regions) uses this file as its poison case, so a download added here
+// again fails the gate rather than shipping quietly.
 
 const ST_EN = { g: 'New Testament or full Bible found', y: 'Something found, but no New Testament', r: 'Nothing found' }
 const citation = computed(() => (ix.value && ix.value.meta && ix.value.meta.citation) || '')
@@ -367,6 +369,7 @@ useShadowStyles(
     <MapToolbar v-if="mapRef">
       <ZoomInButton :map="mapRef" />
       <ZoomOutButton :map="mapRef" />
+      <HelpButton hosted />
     </MapToolbar>
 
     <div v-if="card" class="gtr-card" data-tree-card>
@@ -400,7 +403,6 @@ useShadowStyles(
           <option :value="48">{{ T('gospelInternet.tree.poster4ft', '4 × 4 ft') }}</option>
         </select>
         <button type="button" @click="printPoster">{{ T('gospelInternet.tree.posterPrint', 'Print') }}</button>
-        <button type="button" @click="downloadPoster">{{ T('gospelInternet.tree.posterSvg', 'Download SVG') }}</button>
       </div>
       <div v-if="posterNote" class="gtr-note">{{ posterNote }}</div>
       <div class="gtr-note">{{ T('gospelInternet.tree.sources', 'Tree: Glottolog (CC BY 4.0). Resources: eBible, Faith Comes By Hearing, Scripture Earth, PNG.Bible, JESUS Film, Global Recordings and others, keyed by ISO 639-3.') }} {{ citation }}</div>

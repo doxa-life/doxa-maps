@@ -7,8 +7,8 @@
  *   (region-dashboards). Clicking a region or a country on tab 1 swaps to tab 2 with that
  *   selection already applied.
  *
- * IMITATES upg-100-mfe.vue, does not reinvent it. That file is this repo's reference composite,
- * and the Driver named it explicitly as the thing to copy. Same shape, tab for tab:
+ * IMITATES upg-100-mfe.vue, does not reinvent it. That file is this repo's reference composite
+ * and the sanctioned thing to copy. Same shape, tab for tab:
  *   • the pane-wrapper layout (buildPaneColumn + PANE_GRID_STYLES) supplies the scrolling column
  *   • the SAME View switcher in the header — now the SHARED library component ViewSelect.vue,
  *     which is that control extracted from upg-100-mfe rather than copied a third time
@@ -25,11 +25,16 @@
  * wall's 'show-on-map', and it keeps each pane under its own ProfileLoader/Pinia.
  */
 import { ref, computed, inject, onMounted, onBeforeUnmount } from 'vue'
+import { usePaneConfig } from '@map/composables/usePaneConfig.js'
 import { buildPaneColumn, PANE_GRID_STYLES } from '@map/layouts/pane-wrapper/pane-wrapper.js'
+import { urlOwnerOf, ownAddress } from '@map/composables/useViewAddress.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { SHADOW_BOX_SIZING_RESET } from './src/shadowReset.js'
 import ViewSelect from '@map/components/ViewSelect.vue'
 import ShareButton from '@map/components/map-controls/ShareButton.vue'
+// The header ⓘ ("What can this map do?"), Big Picture's header recipe: the map-control MapInfoButton in its HEADER
+// form, whose control bridge hands the tab's MapInfo to it (tabInfo.js trigger:'control').
+import MapInfoButton from '@map/components/map-controls/MapInfoButton.vue'
 // The SELECT VIEW strip is one of the sanctioned additions, so DX-life has no equivalent
 // markup to clone — and until now its labels were hardcoded English, making it the one piece
 // of chrome that never localised (visible at locale=ar: the panes and every heading go RTL
@@ -42,7 +47,7 @@ import ShareButton from '@map/components/map-controls/ShareButton.vue'
 // missing because DX-life translates 8 of our 11 locales — so English-only keys would push
 // them to 97 and fail the gate. The moment someone adds these three strings to all locales,
 // the strip localises with no code change here.
-import { useRegionsI18n } from './src/useRegionsI18n.js'
+import { useRegionsI18n } from '@map/i18n/useRegionsI18n.js'
 
 const { t }   = useRegionsI18n()
 const cfg     = inject('profileConfig', ref(null))
@@ -76,6 +81,11 @@ const stage = ref(null)
 const view  = ref('list')
 let column = null
 let offScroll = null
+let offOwn = null
+// The page address (useViewAddress): ?pane= is the open view, ?place= the region or country. On this composite's own
+// leaf it owns the address and writes both, the dashboard's choice included (ownAddress). Nested in a shell it owns
+// nothing; its writes go up as announcements and the shell writes them.
+const owner = () => urlOwnerOf(cfg.value)
 
 // PAGE-LEVEL config keys a pane INHERITS from the host page — see the BUG-UPG100MFE-ASSET-PATH
 // note in upg-100-mfe.vue: a cap-4 composite nests children in THIS document, so anything the
@@ -87,7 +97,7 @@ let offScroll = null
 // region-dashboards.vue was necessary and NOT sufficient: a nested pane has no leaf page of its
 // own, so it only sees what this composite forwards. Without `urlSync` in this list the panes read
 // cfg.urlSync as undefined, the guard never fires, and a Regions nested in the Research Gallery
-// goes on rewriting the HOST page's #anchor and tab title -- which is exactly what rega measured
+// goes on rewriting the HOST page's #anchor and tab title -- which is exactly what a browser measurement found
 // after my fix landed. A guard you cannot reach is not a guard.
 // It is the same lesson as the cap-4 asset-path one this file already records: page-scoped config
 // has to be forwarded explicitly. Note the filter below keeps `false`, which is the value that
@@ -96,7 +106,7 @@ let offScroll = null
 // partner who asked for MapLibre a Mapbox map in every nested pane -- the pane reads
 // provider as undefined and falls back. Same shape of bug as the missing 'urlSync' here
 // before it: the inner map cannot honour a key the shell never passed down.
-// ★ 'tokenUrl' and 'dataSource' added 2026-09-26. exp-shepherd's universal-props RE-MEASURE (main
+// ★ 'tokenUrl' and 'dataSource' added 2026-09-26. A universal-props RE-MEASURE (main
 // dee9f9c9) named the first: tokenUrl "is absent from the INHERITED_PAGE_KEYS of country-posters-mfe,
 // upg-100-mfe and regions-mfe". Measuring what that costs HERE, honestly: it is LATENT, not a live
 // token failure. This composite IS mounted under a ProfileLoader, and that loader already watches
@@ -113,22 +123,33 @@ let offScroll = null
 // below), and this was the one genuinely missing.
 const INHERITED_PAGE_KEYS = ['assetsBase', 'apiBaseUrl', 'prayBaseUrl', 'tokenUrl', 'dataSource', 'locale', 'lang', 'languageCode', 'isDark', 'qa', 'pinHint', 'urlSync', 'provider', 'list']
 
-function paneElement(pane) {
-  const el = document.createElement(TAG)
+// ★ SPLIT OUT SO IT CAN BE RE-EVALUATED. This reads cfg.value and spec.value, so calling it again
+// after the outer profile-config changes yields the NEW pane config. It used to be inline in
+// paneElement, which ran once per pane in onMounted and never again -- that is the whole defect:
+// the pane is handed a JSON STRING, so a later locale change reached this element and stopped.
+// stage is the element the panes are appended UNDER, in the same tree as them -- contains() does
+// not cross a shadow boundary, so the host must not be the custom element itself.
+const paneConfig = usePaneConfig(() => stage.value)
+
+function paneConfigFor(pane) {
   const host = cfg.value || {}
   const inherited = {}
   for (const k of INHERITED_PAGE_KEYS) {
     if (host[k] !== undefined && host[k] !== null && host[k] !== '') inherited[k] = host[k]
   }
   if (inherited.locale === undefined && inherited.lang !== undefined) inherited.locale = inherited.lang
-  const pcfg = { ...inherited, ...spec.value.config, ...pane.config }
-  el.setAttribute('profile-config', JSON.stringify(pcfg))
+  return { ...inherited, ...spec.value.config, ...pane.config }
+}
+
+function paneElement(pane) {
+  const el = document.createElement(TAG)
+  el.setAttribute('profile-config', JSON.stringify(paneConfigFor(pane)))
   return el
 }
 
-function go(id) {
+function go(id, changes) {
   view.value = id
-  column?.scrollTo(id)
+  column?.scrollTo(id, { changes })
 }
 
 // ── tab 1 -> tab 2: forward the selection, then swap the visible pane ───────
@@ -138,7 +159,9 @@ function forwardSelection(detail) {
   window.dispatchEvent(new CustomEvent(SELECT_EVENT, {
     detail: { ...detail, instanceId: instanceId.value },
   }))
-  go('dashboard')
+  // ONE address write for the click: the dashboard pane AND its subject, so Back returns to the list in one step.
+  // The dashboard's own write of the same subject then finds it already there and writes nothing.
+  go('dashboard', { place: detail.countrySlug || detail.regionSlug || '' })
 }
 
 // A region heading (or its "See X dashboard" link) was clicked on tab 1.
@@ -156,11 +179,15 @@ function onCountrySelected(e) {
 
 onMounted(() => {
   if (!stage.value) return
-  column = buildPaneColumn(spec.value, { host: stage.value })
+  column = buildPaneColumn(spec.value, { host: stage.value, address: { owner } })
   if (!column) return
+  offOwn = ownAddress(stage.value, owner)
   for (const pane of column.panes) {
     if (!pane.config) continue
-    column.mountEl(pane.id)?.appendChild(paneElement(pane))
+    const el = paneElement(pane)
+    column.mountEl(pane.id)?.appendChild(el)
+    // Keep this pane's profile-config in step with the outer element's for the rest of the session.
+    paneConfig.register(el, () => paneConfigFor(pane))
   }
   // Tabs are a readout as well as a control — follow the user's scroll.
   offScroll = column.onScroll(() => {
@@ -177,6 +204,7 @@ onBeforeUnmount(() => {
   stage.value?.removeEventListener('region-selected', onRegionSelected)
   stage.value?.removeEventListener('country-selected', onCountrySelected)
   offScroll?.()
+  offOwn?.()
   column?.destroy()
   column = null
 })
@@ -191,7 +219,7 @@ useShadowStyles(SHADOW_BOX_SIZING_RESET + PANE_GRID_STYLES + '\n' +
   // chain resolves to ZERO unless the HOST itself is sized — the "elements are not embedding"
   // failure upg-100-mfe documents. Declaring :host makes this fill whatever slot it is mounted
   // into, in every deploy method.
-  ':host{ display:block; width:100%; height:100%; min-height:420px; }' +
+  ':host{ display:block; position:relative; width:100%; height:100%; min-height:420px; }' +
   // Material LIGHT palette only — no dark mode, no prefers-color-scheme override.
   '.rmfe{ --ui-bg:#ffffff; --ui-bg-elevated:#f3f3f1; --ui-bg-accented:#f3f3f1;' +
   '  --ui-border:#d1d4cd; --ui-text:#3b463d; --ui-text-muted:#6d766e; --ui-primary:#92b195;' +
@@ -206,6 +234,16 @@ useShadowStyles(SHADOW_BOX_SIZING_RESET + PANE_GRID_STYLES + '\n' +
   // POSITIONING is the caller's job — ViewSelect ships its own metrics but no placement, so the
   // absolute centring lives here exactly as it does in the shell and in upg-100-mfe.
   '.rmfe .hdr .viewsel{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); }' +
+  // ★ HEADER BUTTONS, Big Picture's recipe (design rule, 2026-09-30): the ⓘ and Share as rounded squares at the
+  // vertical tabs' radius, side by side at the header's end. The SHAPE comes from each button's
+  // shape="rounded-square" prop (--vtl-radius); this header only sizes them to 28 px and keeps a 44 px tap target.
+  '.rmfe .hdr .hdr-btns{ display:inline-flex; align-items:center; gap:8px; flex:0 0 auto; }' +
+  '.rmfe .hdr .hdr-btns .mcb{ --map-btn-size:28px; position:relative; }' +
+  '.rmfe .hdr .hdr-btns .mcb svg{ width:16px; height:16px; }' +
+  '.rmfe .hdr .hdr-btns .mcb::after{ content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:44px; height:44px; }' +
+  // ON A PHONE the centred view switcher (about 290 px at 390) leaves no room for two buttons at one end, so the
+  // ⓘ takes the header's START edge, where the floating ⓘ sat before; Share keeps the end.
+  '@media (max-width: 600px){ .rmfe .hdr .hdr-btns > :first-child{ position:absolute; inset-inline-start:12px; top:50%; transform:translateY(-50%); } }' +
   // Stage: the pane-wrapper column mounts here (its .pane-col is absolute).
   '.rmfe .stage{ position:relative; flex:1 1 auto; min-height:0; }' +
   '.pane > .pane-mount > *{ position:absolute; inset:0; width:100%; height:100%; display:block; }',
@@ -223,7 +261,10 @@ useShadowStyles(SHADOW_BOX_SIZING_RESET + PANE_GRID_STYLES + '\n' +
         :label="t('Views')"
         @select="go"
       />
-      <ShareButton :is-dark="isDark" :embed-path="SHARE_EMBED_PATH" />
+      <div class="hdr-btns" data-header-btns>
+        <MapInfoButton :is-dark="isDark" shape="rounded-square" />
+        <ShareButton :is-dark="isDark" :embed-path="SHARE_EMBED_PATH" shape="rounded-square" />
+      </div>
     </header>
     <div class="stage" ref="stage"></div>
   </div>

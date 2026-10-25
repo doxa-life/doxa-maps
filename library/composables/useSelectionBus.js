@@ -8,7 +8,8 @@
  * generalisation. A move that also edits is a move nobody can verify.
  *
  * research-dashboard's old copy re-exported this file for one cycle so nothing broke mid-flight;
- * that shim is now deleted. See _qa-cycle/03-deployment-cycle/SPEC-DASHBOARD-KIT.md sections 5.2 and 8.
+ * that shim is now deleted. What the bus carries, and why selection does not travel by emit:
+ * library/dashboards/README.md.
  *
  * The move and SPEC-DASHBOARD-KIT D1 (multi-value `filterSet`: an array means OR-within-key,
  * AND-across-keys) landed as separate commits, the move first, so 'Big Picture is unchanged' by the
@@ -117,7 +118,7 @@ export function createSelectionBus() {
   // ★ HOVER IS NOT SELECTION, AND MUST NEVER BECOME IT. It does not enter selectionSet, does not
   // bump selectionVersion, and therefore does not move the camera: useSelectionCamera watches the
   // version, and a camera that chased the pointer across a table would be the resize-strobe bug
-  // wearing a new hat, on a Driver who is photosensitive. A panel may fade or outline on hover; it
+  // wearing a new hat, on a reader who may be photosensitive. A panel may fade or outline on hover; it
   // may not fly, select or filter.
   const hoverKey = ref(null)
   const subs = new Map()                   // event -> Set<cb>

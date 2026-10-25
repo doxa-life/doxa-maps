@@ -1,4 +1,4 @@
-/* check-map-unmount-guard — the fast, browser-free half of the unmount-race proof (by gospel-plugin,
+/* check-map-unmount-guard — the fast, browser-free half of the unmount-race proof (by the gospel-resources owner,
    adopted into internal/ by the studio lane; the end-to-end half is check-map-unmount-mid-init.mjs).
 
    Proves the guard by REPRODUCING the race against the real file: take the shipped source,

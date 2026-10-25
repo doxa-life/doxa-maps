@@ -13,12 +13,15 @@
  *     English string written "none | one | {n}" changes MEANING at n=0 under the map. Every pipe
  *     key is rendered at 0 and must not regress.
  */
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const LOC_DIR = new URL('../library/i18n/locales/', import.meta.url).pathname
 const SRC_DIRS = [new URL('../plugin-designs/', import.meta.url).pathname, new URL('../library/', import.meta.url).pathname]
-const LOCALES = readdirSync(LOC_DIR).filter((d) => !d.startsWith('.'))
+// DIRECTORIES ONLY. This listed every entry, so a README.md beside the locale folders entered
+// the locale list, passed the existsSync below (a file does exist) and crashed readdirSync on a
+// non-directory. A note explaining a catalogue belongs beside it; the gate has to tolerate one.
+const LOCALES = readdirSync(LOC_DIR).filter((d) => !d.startsWith('.') && statSync(join(LOC_DIR, d)).isDirectory())
 const fail = []
 
 // Collect every pipe-bearing catalogue value, as ns.key -> { locale: value }
@@ -51,6 +54,25 @@ for (const [key, byLoc] of Object.entries(pipes)) {
     const forms = val.split(/\s\|\s/).length
     const need = catCount(loc)
     if (forms < need) fail.push(`FORM COUNT ${key} @${loc}: ${forms} form(s) for ${need} CLDR categories — the pick clamps`)
+  }
+}
+
+// ── 1b. AUTHORING ORDER — the forms must be in the locale's CLDR order, not English's ──────────
+// vue-i18n's own rule for English reads zero|one|other; every other locale is picked by CLDR into its
+// OWN categories (de one|other, es one|many|other). A string copied in English order therefore picks the
+// wrong form while its form COUNT looks fine — measured: German printed "27 Land", Spanish "1 países".
+// Two signatures of English order, both impossible in a correctly ordered string:
+//   · 3 forms in a locale with 2 categories (de, hi): the extra form is English's zero
+//   · 3 forms in a 3-category locale where the first equals the last and the middle differs: "N plural |
+//     N singular | N plural" is English's zero|one|other, never CLDR's one|many|other
+for (const [key, byLoc] of Object.entries(pipes)) {
+  for (const [loc, val] of Object.entries(byLoc)) {
+    if (loc === 'en') continue
+    const f = val.split(/\s\|\s/)
+    const need = catCount(loc)
+    if ((f.length === 3 && need === 2) || (f.length === 3 && need === 3 && f[0] === f[2] && f[1] !== f[0])) {
+      fail.push(`ORDER ${key} @${loc}: authored in English zero|one|other order — CLDR picks the wrong form (write it as the locale's own categories: ${(() => { try { return new Intl.PluralRules(loc).resolvedOptions().pluralCategories.join('|') } catch { return '?' } })()})`)
+    }
   }
 }
 
@@ -93,4 +115,4 @@ if (fail.length) {
   process.exit(1)
 }
 const n = Object.keys(pipes).length
-console.log(`PLURAL-FORMS: PASS — ${n} plural key(s) across ${LOCALES.length} locale(s): form counts cover their CLDR categories, none is read through tStatic, and every zero-category locale authors its zero form.`)
+console.log(`PLURAL-FORMS: PASS — ${n} plural key(s) across ${LOCALES.length} locale(s): form counts cover their CLDR categories and are written in the locale's own order, none is read through tStatic, and every zero-category locale authors its zero form.`)

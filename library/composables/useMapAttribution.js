@@ -80,6 +80,9 @@ export function addMapAttribution(map, opts = {}) {
   if (boundaries) parts.push(LINKS.boundaries);
   if (basemap) parts.push(...basemapCredit(map));
 
+  // href-escaped-ok: every p comes from the LINKS table above — module constants chosen by engine
+  // type in basemapCredit(). No API value and no host attribute reaches this href, so there is
+  // nothing user-supplied to escape. (check:popup-href-escaped)
   el.innerHTML = parts.map((p) =>
     `<a href="${p.href}" target="_blank" rel="noopener noreferrer"`
     + (p.title ? ` title="${p.title}"` : '')

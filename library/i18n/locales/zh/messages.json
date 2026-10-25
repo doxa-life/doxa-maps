@@ -3,7 +3,7 @@
   "pinHint": {
     "tapDot": "点按一个彩色圆点——仍有人需要祷告"
   },
-  "upg100WallHeading": "我的 UPG 100 名单 — 祷告名单与海报",
+  "upg100WallHeading": "我的 UPG100 名单 — 祷告名单与海报",
   "upg100WallTag": "祷告动员",
   "upg100WallIntroA": "你会怎样喂饱五千人的群众？耶稣让他们一排五十、一排一百地坐下，不可能的事就变得可以分担了（路加福音 9:14）。我们对 2,106 个未得之民做了同样的事：27 份名单，每份约五十到一百。每份名单都能印成祷告手册和海报，让 27 位门徒、教会或当地领袖各领一份 — 为他们祷告 ",
   "upg100WallIntroEmph": "称呼他们族群的名字",
@@ -31,5 +31,15 @@
   "territoriesSelected": "区域：{count}",
   "bandInRange": "✓ 50–100 区间",
   "bandOutOfRange": "50–100 区间",
-  "mapContextLost": "已卸载此地图以释放显存。"
+  "mapContextLost": "已卸载此地图以释放显存。",
+  "nOfTotal": "{total} 个中的 {n} 个",
+  "mapInitFailed": "地图初始化失败——请检查令牌和容器",
+  "countryWallIntroA": "每个国家一张海报，可用来祷告、打印、贴在墙上——为他们祷告，",
+  "countryWallIntroB": "。各区域和国家按其中未得之民族群的数量排序，让最大的需要排在最前。",
+  "countryWallSoon": "即将推出：将为每个国家生成一份祷告名单，列出其中每一个未得之民族群的名字。",
+  "countryWallHeading": "国家海报 — 祷告名单与海报",
+  "largerScreenNotice": "这张实验性地图为大屏幕设计。它可以在这里打开，但部分内容在手机上可能显示不全或无法正常使用。",
+  "desktopOnlyNotice": "{label} 仅支持桌面端——请在电脑上打开此页面使用。",
+  "noticeDismiss": "关闭",
+  "countryPosterTooMany": "族群数量过多，无法清晰地放在一张海报上——我们正在制定解决方案。"
 }

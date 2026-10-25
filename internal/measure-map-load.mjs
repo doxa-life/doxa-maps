@@ -7,7 +7,7 @@
  * Prints, per map: median time to the bundle, to the engine script (mapbox-gl.js), to the map's
  * `load` event, and the serial chain — the requests that had to finish before the next could start.
  *
- * ★ WHY. The Driver: "Vue needs to be bundled inline into the maps so map load time is faster." Vue is
+ * ★ WHY. The ask: bundle Vue inline into the maps so they load faster. Vue is
  *   already compiled into every IIFE (vite.config.js externalises only jspdf), so the measurement has
  *   to find what DOES wait on what. Every run is a FRESH browser context (cold HTTP cache) under
  *   Chrome DevTools network throttling, so a local server is not mistaken for a real connection.
@@ -29,7 +29,7 @@ const ONLY = arg('--only', '') ? arg('--only', '').split(',') : DEFAULT
 const manifest = JSON.parse(readFileSync(`public/${TREE_NAME}/manifest.json`, 'utf8'))
 
 const port = await new Promise((ok) => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)) }) })
-const srv = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(port)], { stdio: 'ignore' })
+const srv = spawn(process.execPath, ['internal/serve-strict.mjs', '--port', String(port), '--exit-with-parent'], { stdio: 'ignore' })
 const hostPort = await new Promise((ok) => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)) }) })
 let hostHtml = ''
 const host = createServer((_, r) => { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); r.end(hostHtml) }).listen(hostPort, 'localhost')

@@ -2,7 +2,7 @@
 /**
  * check-legend-mirrors.mjs — the legends must MIRROR, and their labels must not become values.
  *
- * rega's Arabic survey on main 52eeb0db: the research-dashboard legends sat on the wrong edge with
+ * the Arabic survey on main 52eeb0db: the research-dashboard legends sat on the wrong edge with
  * ENGLISH text — 70 of 85 letters Latin — in Big Picture and in the Research Gallery. Two faults
  * that look like one, and they fail in opposite directions if you fix them carelessly.
  *
@@ -174,7 +174,7 @@ if (!fails.some((f) => f.startsWith('1'))) notes.push(`insets: ${SURFACES.length
 // component: mounting an SFC here needs the Vite/no-op-renderer harness check:composites-mount
 // carries, and a no-op renderer cannot show a colour anyway, so a mount would prove only "it did
 // not throw" at the cost of a dev server in a gate that otherwise runs in milliseconds. The
-// rendered result is rega's, on the NEEDS-EYES row for this landing.
+// rendered result is the browser QA step's, on the NEEDS-EYES row for this landing.
 {
   const RAIL = 'library/components/dashboards/DashboardFacetRail.vue'   // moved by kit landing 4c-3
   const CHIP = 'library/components/dashboards/DashboardFilterChips.vue'   // moved by kit landing 4c-2
@@ -263,10 +263,10 @@ if (!fails.some((f) => f.startsWith('1'))) notes.push(`insets: ${SURFACES.length
 //   (a) the old copy survives, so the tree holds two chip bars that drift apart — the failure this
 //       repo has already paid for with useNeighborT/usePplrT at Jaccard 0.82;
 //   (b) the kit's UNCONFIGURED behaviour is wrong, which nobody notices because every dashboard in
-//       this tree supplies a resolver. go-int is the consumer that will not, at first.
+//       this tree supplies a resolver. the gospel-internet board is the consumer that will not, at first.
 // So the arm asserts the move is complete and then LIFTS the default out of the source and RUNS it,
 // the same way arm 3 drives the rail's fallbacks. Not a mount: a no-op renderer cannot show a chip,
-// and the rendered result is rega's.
+// and the rendered result is the browser QA step's.
 {
   const NEW = 'library/components/dashboards/DashboardFilterChips.vue'
   const OLD = 'plugin-designs/research-dashboard/src/components/dashboards/DashboardFilterChips.vue'
@@ -330,12 +330,19 @@ if (!fails.some((f) => f.startsWith('1'))) notes.push(`insets: ${SURFACES.length
     if (!lf) {
       fails.push('5  could not lift `const labelFor` out of the kit chip bar, so its unconfigured behaviour is whatever this gate can no longer see. Keep it one expression.')
     } else {
-      const make = (cfg) => new Function('cfg', `return ${lf[1]}`)(cfg)
+      // The chip joins a multi-value filter with library/i18n's formatList. It is LIFTED from index.js exactly
+      // as the chip's own expression is, so the gate drives the shipped list grammar, not a re-typed copy.
+      const i18nSrc = read('library/i18n/index.js') || ''
+      const flStart = i18nSrc.indexOf('const listFormats = new Map()')
+      const flEnd = i18nSrc.indexOf('\n}\n', i18nSrc.indexOf('export function formatList')) + 2
+      const formatList = new Function('getRuntimeLocale', 'detectLocale',
+        `${i18nSrc.slice(flStart, flEnd).replace('export function', 'function')}\nreturn formatList`)(() => '', () => 'en')
+      const make = (cfg) => new Function('cfg', 'formatList', `return ${lf[1]}`)(cfg, formatList)
       const bare = make({})
       if (bare('affinity_bloc', 'A012') !== 'A012') {
         fails.push('5  with NO resolver the kit chip bar does not pass a scalar value through — a dashboard that has not wired its code tables must see the code, not blank.')
       }
-      if (bare('religion', ['Islam', 'Hinduism']) !== 'Islam, Hinduism') {
+      if (bare('religion', ['Islam', 'Hinduism']) !== 'Islam or Hinduism') {
         fails.push(`5  with NO resolver a MULTI-VALUE filter (spec D1) renders as ${JSON.stringify(String(bare('religion', ['Islam', 'Hinduism'])))} instead of a joined list. Configured and unconfigured must differ in whether CODES RESOLVE, never in punctuation — a comma-jammed "A012,A013" reads as a rendering bug rather than as missing configuration.`)
       }
       const wired = make({ legend: { labelFor: () => 'SUPPLIED' } })

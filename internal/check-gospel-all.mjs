@@ -37,6 +37,7 @@ const STATIC = [
   ['check:click-sheet', 'the country sheet resolves, links are absolute'],
   ['check:snapshot-guard', 'no fetcher writes around the guard'],
   ['check:gospel-tables-staged', 'every asset the map fetches is in the shipped tree'],
+  ['check:gospel-clear-filter-url', 'Show all drops only the filter keys, not a partner\'s'],
 ]
 const BROWSER = [
   ['check:leaves-mount', 'all five leaves actually mount'],

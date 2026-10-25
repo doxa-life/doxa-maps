@@ -179,7 +179,7 @@ useShadowStyles(`
    Background darkens the row color by 28% (mix with #000) so white badge text
    stays readable on bright rows like the engagement-tab "Engaged" green. The
    previous mix used currentColor (which is white in light mode), so on bright
-   rows it LIGHTENED the badge — wrong direction. qa: 2026-05-02. */
+   rows it LIGHTENED the badge — wrong direction. */
 .lrg-badge{display:flex;align-items:center;justify-content:center;}
 .lrg-badge-inner{display:inline-block;background:color-mix(in srgb, var(--lrg-item-color, #888), #000 28%);border-radius:8px;padding:2px 10px;font-size:11px;font-weight:600;font-family:'Courier New',monospace;white-space:nowrap;min-width:32px;text-align:center;}
 
@@ -204,6 +204,14 @@ useShadowStyles(`
 .lrg-dark .lrg-header-col{color:rgba(243,243,241,0.65);}
 .lrg-dark .lrg-footer{background:#2a332a;border-top-color:rgba(255,255,255,0.1);color:rgba(243,243,241,0.75);}
 .lrg-dark .lrg-footer-label{color:rgba(243,243,241,0.65);}
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .lr-row, .lr-swatch { transition: none !important; animation: none !important; }
+}
 `, 'legend-row-group')
 
 const props = defineProps({
@@ -241,7 +249,7 @@ defineEmits(['filter-click'])
 // Progress payload: explicit prop wins, else the provided one (may be a ref/computed).
 const injectedProgress = inject('legendProgress', null)
 const progressData = computed(() => props.progress ?? unref(injectedProgress) ?? null)
-// Driver 2026-09-16: the prayer legend's header says "Progress" (never "Legend").
+// Since 2026-09-16 the prayer legend's header says "Progress" (never "Legend").
 const displayTitle = computed(() => progressData.value ? t('legend.progress.title') : props.title)
 
 // Scroll-to-selected — universal across flat-legend tabs (prayer / engagement /

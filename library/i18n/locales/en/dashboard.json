@@ -84,7 +84,9 @@
     "asia": "Asia",
     "europe": "Europe",
     "latin_america_&_caribbean": "Latin America & Caribbean",
-    "oceania": "Oceania"
+    "oceania": "Oceania",
+    "middle_east": "Middle East",
+    "north_america_&_non-spanish_caribbean": "North America & Non-Spanish Caribbean"
   },
   "sort_by_column_hint": "Sort this table by {column} — shift-click to add a second column. Sorting orders the table only; the cards keep their own order.",
   "fs_exit_hint": "Exit full screen (Esc) — back to seven rows",
@@ -92,5 +94,19 @@
   "fs_exit": "Exit full screen",
   "fs_open": "Open table full screen",
   "export_selected_hint": "Export all fields — selected people groups: {n}",
-  "export_all_hint": "Export all fields — people groups: {n}"
+  "export_all_hint": "Export all fields — people groups: {n}",
+  "map_init_failed": "The map could not start. Check the access token and the map container.",
+  "show_filters": "Show filters",
+  "hide_filters": "Hide filters — grow the map",
+  "show_charts": "Show charts",
+  "hide_charts": "Hide charts — grow the map",
+  "export_copied": "copied to clipboard",
+  "export_done": "exported",
+  "export_ready": "ready",
+  "export_toast": "✓ {rows} rows × {fields} fields {how}",
+  "export_failed": "✕ Export failed",
+  "pray_for_group": "Pray for this people group",
+  "more_information": "More information",
+  "title": "Research Dashboard",
+  "gospel_pending": "Not ready yet: the lostness figure, the data-source key and the layout are still being decided."
 }

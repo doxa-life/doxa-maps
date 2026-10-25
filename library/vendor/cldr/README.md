@@ -31,7 +31,7 @@ fails, so a bad refresh cannot land quietly.
 
 `library/scripts/research/out/iso3-to-iso2.json` is a DIFFERENT map with a different job: it is the
 176-country research spine that drives the data fetches, and expanding it changes what gets fetched —
-a data-scope decision that belongs to the Driver, not a side effect of adding country names. The map
+a product decision about data scope, not a side effect of adding country names. The map
 derived here is for DISPLAY NAMES ONLY and drives no fetch. CLDR agrees with all 176 values in the
 research map, which is a useful independent check on it, but the two files are not interchangeable.
 

@@ -14,33 +14,27 @@
  *
  * Data: the live pray.doxa.life people-group list (2,107 groups, with photos and prayer counts).
  * Prayers and comments stay in this browser's localStorage, under a 'wall-pg:' prefix.
- * d3 and Font Awesome are CDN globals, loaded on first mount.
+ * d3 is loaded on first mount, pinned and integrity-checked, and kept off the host's window.d3
+ * (src/wallD3.js). Font Awesome is no longer used: the canvas draws its own icons.
  */
 import PeopleGroupsWall from './src/components/PeopleGroupsWall.vue'
-import CommentsDialog from './src/components/CommentsDialog.vue'
 import PrayerDialog from './src/components/PrayerDialog.vue'
-import SourceSelector from './src/components/SourceSelector.vue'
 import { ensureD3 } from './src/wallD3.js'
 
 export default {
   name: 'WallOfPeopleGroups',
-  components: { PeopleGroupsWall, CommentsDialog, PrayerDialog, SourceSelector },
+  components: { PeopleGroupsWall, PrayerDialog },
   data() {
-    return { ready: false, error: null, commentsDialogVisible: false, prayerDialogVisible: false, selectedGroup: null }
+    return { ready: false, error: null, prayerDialogVisible: false, selectedGroup: null }
   },
   mounted() {
     ensureD3().then(() => { this.ready = true }, (e) => { this.error = e.message })
   },
   methods: {
-    openCommentsDialog(group) { this.selectedGroup = group; this.commentsDialogVisible = true },
-    closeCommentsDialog() {
-      this.commentsDialogVisible = false
-      setTimeout(() => { this.selectedGroup = null }, 300)
-    },
     openPrayerDialog(group) { this.selectedGroup = group; this.prayerDialogVisible = true },
     closePrayerDialog() {
       this.prayerDialogVisible = false
-      setTimeout(() => { if (!this.commentsDialogVisible) this.selectedGroup = null }, 300)
+      setTimeout(() => { this.selectedGroup = null }, 300)
     },
     handlePrayerConfirmed() { /* PrayerDialog already updated the store */ },
   },
@@ -49,10 +43,8 @@ export default {
 
 <template>
   <div class="app-container">
-    <source-selector />
-    <people-groups-wall v-if="ready" @open-comments="openCommentsDialog" @open-prayer="openPrayerDialog" />
+    <people-groups-wall v-if="ready" @open-prayer="openPrayerDialog" />
     <div v-else-if="error" class="wall-error">{{ $t('wall.drawLibError') }} {{ error }}</div>
-    <comments-dialog :visible="commentsDialogVisible" :group="selectedGroup" @close="closeCommentsDialog" />
     <prayer-dialog :is-open="prayerDialogVisible" :group="selectedGroup" @close="closePrayerDialog" @prayer-confirmed="handlePrayerConfirmed" />
   </div>
 </template>

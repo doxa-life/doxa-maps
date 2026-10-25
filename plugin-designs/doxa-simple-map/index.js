@@ -1,20 +1,19 @@
 /**
  * plugin-designs/doxa-simple-map/index.js
  *
- * Bundle entry — registers the doxa-simple-map web component(s).
+ * Bundle entry — registers the doxa-simple-map web component.
  *
- * Registers TWO custom-element tag names that mount the SAME ProfileLoader
- * (separate defineCustomElement calls so each tag gets its own class):
- *   - <doxa-map>          legacy production tag (Q1 back-compat — must keep working)
- *   - <doxa-simple-map>   new explicit tag matching the bundle name
+ * ★ ITS TAG IS <dxm-simple-map>, DX Maps' own name. A host page can define the older generic names first
+ * (DX Life's own /js/doxa-simple-map.js defines <doxa-map> and <doxa-simple-map>), and the first definition
+ * wins, so under those names a page could be drawing the host's element instead of this one. The older names
+ * are defined only when the host asks: a `data-legacy-tags` attribute on this bundle's <script>, or
+ * window.DXM_LEGACY_TAGS = true before it loads. Each name gets its own class (one class under two tags is
+ * undefined behaviour).
  *
- * Usage from a host page (legacy):
- *   <script src="/app/doxa-simple-map.iife.js"></script>
- *   <doxa-map profile-config='{"profile":"doxa-simple-map","tk":"pk.eyJ..."}'></doxa-map>
- *
- * Usage (new):
- *   <script src="/app/doxa-simple-map.iife.js"></script>
- *   <doxa-simple-map profile-config='{"profile":"doxa-simple-map","tk":"pk.eyJ..."}'></doxa-simple-map>
+ * Usage:
+ *   <script src="<tree>/doxa-simple-map/doxa-simple-map.js"></script>
+ *   <dxm-simple-map profile-config='{"profile":"doxa-simple-map","tk":"MAPBOX_PUBLIC_TOKEN"}'></dxm-simple-map>
+ * An existing embed that still writes <doxa-map> or <doxa-simple-map> adds `data-legacy-tags` to its <script>.
  *
  * The profile-config attribute is parsed by ProfileLoader (in @map).
  * `profile` must match a .vue file in this bundle's folder.
@@ -30,6 +29,15 @@
 
 import { defineMapElement } from '@map/elements/defineMapElement.js'
 import { registerStrategies } from '@map/colors/_registry.js'
+
+// Read NOW, at evaluation time: document.currentScript is null once this script has run.
+const LEGACY_TAGS = (() => {
+  try {
+    if (typeof window !== 'undefined' && window.DXM_LEGACY_TAGS === true) return true
+    const s = typeof document !== 'undefined' ? document.currentScript : null
+    return Boolean(s && typeof s.hasAttribute === 'function' && s.hasAttribute('data-legacy-tags'))
+  } catch (_) { return false }
+})()
 
 // ─── Bundle-private profile registry ─────────────────────────────────────────
 // import.meta.glob is evaluated by Vite at build time relative to THIS file —
@@ -73,21 +81,19 @@ function buildDoxaMapElement() {
 })
 }
 
-const DoxaMapElement       = buildDoxaMapElement()
-const DoxaSimpleMapElement = buildDoxaMapElement()
+const DxmSimpleMapElement = buildDoxaMapElement()
 
-// ─── Register both tag names ─────────────────────────────────────────────────
-// Guards prevent "already registered" errors when this IIFE is loaded twice
-// (e.g. on a page that ships both legacy and new <script> tags during a
-// transition window).
+// ─── Register the tag ────────────────────────────────────────────────────────
+// The guard keeps a second load of this bundle quiet. The FIRST define in this file is the profile's
+// element: internal/generate-tree.mjs reads it into the manifest, the leaf pages and the gallery.
 if (typeof customElements !== 'undefined') {
-  if (!customElements.get('doxa-map')) {
-    customElements.define('doxa-map', DoxaMapElement)
-  }
-  if (!customElements.get('doxa-simple-map')) {
-    customElements.define('doxa-simple-map', DoxaSimpleMapElement)
+  if (!customElements.get('dxm-simple-map')) customElements.define('dxm-simple-map', DxmSimpleMapElement)
+  // The older generic names, ONLY when the host asked (see the header). Never on by default.
+  if (LEGACY_TAGS) {
+    for (const legacy of ['doxa-map', 'doxa-simple-map']) {
+      if (!customElements.get(legacy)) customElements.define(legacy, buildDoxaMapElement())
+    }
   }
 }
 
-export default DoxaMapElement
-export { DoxaSimpleMapElement }
+export default DxmSimpleMapElement

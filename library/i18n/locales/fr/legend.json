@@ -7,7 +7,7 @@
     "gospelResources": "Ressources de l'Évangile",
     "languageFamilies": "Familles de langues",
     "prayer": "Progression de la prière",
-    "upg100List": "Ma liste UPG 100",
+    "upg100List": "Ma liste UPG100",
     "batchSelect": "Sélection multiple"
   },
   "header": {
@@ -58,9 +58,19 @@
     "languages": "Langues"
   },
   "tabInfo": {
-    "upg100Region": "Région — trie les listes UPG-100 par zone du monde (Afrique, Inde, Moyen-Orient, Sourds, …). Les totaux sont les UUPG et la population additionnés sur toutes les listes qu’elle contient.",
-    "upg100Zone": "Listes UPG-100 — chacune est une liste de prière des groupes de peuples non atteints d’une zone, et c’est ce que la carte dessine et colore. Chaque liste s’imprime comme son propre livret.",
-    "upg100Group": "Groupe de peuples — les groupes non atteints au sein d’une liste, les plus grands besoins de prière en premier. Chaque point de la carte en est un."
+    "upg100Region": "Région — trie les listes UPG100 par zone du monde (Afrique, Inde, Moyen-Orient, Sourds, …). Les totaux sont les UUPG et la population additionnés sur toutes les listes qu’elle contient.",
+    "upg100Zone": "Listes UPG100 — chacune est une liste de prière des groupes de peuples non atteints d’une zone, et c’est ce que la carte dessine et colore. Chaque liste s’imprime comme son propre livret.",
+    "upg100Group": "Groupe de peuples — les groupes non atteints au sein d’une liste, les plus grands besoins de prière en premier. Chaque point de la carte en est un.",
+    "family": "Famille linguistique — un ensemble de langues issues d’un ancêtre commun (p. ex. indo-européen, afro-asiatique).",
+    "language": "Langue — un système de communication employé par un peuple (p. ex. arabe, bengali, hindi).",
+    "dialect": "Dialecte/Variété — une forme régionale ou sociale d’une langue (p. ex. arabe soudanais ; langue des signes pakistanaise).",
+    "bloc": "Bloc d’affinité — le regroupement le plus large, selon la parenté culturelle, linguistique et géographique (p. ex. peuples malais, peuples d’Asie du Sud, Sourds, monde arabe).",
+    "cluster": "Grappe — un regroupement plus fin à l’intérieur d’un bloc (p. ex. Bornéo-Kalimantan parmi les peuples malais). Les lignes portent « (grappe) » pour les distinguer des peuples.",
+    "group": "Peuple — une identité ethnolinguistique en elle-même, indépendante du pays. Les lignes portent « (peuple) ». Un même peuple peut vivre dans de nombreux pays (les Sourds, par exemple, dans plus de cent).",
+    "pgic": "Peuple dans le pays — une ligne par peuple et par pays où il vit (p. ex. « Abai Sungai, Malaisie »). Les lignes portent « (peuple dans le pays) ».",
+    "region": "Région WAGF — la macro-région dont relève un pays (p. ex. Asie, Afrique). Chacune a sa couleur sur la carte.",
+    "block": "Bloc WAGF — le sous-ensemble à l’intérieur d’une région (p. ex. Asie du Sud-Est, Afrique de l’Ouest).",
+    "country": "Pays — les pays un à un, classés par population non atteinte au sein de leur bloc."
   },
   "a11y": {
     "expandRow": "Développer {label}",
@@ -70,7 +80,7 @@
   },
   "export": {
     "poster": "Affiche",
-    "packet": "UPG 100",
+    "packet": "UPG100",
     "packetExplain": "Une liste de prière d’environ 50 à 100 peuples non atteints : une personne peut en porter une.",
     "packetAria": "Niveau de détail du dossier de prière",
     "packetFull": "Détail complet",

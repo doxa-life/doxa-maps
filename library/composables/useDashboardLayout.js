@@ -11,7 +11,7 @@
  * else is verbatim.
  *
  * plugin-designs/research-dashboard/src/composables/useDashboardLayout.js re-exports this for one
- * cycle. See _qa-cycle/03-deployment-cycle/SPEC-DASHBOARD-KIT.md section 8, landing 2.
+ * cycle. The contract the dashboard panels share is library/dashboards/README.md.
  *
  * A dashboard shell (see plugin-designs/research-dashboard/research-dashboard.vue) is a CSS
  * grid whose three flexible tracks are driven by CSS custom properties:
@@ -39,9 +39,8 @@
  *   the table's share is derived as shellH - mapH (see the CSS in research-dashboard.vue). Before
  *   this, --rd-map-h alone was BOTH "the map/table split" AND "the element's total height" — one
  *   knob answering two questions, which is why dragging the map/table divider used to resize the
- *   whole element as a side effect. Driver: "you improperly bound that control to the separator
- *   line between the map and the table... that's not the request I was making to resize the
- *   height of the page."
+ *   whole element as a side effect: the divider between the map and the table was bound to the
+ *   page's height, which is not what that control is for.
  *
  * COMPOSITION with the collapse-table fix (do NOT regress):
  *   The shell's DEFAULT rows are `52px auto 42px 1fr var(--table-h,34%)` while the collapsed rule
@@ -106,34 +105,29 @@ const DEFAULT_STORAGE_KEY = 'rd-dashboard-layout-v6'
 // shellH default (720) is the SUM the old single-knob mapH(360) used to imply — map 360 + table
 // budget 360 (328 grid + 32 bar) — so first paint is pixel-identical to before this axis split;
 // only DRAGGING behaves differently now (see the SHELL vs. TABLE axis note above).
-// ★ shellH 720 -> 602 so the table OPENS at seven data rows (Driver 2026-09-23: "the table needs to
-// only show SEVEN rows by DEFAULT height"). 602 = map 360 + bar 32 + 7 rows x 26 + foot 28.
+// ★ shellH 720 -> 602 so the table OPENS at seven data rows by default. 602 = map 360 + bar 32 + 7 rows x 26 + foot 28.
 // ★ A DEFAULT, NOT A LOCK — and the distinction is the whole correction. My first attempt hard-capped
 // the keyhole at 7 rows in CSS, which read as the same thing and was not: nothing writes
 // --rd-table-rows, while the drag handles write --rd-shell-h and --rd-map-h, so the cap could not
-// be reached by any gesture. The Driver lost BOTH resizes at once and said so: "I didn't want the
-// table set to 7. Only the table needs to be resizable. We've set it to where I can't even resize."
-// Setting the STARTING VALUE instead leaves the derivation intact: the keyhole stays
+// be reached by any gesture: BOTH resizes were lost at once, when only the table was meant to
+// change (seven rows as a default, still resizable). Setting the STARTING VALUE instead leaves the
+// derivation intact: the keyhole stays
 // shell - map - bar - foot, so dragging either handle still moves the table, and seven rows is
 // merely where it opens.
-// ★ RECLAIM PASS 2 (Driver 2026-09-23: "it is a priority to reclaim height... so I can see half
-// of the first row of the people groups grid"). mapH 360 -> 300 and shellH follows the same
+// ★ RECLAIM PASS 2: reclaim height so half of the People Groups grid's first row shows. mapH 360 -> 300 and shellH follows the same
 // arithmetic as before: 300 map + 32 bar + 7x26 rows + 28 foot = 542. The seven-row table
 // promise is unchanged; only the map's share shrinks -- and the map compensates by DEFAULTING
 // MORE ZOOMED OUT with the world-floor released on the globe (see DashboardMapPanel), so a
 // shorter map shows MORE world, not less.
-// shellH 502 -> 542 (Driver 2026-09-23: "the dashboard should be taller by about 40px"). The
+// shellH 502 -> 542: the dashboard about 40px taller. The
 // extra 40px flows to the TABLE via the standing derivation (table = shell - map - bar - foot);
 // the map row stays pinned at mapH. One owner: this number, with the CSS var fallbacks in
 // research-dashboard.vue kept byte-equal at 542.
-// mapH 260 -> 300 (Driver 2026-09-23 follow-up: the +40px was to be "added to the map -- map is
-// 40px taller display room"). shellH stays 542, so the table's derived share returns to its
+// mapH 260 -> 300: the +40px belongs to the map, 40px more display room. shellH stays 542, so the table's derived share returns to its
 // pre-+40 height and the whole gain lands in the map row.
-// +40px again (Driver 2026-09-23 second raise: "go taller with the dashboard by another 40px,
-// add that to the height of the map"): shellH 542 -> 582 and mapH 300 -> 340 move together, so
+// +40px again, added to the map's height: shellH 542 -> 582 and mapH 300 -> 340 move together, so
 // the whole gain lands in the map row and the table's derived share stays put.
-// Driver fine-tune 2026-09-23: "almost perfect height -- keep the map the same height, but
-// decrease the height of the dashboard by about 20px". Map stays 340; the 20px comes out of
+// Fine-tune: the map keeps its height and the dashboard loses about 20px. Map stays 340; the 20px comes out of
 // the table's derived share (shell - map - bar - foot).
 const DEFAULTS = { facetW: 296, railW: 296, tableH: '34%', mapH: 340, shellH: 562 }
 const CLAMPS = { facetW: [160, 420], railW: [200, 520], tableH: [12, 70], mapH: [220, 1400], shellH: [400, 2600] }
@@ -157,16 +151,16 @@ export function useDashboardLayout(options = {}) {
     bus = null,
     isNarrow = false,
     pageScroll = false,
-    // ★ KEY VERSIONED v2 (2026-09-23). The Driver reported "sidebars are not equally spaced" on
-    // his machine AFTER the symmetric-rail change landed -- because his browser restores a layout
+    // ★ KEY VERSIONED v2. The sidebars still looked unequal AFTER the symmetric-rail change landed
+    // -- because a browser restores a layout
     // SAVED under the old defaults (rail 264), and a restored value outranks any new default by
     // design. When defaults change materially, the old saved layouts are prescriptions from a
     // different bottle: bump the key so every reader starts from the new defaults once, and a
     // fresh drag re-personalises from there. The v1 blob is left in place, inert.
     // v2 -> v3: retire stored layouts so the new 542 default is actually SEEN -- a persisted
-    // shellH:502 from the previous default would silently mask this change on the Driver's browser.
+    // shellH:502 from the previous default would silently mask this change in any browser that saved one.
     // ★ NAMESPACED PER DASHBOARD, AND THAT IS THE ONE BEHAVIOUR CHANGE IN THIS MOVE.
-    // SPEC-DASHBOARD-KIT section 8 named it as landing 2's risk: this key was a single constant, so
+    // This was the move's named risk: the key was a single constant, so
     // the moment a page carries TWO dashboards they read and write one another's layout. Dragging a
     // divider in one would move the other's on next load, and neither would be wrong on its own.
     // While there was exactly one dashboard that was invisible; sharing the engine is precisely
@@ -275,9 +269,9 @@ export function useDashboardLayout(options = {}) {
       // every reader's saved layout. Read-only and never written back: the new key is written on
       // the next drag-end, and the old value is simply left where it is rather than migrated and
       // deleted — a migration that also deletes is one that cannot be rolled back.
-      // ★ ONLY FOR THE DEFAULT KEY (go-int, 2026-09-27) — and this was my own regression from kit
-      // landing 2. I added the read-through so namespacing would not discard a reader's saved
-      // layout, and applied it unconditionally: so a caller that passes its OWN storageKey, which
+      // ★ ONLY FOR THE DEFAULT KEY (2026-09-27) — a regression from kit landing 2. The
+      // read-through was added so namespacing would not discard a reader's saved
+      // layout, and was applied unconditionally: so a caller that passes its OWN storageKey, which
       // is the entire point of namespacing, still inherited Big Picture's rail widths on first
       // load. The migration meant to protect one dashboard's layout was handing it to every other
       // dashboard. A fallback that ignores the key it is falling back FROM is not a fallback.
@@ -344,11 +338,11 @@ export function useDashboardLayout(options = {}) {
     const startX = e.clientX
     const startFacet = facetW.value
     const startRail = railW.value
-    // ★ THE X DELTA HAS A READING DIRECTION (go-int, 2026-09-27). Under dir=rtl the grid mirrors —
+    // ★ THE X DELTA HAS A READING DIRECTION (2026-09-27). Under dir=rtl the grid mirrors —
     // the facet rail sits on the RIGHT — so dragging its handle toward the map INCREASES clientX
     // where in LTR it decreases it. The maths below was written once, in LTR, and the result in
     // Arabic is that dragging the facet handle shrinks the CHARTS rail: both handles fight, and
-    // neither does what the cursor says. This reaches Big Picture in ar today, not only go-int.
+    // neither does what the cursor says. This reaches Big Picture in ar today, not only the gospel-internet dashboard.
     // Read per drag rather than cached: a host can flip dir between gestures (our own composites
     // set it on the custom-element host from the runtime locale), and a cached sign would be wrong
     // for the rest of the session.
@@ -551,7 +545,7 @@ export function useDashboardLayout(options = {}) {
     let dir = 0
     if (axis === 'table' || axis === 'shell') { if (K === 'ArrowUp') dir = -1; else if (K === 'ArrowDown') dir = 1 }
     else {
-      // ★ AND THE ARROWS FOLLOW THE SAME SIGN (go-int). The pointer path now mirrors under rtl; if
+      // ★ AND THE ARROWS FOLLOW THE SAME SIGN. The pointer path now mirrors under rtl; if
       // the keyboard did not, the two input methods would disagree about which way widens — and a
       // keyboard user in Arabic would find the arrows inverted relative to the drag they just
       // watched. aria-valuenow reports the same ref for both, so a disagreement here would also

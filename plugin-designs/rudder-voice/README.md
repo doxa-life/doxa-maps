@@ -57,5 +57,6 @@ so this plugin is not meant for web embeds.
 
 ## Not yet
 
-- Desktop build (`desktop:build`) with the engine as a Tauri sidecar.
+- The desktop app on macOS and Windows. On Linux it builds and runs: `bun run desktop:build rudder-voice`,
+  see [HOWTO-build-the-desktop-app](../../documentation/HOWTO-build-the-desktop-app.md).
 - A saved word-correction table (PocketBase) for technical terms the model mishears.

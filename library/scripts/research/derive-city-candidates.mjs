@@ -31,11 +31,11 @@
 //
 // EVERY row therefore carries provenance and an explicit unknown for anything not
 // derived from the source data. Nothing here is researched; nothing is guessed.
-// design note constraint: "mark unknowns as unknown, never guess a yes/no."
+// Constraint: unknowns are marked unknown; a yes/no is never guessed.
 //
 // PERSECUTION-SAFETY: this file emits location + language + population only. It
 // carries NO gospel-resource, church, or believer field, and must not gain one —
-// that join is the targeting list the design note held. (event_bus de87377ce6f53279)
+// that join would be a targeting list.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -100,7 +100,7 @@ for (const [key, members] of cells) {
     provenance: {
       derived_from: 'doxa people-group records (lat/lng centroids)',
       method: `~25km cell aggregation (quarter-degree), cell=${key}`,
-      caveat: 'NOT a settlement. A cluster of people-group centroids; place_name is unresolved.',
+      caveat: 'NOT a settlement. A cluster of people-group pins; place_name is unresolved.',
       derived_on: '2026-08-01',
     },
   });
@@ -122,7 +122,7 @@ const stats = {
   internet_researched: clusters.filter((c) => c.internet_access !== 'unknown').length,
   generated: '2026-08-01',
   scope_note: 'Scope is the full 2,106-record DX people-group corpus. No separate "2000 list" artefact exists on disk — verified by search — so this corpus IS the scope.',
-  safety_note: 'Contains NO gospel-resource, church or believer field, and must not gain one. That join is held pending design note architecture (separate store, never joined to UPG locations in a public artifact).',
+  safety_note: 'Contains NO gospel-resource, church or believer field, and must not gain one. That join is held pending its own architecture (separate store, never joined to UPG locations in a public artifact).',
 };
 
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });

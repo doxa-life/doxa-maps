@@ -33,7 +33,7 @@ element with its own `profile-config`.
 <script src="/dx-maps/my-map/my-map.js"></script>
 
 <!-- The map. `profile` = your .vue filename. `tk` = the Mapbox token. -->
-<my-map profile-config='{"profile":"my-map","tk":"pk.eyJ..."}'></my-map>
+<my-map profile-config='{"profile":"my-map","tk":"MAPBOX_PUBLIC_TOKEN"}'></my-map>
 ```
 
 `profile-config` is read at **runtime**, so the same bundle re-points at different data,
@@ -237,7 +237,7 @@ snippets (leave it empty for relative URLs that work wherever the folder is drop
 ## Hosting the dx-maps folder: caching, compression, CORS
 
 **Why it matters.** On a cold load a map's layers draw about 10–17 s after the page opens (measured
-on the UPG-100 list page). The bundle and the map engine take under 2 s of that; the rest is basemap
+on the UPG100 Posters page). The bundle and the map engine take under 2 s of that; the rest is basemap
 tiles and data files such as the country-boundary file (1,866 KB raw, 597 KB gzipped). Compression
 cuts every visit; caching means a returning reader doesn't download the same files again.
 
@@ -303,13 +303,16 @@ Contracts and gotchas (PROFILES shape, tag-vs-bundle names, `--no-token`):
 **Mobile is separate from `bun run build`.** The default build produces **only** the `dx-maps`
 web folder — the embeddable maps (and the SPA, if configured). It never touches Capacitor. The
 Android/iOS app is an **opt-in** step that *reuses* that web build: Capacitor's `webDir` points at
-`public/` (`appId: life.doxa.maps`, `appName: "Doxa Maps"`), so `cap sync` wraps the already-built
+`public/dx-maps/` (`appId: life.doxa.maps`, `appName: "Doxa Maps"`), so `cap sync` wraps the already-built
 folder into a native app. You never need to build mobile to ship the web maps.
+
+**The quickest app is one plugin, with no rebuild:** `bun run phone:deep-research` installs Deep Research
+as an app. The whole tutorial: [how to build mobile apps from plugins](how-to-build-mobile-apps-from-plugins/README.md).
 
 **Android** (project is committed; needs Android Studio + a JDK):
 
 ```bash
-bun run apk:debug     # build web → cap sync → verify → assemble a debug APK
+bun run apk:debug     # build web → cap sync → verify → assemble a debug APK (the full build asks for BUILD_ALLOW=1)
 bun run apk:install   # adb install onto a connected device/emulator
 ```
 
@@ -334,10 +337,10 @@ The engine is a **runtime parameter** — same bundle, no rebuild. Resolution or
 (first defined wins): `profile-config.provider` → `?provider=` in the page URL →
 `window.MAP_PROVIDER` → default `auto`.
 
-`auto` picks **Mapbox when a token is available** (a `tk` in the profile-config, `window.MAP_TOKEN`,
-`?tk=`, a token pasted once in the tree, the studio's ⚙ Settings, or a configured token URL) and
-**MapLibre otherwise** — keyless, with no request to Mapbox. The repo ships no Mapbox token, so a
-fresh checkout draws every map with MapLibre until you give it one. An explicit `provider` always wins.
+`auto` is **MapLibre**: keyless, with no request to Mapbox. Since 2026-09-28 a token no longer chooses the
+engine. **Mapbox** is an explicit `provider: "mapbox"`, and the token then authenticates it (a `tk` in the
+profile-config, `window.MAP_TOKEN`, `?tk=`, a token pasted once in the tree, the studio's ⚙ Settings, or a
+configured token URL). An explicit `provider` always wins.
 
 ```html
 <!-- per embed -->
@@ -412,6 +415,7 @@ every third-party script is pinned with an integrity hash (`library/constants/cd
 | `style-src` | `'unsafe-inline'`, the same CDN hosts | each plugin styles its own shadow root with a `<style>` element |
 | `worker-src` | `blob:` | the map engines run their tile workers from a blob URL |
 | `connect-src` | the tile/style hosts you use (`https://tiles.openfreemap.org` for MapLibre, `https://*.mapbox.com` for Mapbox), your data API | tiles, styles, glyphs, data |
+| `connect-src` (Bible Posters) | `https://bible.helloao.org` | the public-domain Bible text, fetched per book at render time (no text is bundled) |
 | `img-src` | `data:` `blob:` and the same tile hosts | sprites and raster tiles |
 
 ---

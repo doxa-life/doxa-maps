@@ -176,7 +176,7 @@ function fixTree(root) {
     }
     // The Research Gallery reads a BYTE-IDENTICAL copy of the manifest first when it runs on a foreign
     // origin (generate-tree writes it; see doxa-maps-spa.vue). Repairing the root manifest alone left the
-    // copy with the OLD integrity, so an embedded gallery refused the rebuilt bundle (rega, 2026-09-25).
+    // copy with the OLD integrity, so an embedded gallery refused the rebuilt bundle (measured 2026-09-25).
     for (const rel of ['doxa-maps-spa/manifest.json']) {
       const copy = join(root, rel)
       if (existsSync(copy) && readFileSync(copy, 'utf8') !== after) {

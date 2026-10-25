@@ -74,5 +74,6 @@
   "Countries: %count%": "Страны: %count%",
   "Regions: %count%": "Регионы: %count%",
   "countryCount": "{n} страна | {n} страны | {n} стран | {n} стран",
-  "regionCount": "{n} регион | {n} региона | {n} регионов | {n} регионов"
+  "regionCount": "{n} регион | {n} региона | {n} регионов | {n} регионов",
+  "Coming soon — a prayer list will be generated for each country, naming every unengaged people group within it.": "Скоро — для каждой страны будет создан список для молитвы с названием каждой неохваченной народности в ней."
 }

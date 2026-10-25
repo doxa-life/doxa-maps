@@ -129,7 +129,7 @@ ok(Math.round(per / 100) * 100 === 40200,
 // it: 32 contiguous cells fill most of row 1 of 52, so the page printed as one solid bar across the
 // header — the ordinary chart the life grid exists to avoid — and the existing gate asserts only
 // that the shaded COUNT is between 0 and 5,200, which is equally true of a bar and of a scatter.
-// A count cannot distinguish a distribution. rega's eyes caught it; nothing else could have.
+// A count cannot distinguish a distribution. A visual review caught it; nothing else could have.
 const picked = scatterCells(5200, 32, 'upg-100')
 const spread = scatterSpread(picked, 52)
 ok(spread.cells === 32, '32 shaded cells are picked, distinct')

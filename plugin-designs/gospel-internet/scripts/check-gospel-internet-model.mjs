@@ -111,6 +111,12 @@ const csv = M.buildCsv(
 const lines = csv.split('\r\n')
 ok(lines[0] === 'A,B' && lines[lines.length - 1].startsWith('# test') && (POISON ? false : true), 'CSV header first, provenance last')
 ok(lines[1].startsWith('"\'=HYPERLINK') && lines[1].endsWith('"Arabic, Mesopotamian"'), 'CSV neutralises = and quotes an embedded comma')
+// A spreadsheet can strip a leading TAB or CR and then read the = after it as a formula (OWASP's list), so those
+// two lead characters are neutralised too, the same as the library's useCsvExport.
+const tabCell = M.buildCsv([{ a: '\t=cmd' }], [{ key: 'a', header: 'A' }]).split('\r\n')[1]
+ok(tabCell === "'\t=cmd", `CSV neutralises a leading TAB (got ${JSON.stringify(tabCell)})`)
+const crCell = M.buildCsv([{ a: '\r=cmd' }], [{ key: 'a', header: 'A' }]).slice('A\r\n'.length)
+ok(crCell === '"\'\r=cmd"', `CSV neutralises a leading CR, then quotes it (got ${JSON.stringify(crCell)})`)
 
 // 9. platforms: the preset is "nothing in own language, 60%+ online" (the 220), and the app chart counts
 //    each COUNTRY once, with countries outside Apple's feed kept as "not measured", never dropped

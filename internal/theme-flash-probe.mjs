@@ -10,12 +10,12 @@
  *            to rebuild — but it is NOT a standing check and is not expected to run again
  *            unless that class of bug returns.
  *
- * WHY: the Driver sees (a) a light→dark FLASH on load and (b) the basemap flipping
+ * WHY: a reader sees (a) a light→dark FLASH on load and (b) the basemap flipping
  * FULLY light after a legend click / tab click. "It looks dark to me" is not
  * evidence — this tool turns the basemap's brightness into NUMBERS sampled over
  * time, before and after every UI action, so the bug (and the fix) is a checked
  * fact on both surfaces. It needs NO handle to the `map` object hidden inside the
- * shadow DOM: it only looks at pixels, exactly like the Driver does.
+ * shadow DOM: it only looks at pixels, exactly like a reader does.
  *
  * HOW: WebGL canvases cannot be read back (Mapbox does not keep the drawing buffer),
  * so the probe deep-finds `canvas.mapboxgl-canvas` through every nested shadow root

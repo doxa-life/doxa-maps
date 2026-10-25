@@ -5,7 +5,7 @@
  *
  *   node library/scripts/boundaries/build-web-boundaries.mjs
  *
- * WHY. rega measured ~3.6 MB of boundary GeoJSON (world-adm0 1.9 MB, gb-IND-ADM1 1.6 MB) costing
+ * WHY. ~3.6 MB of boundary GeoJSON was measured (world-adm0 1.9 MB, gb-IND-ADM1 1.6 MB) costing
  * 5–6 s of MapLibre worker parsing before the first territory draws, on every page of every
  * partner site. A web map drawn at zoom 1–7 needs a fraction of those vertices. The FULL files stay
  * as they are: posters and print use them, and so does every build-time point-in-polygon.
@@ -21,8 +21,9 @@
  *
  * VALIDATED, the run FAILS otherwise: the same feature count, the same keys, the same polygon-part
  * count (no dropped island), and the same property names and values on every feature.
- * The measured report (size, parts, area error, point-in-polygon drift) is in
- * _qa-cycle/03-deployment-cycle/REPORT-WEB-BOUNDARIES.md.
+ * MEASURED: the world file goes from 1,866 KB to 383 KB (134 KB gzipped) with all 162 features and all
+ * 572 polygon parts; India's from 1,796 KB to 227 KB with all 36 and all 452. A second run writes
+ * identical bytes.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'

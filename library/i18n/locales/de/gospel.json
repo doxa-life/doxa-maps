@@ -1,5 +1,4 @@
 {
-  "_note": "SHORT UI LABELS ONLY for the gospel-resources bundle. The explanatory prose on those surfaces stays in English on purpose and is NOT in this file; prose.english is the one translated line that says so.",
   "prose": {
     "english": "Die erläuternden Hinweise unten sind auf Englisch."
   },
@@ -12,7 +11,8 @@
     "clear": "Suche löschen",
     "none": "Nichts passt zu diesem Namen, dieser Sprache oder diesem Code.",
     "placeholderShort": "Gruppe, Sprache oder ISO-Code",
-    "showingOf": "{shown} von {total} Treffern angezeigt — weitertippen, um einzugrenzen."
+    "showingOf": "{shown} von {total} Treffern angezeigt — weitertippen, um einzugrenzen.",
+    "aria": "Volksgruppe, Sprache oder ISO-Code suchen"
   },
   "legend": {
     "title": "Unerreichte Volksgruppen ohne gefundene Evangeliums-Ressource",
@@ -78,7 +78,17 @@
     "everyResource": "Alle Ressourcen auf",
     "alsoSpeak": "Sprechen ebenfalls",
     "share": "Teilen",
-    "linkCopied": "Link kopiert"
+    "linkCopied": "Link kopiert",
+    "seeLargest": "Die {n} größten ansehen →",
+    "alreadyPraying": "{n} beten bereits",
+    "everyIn": "Jede in {country} genutzte Ressource",
+    "found": "Gefundene Evangeliums-Ressourcen ({n})",
+    "none": "Keine Ressource gefunden ({n})",
+    "showingOf": "{shown} von {total} werden angezeigt.",
+    "popSuffix": "· {pop} Menschen",
+    "hasResources": "verwandt: {lang} hat Ressourcen",
+    "loadingTable": "{table} wird geladen…",
+    "popCountries": "{pop} Menschen · {countries}"
   },
   "res": {
     "scripture": "Bibeltext",
@@ -166,7 +176,9 @@
     "allLanguages": "Alle Sprachen",
     "peopleGroup": "Volksgruppe",
     "peopleGroups": "Volksgruppen",
-    "scriptureHere": "Bibeltext in dieser Sprache"
+    "scriptureHere": "Bibeltext in dieser Sprache",
+    "noTextMeans": "Was „kein Text“ bedeutet.",
+    "pageLists": "Diese Seite listet"
   },
   "columns": {
     "People group": "Volksgruppe",
@@ -334,7 +346,9 @@
     "c2Unit": "Menschen in den Volksgruppen, deren PRIMÄRE Sprache dies ist — nicht Sprecher der Sprache",
     "c3Title": "Länder mit den meisten unversorgten Sprachen",
     "c3Sub": "Die {n} Länder mit den meisten Sprachen, für die nichts gefunden wurde. Die Balkenlänge ist jede im Land vorhandene Sprache.",
-    "c3Unit": "im Land vorhandene Sprachen (eine grenzüberschreitende Sprache zählt in jedem Land)"
+    "c3Unit": "im Land vorhandene Sprachen (eine grenzüberschreitende Sprache zählt in jedem Land)",
+    "noneHero": "{nNone} von {nLang} Sprachen haben {noScripture} — die Sprachen von {popNone} Menschen.",
+    "noneHeroFound": "keine Bibel und keinen Film in den geprüften Beständen"
   },
   "filter": {
     "showingOnly": "Nur {what} werden angezeigt.",
@@ -368,5 +382,58 @@
   },
   "deaf": {
     "sunTaughtIn": "SUN wird in {countries} bereits von {organisation} unterrichtet."
+  },
+  "gap": {
+    "popLine": "{pop} Menschen · {iso3}",
+    "wayIn": "Zugang: {via}",
+    "hasNoText": "hat {what} — kein Text gefunden",
+    "showingOnly": "Es werden nur {what} angezeigt.",
+    "seeLargest": "Die {n} größten ansehen →",
+    "kind": {
+      "none": "Gruppen ohne jeden Fund",
+      "some": "Gruppen mit einzelnen Ressourcen",
+      "hnr": "Gruppen, die das Evangelium hören können, aber keinen Bibeltext in den geprüften Beständen haben",
+      "all": "Gruppen mit Bibel und Film"
+    }
+  },
+  "chip": {
+    "scriptureAudio": "Bibel, {medium} · {source}",
+    "bibleVideoOf": "Bibelvideo · {source}",
+    "loading": "Ressourcen werden geladen…",
+    "peopleWord": "Menschen",
+    "alreadyPraying": "beten bereits",
+    "exhausted": "erschöpft",
+    "together": "zusammen mit"
+  },
+  "gapHero": {
+    "hero": "{groups} Volksgruppen {growing} {noFound} {pop} Menschen, geschätzt {deaths} Todesfälle pro Tag.",
+    "growing": "wachsen",
+    "found": "ohne Bibel und ohne Film in den geprüften Beständen —"
+  },
+  "ui": {
+    "noCode": "kein Code",
+    "unnamed": "unbenannte Sprache",
+    "hideKey": "Legende einklappen",
+    "showKey": "Legende ausklappen",
+    "largest": "Größte Gruppen ohne jeden Fund",
+    "nobodyPraying": "Nichts gefunden, und niemand betet",
+    "concentrates": "Wo sich die Lücke ballt",
+    "linkUnchecked": "Dieser Link wurde nicht geprüft."
+  },
+  "rows": {
+    "scriptureHere": "Bibel in dieser Sprache",
+    "audio": "Bibel",
+    "bibleVideo": "Bibelvideo",
+    "gospelPresentation": "Evangeliumsdarstellung",
+    "studyNotes": "Studiennotizen",
+    "readOnline": "online lesen",
+    "audioScripture": "Bibel als Audio",
+    "listenBrowser": "Im Browser anhören",
+    "inBrowser": "Im Browser — {media}",
+    "readHere": "In dieser Sprache lesen",
+    "listenHere": "In dieser Sprache hören",
+    "wordsOfLife": "Worte des Lebens — {name}",
+    "gospelAudio": "Evangeliums-Audio",
+    "discipleship": "{brand} Jüngerschafts-Schulung"
   }
 }

@@ -1,7 +1,7 @@
 <script setup>
 /**
  * GiCharts.vue — the right rail: FOUR charts, each answering one plain question about the groups shown,
- * chosen to show a newcomer the GAPS they would not otherwise see (Driver, 2026-09-27: "a reader can't
+ * chosen to show a newcomer the GAPS they would not otherwise see (2026-09-27: a reader can't
  * tell what they're saying"; "showcase the gaps ... the biggest, most helpful, clearest data"). Each
  * carries its question as the title, says what one bar is and what it counts, and ends in a one-line
  * takeaway computed from the same rows.
@@ -85,7 +85,7 @@ function onBar(row) {
 useShadowStyles(
   '.gic{display:flex;flex-direction:column;gap:4px;height:100%;overflow-y:auto;box-sizing:border-box;padding:10px 12px 16px;background:#fff;color:#3b463d;font:13px/1.35 Roboto,-apple-system,"Segoe UI",sans-serif;scrollbar-width:thin}' +
   // A flex column's children SHRINK by default: inside this scroll box they were squeezed instead of
-  // scrolled, so the measure toggle collapsed to a 2px line and a caveat card was cut in half (rega).
+  // scrolled, so the measure toggle collapsed to a 2px line and a caveat card was cut in half.
   '.gic > *{flex-shrink:0}' +
   '.gic-seg{align-self:flex-start;display:inline-flex;border:1px solid #d1d4cd;border-radius:6px;overflow:hidden;margin-bottom:4px}' +
   '.gic-seg button{font:inherit;font-size:12px;padding:4px 12px;min-height:26px;border:0;background:#fff;color:#3b463d;cursor:pointer}' +

@@ -23,11 +23,10 @@ function setGlobal(name, value) {
  * on a light country — that case is the point of the map, not a rendering fault. A
  * country Doxa does not work is left uncoloured, not drawn as covered.
  *
- * > design note 2026-08-01: "mapping out the gospel resources is super important for me
- * > … key city posters, cities with internet, gospel resources — all these are
- * > missing maps."
+ * Why this map exists: gospel resources had no map of their own, alongside key city posters
+ * and cities with internet.
  *
- * MOBILE FIRST, deliberately. The brief asked for mobile-friendliness before this
+ * MOBILE FIRST, deliberately. Mobile-friendliness was a requirement before this
  * map existed, so it is built that way rather than retrofitted:
  *   - one WebGL context (the ~16-cap rule; this is the app's only map pane)
  *   - tap-to-select with a bottom SHEET, not a hover popup — hover does not exist
@@ -77,9 +76,10 @@ function setGlobal(name, value) {
  * boundaries. Verified against the corpus's own `country_count`: 0 of 2,106 rows
  * disagree, and the 5-country string above parses to exactly its 5 real names.
  */
-import { computed, inject, ref, shallowRef, markRaw, onMounted, onBeforeUnmount } from 'vue'
+import { computed, inject, ref, shallowRef, markRaw, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOptionalT } from '@map/composables/useOptionalT.js'   // vue-i18n stays: two guarded LOCALE reads below
+import { formatList } from '@map/i18n/index.js'
 import { applyPeopleGroupList } from '@map/lists/peopleGroupList.js'
 import { useShadowStyles } from '@map/composables/useShadowStyles.js'
 import { addMapAttribution } from '@map/composables/useMapAttribution'
@@ -89,6 +89,8 @@ import { engineUiLocale } from '@map/composables/useMapInstance.js'
 // children). ThemeToggleButton is omitted: this profile's isDark is a read-only
 // computed off profile-config with no theme-toggle handler to wire it to.
 import MapToolbar       from '@map/components/map-controls/MapToolbar.vue'
+import MapInfoButton    from '@map/components/map-controls/MapInfoButton.vue'
+import { useEdgeScrollAffordance } from '@map/composables/useEdgeScrollAffordance.js'
 import ZoomInButton     from '@map/components/map-controls/ZoomInButton.vue'
 import ZoomOutButton    from '@map/components/map-controls/ZoomOutButton.vue'
 import LocationButton   from '@map/components/map-controls/LocationButton.vue'
@@ -101,6 +103,16 @@ import { installRtlTextPlugin } from '@map/maps/rtl-text.js'
 import { resolveNamedStyle } from '@map/styles/registry.js'
 
 const profileConfig = inject('profileConfig', ref(null))
+// EDGE SCROLL AFFORDANCE: the gray side strips that say the page scrolls PAST the map (UPG-100's pattern).
+// This map builds its map RAW with new gl.Map, not through useMapInstance, so nothing wired the strips
+// for it and a phone had no scroll escape at the map's edges. Flagged per embed, because it is a
+// promise: <… edge-scroll-affordance="false"> or config.edgeScrollAffordance switches it off for a map
+// with nothing beneath it. Defaults on, as UPG-100's does.
+const EDGE_SCROLL_AFFORDANCE = computed(() => {
+  const v = profileConfig.value?.edgeScrollAffordance
+  return v === undefined || v === null ? true : !(v === false || v === 'false')
+})
+let detachEdges = null
 const isDark = computed(() => profileConfig.value?.isDark === true)
 // The token through the library's channel (documentation/reference-universal-props.md): the
 // profile-config tk, then ProfileLoader's injected mapboxToken (which carries the page-wide shared
@@ -123,10 +135,80 @@ const grProvider = resolveMapProvider(profileConfig)
 const assetsBase = computed(() => resolveAssetsBase(profileConfig.value))
 
 const mapEl = ref(null)
+// ★ THE LICENCE CREDIT, COMPACT (plugin-designer 5.8, the bottom-of-map standard). The engine's own
+// AttributionControl, with geoBoundaries as custom attribution (its licence asks for the name and a link back).
+// On a narrow map the engine draws it compact, EXPANDED at first; CREDIT_FOLD_MS after it first shows,
+// foldCredit folds it to its (i) the way the engine's own drag does (it drops the -compact-show class), and a
+// tap on the (i) opens it again. The style may still be loading when the map is built, so it looks every half
+// second, for up to 30 s, and stops once the credit is there and folded, or is full width (not compact).
+const GB_CREDIT = '<a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a>'
+const CREDIT_FOLD_MS = 3000
+let creditTimer = 0
+function foldCredit(triesLeft = 60) {
+  creditTimer = 0
+  const box = mapEl.value
+  if (!box) return
+  const shown = box.querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show, .mapboxgl-ctrl-attrib.mapboxgl-compact-show')
+  // The clock starts once the STYLE's own credit has joined geoBoundaries (it arrives with the style's
+  // sources), so the first expanded show names the basemap too; measured, the fold otherwise came while
+  // only "geoBoundaries" had shown. After 30 s it starts anyway.
+  const inner = shown && shown.querySelector('.maplibregl-ctrl-attrib-inner, .mapboxgl-ctrl-attrib-inner')
+  const full = !!(inner && inner.textContent.replace('geoBoundaries', '').replace(/[|\s]/g, '').length)
+  if (shown && (full || triesLeft <= 0)) {
+    creditTimer = setTimeout(() => { creditTimer = 0; shown.classList.remove('maplibregl-compact-show', 'mapboxgl-compact-show') }, CREDIT_FOLD_MS)
+    return
+  }
+  const credit = box.querySelector('.maplibregl-ctrl-attrib, .mapboxgl-ctrl-attrib')
+  if (!shown && credit && !/attrib-empty/.test(credit.className)) return
+  if (triesLeft > 0) creditTimer = setTimeout(() => foldCredit(triesLeft - 1), 500)
+}
+function addCompactCredit(map, gl) {
+  if (typeof gl?.AttributionControl !== 'function') return false
+  try { map.addControl(new gl.AttributionControl({ customAttribution: GB_CREDIT }), 'bottom-right') } catch (_) { return false }
+  foldCredit()
+  return true
+}
 const mapRef = shallowRef(null)
 const rows = ref([])
 const selected = ref(null)
 const err = ref(null)
+
+// ─── "What can this map do?" is on its way (Prayer Progress's announcement) ────────────────────
+// The control column, with its ⓘ on top, renders only once the map exists, after the data, which can
+// take tens of seconds on a slow phone. So at mount this map tells the gallery's MapInfo a control is
+// COMING, and MapInfo waits for the map instead of a clock rather than flashing its floating ⓘ first.
+// A failure (err) or an unmount before the map exists withdraws it, so the floating ⓘ shows at once.
+// A standalone page has no MapInfo: nothing answers and nothing changes.
+function announceInfoPending(pending) {
+  const el = mapEl.value
+  if (!el) return
+  try { el.dispatchEvent(new CustomEvent('dxmaps:mapinfo-pending', { bubbles: true, composed: true, detail: { pending } })) } catch (_) {}
+}
+// A MapInfo that mounts after this map asked into the void announces itself; answer it again.
+const reannounceInfoPending = () => { if (!cardMode.value && !mapRef.value && !err.value) announceInfoPending(true) }
+watch(err, (e) => { if (e) announceInfoPending(false) })
+
+// ─── On a phone the control column starts BELOW the folded legend ─────────────────────────────────
+// The ⓘ is the column's top control, and its one-time pointer runs sideways from it across the map's
+// top band, which on a phone is this legend's. MapToolbar's phone rule puts the column at top:72px,
+// inside that band, so the pointer lay over the legend's title and buttons. The column now starts 8px
+// below the FOLDED legend's measured bottom, whatever its height in each language. Measured only while
+// folded, and before the toolbar exists, so opening the legend never moves the controls under the reader's
+// thumb (MapInfo would re-place its pointer on its 1.5 s timer, but the controls should not jump). Desktop
+// is unchanged.
+const legendEl = ref(null)
+const toolbarTop = ref(0)
+let legendRO = null
+function measureLegend() {
+  const el = legendEl.value
+  if (!el || !narrow.value || legendOpen.value) return
+  const b = el.offsetTop + el.offsetHeight
+  if (b > 0) toolbarTop.value = b + 8
+}
+function watchLegend() {
+  try { legendRO = new ResizeObserver(measureLegend); if (legendEl.value) legendRO.observe(legendEl.value) } catch (_) { legendRO = null }
+  measureLegend()
+}
 
 // GAP = what is missing (default). COVERAGE = what was found. See the header note.
 const mode = ref('gap')
@@ -197,7 +279,7 @@ const activeBands = computed(() => (mode.value === 'gap' ? BANDS : COVER_BANDS))
  * The claim above — "all three sit apart from the clay ramp" — was false for the one that
  * matters. Tier 0 was #7d3b30 and the darkest country fill is #7d3b30: THE SAME COLOUR. So in
  * exactly the countries with 40+ groups having nothing, the pins that matter most dissolved
- * into their own country. Reported by the Driver; confirmed by reading the two tables.
+ * into their own country. Reported from use; confirmed by reading the two tables.
  *
  * Hue alone cannot fix this, because a choropleth and its pins compete for the same range at
  * every zoom. So the states differ in FORM, which survives any background:
@@ -239,6 +321,12 @@ const linkVerify = ref(null)
 const pgLoading = ref(false)
 const pgErr = ref(null)
 const selectedGroup = ref(null)   // set = the people-group detail is showing
+// The tap hint (PinHint) goes away on the reader's first pin. It listens for uiStore.selectPeopleGroup,
+// which this map never calls: it selects through its own refs. So a country or a people-group selection
+// here says so with the event PinHint also hears, from inside this map's root.
+watch([selected, selectedGroup], ([c, g]) => {
+  if ((c || g) && mapEl.value) mapEl.value.dispatchEvent(new CustomEvent('dxmaps:pin-selected', { bubbles: true, composed: true }))
+})
 const pinRows = shallowRef([])    // [name, lat, lng, iso3, code, population, tier, slug]
 const doxaTotal = ref(0)          // every group on Doxa's roster, placed or not
 const doxaUnplaced = ref(0)       // on the roster, no coordinates in this build yet
@@ -372,12 +460,11 @@ const cardShard = (slug) => {
 const sxScope = (sx) => {
   if (!sx) return ''
   const n = Number(sx.parts) || 0
-  /* ⚠ THE WORDS ALREADY EXISTED, TRANSLATED, and I asked for new keys without looking. rega found
-     gospel.charts.newTestament and gospel.charts.fullBible in all 11 locales — used by the charts
-     leaf — while my gospel.res.* existed nowhere, so every locale including Arabic fell back to my
-     English defaults, and even en read "full Bible" against the catalogue's "Full Bible". Two keys
-     for one word is the drift I keep fixing in other people's code; these are the same words, so
-     they are the same keys. Only the part count needed a new one. */
+  /* ⚠ THE WORDS ALREADY EXISTED, TRANSLATED. gospel.charts.newTestament and gospel.charts.fullBible
+     are in all 11 locales (used by the charts leaf), while the gospel.res.* keys first added here
+     existed nowhere, so every locale including Arabic fell back to the English defaults, and even en
+     read "full Bible" against the catalogue's "Full Bible". Two keys for one word is drift; these are
+     the same words, so they are the same keys. Only the part count needed a new one. */
   const name = n === 66 ? t('gospel.charts.fullBible')
     : n === 27 ? t('gospel.charts.newTestament')
     : n ? t('gospel.res.nParts', { n: fmt(n) })
@@ -510,7 +597,7 @@ function openFromUrl() {
   const country = (sp.get('country') || '').trim()
   /* ⚠ A COUNTRY IS AN ADDRESS TOO, and it was not one: ?country=IND did nothing at all unless a
      ?code came with it, because country was only ever a tie-breaker between two pins sharing a
-     language. The brief's second requirement — click a country, see its resources — had no URL,
+     language. The second requirement — click a country, see its resources — had no URL,
      which is precisely what a partner embeds. Accepts the ISO3 or the country's own name. */
   if (!code && country) {
     const key = country.toUpperCase()
@@ -714,7 +801,9 @@ const gapHnr = computed(() => {
     if (c.au && /audio/.test(c.au.m || '')) has.push('audio Scripture')
     if (c.f) has.push('the JESUS Film')
     if (c.bv) has.push('Bible video')
-    out.push({ i, name: r[0], lat: r[1], lng: r[2], iso3: r[3], code: r[4], pop: r[5], has: has.join(', ') })
+    // CONJUNCTION: the group HAS all of these. It renders into gospel.gap.hasNoText, whose ar message
+    // is "لديها {what} — لا يوجد نص", so an English comma was printing inside Arabic prose.
+    out.push({ i, name: r[0], lat: r[1], lng: r[2], iso3: r[3], code: r[4], pop: r[5], has: formatList(has, { type: 'conjunction' }) })
   }
   return out.sort((a, b) => b.pop - a.pop).slice(0, 40)
 })
@@ -914,7 +1003,7 @@ const fill = (str, params) => (params
 // pins.approximate into gospel.pins.approximate on the translated path and sent the fallback looking
 // under EN_MESSAGES.gospel, where pins.* does not exist. studio caught it as a SEMANTIC conflict
 // before it landed; passing '' keeps every key exactly as the caller wrote it.
-// C4 wave 3a, gospel-plugin's call (2026-09-26): take the LOCALE-HONOURING fallback. Their reason is
+// C4 wave 3a, the plugin owner's call (2026-09-26): take the LOCALE-HONOURING fallback. Their reason is
 // the bundle's purpose -- most partners drop an element or an iframe and never install vue-i18n, so
 // those hosts got enLookup's ENGLISH while the bundle already shipped all 11 catalogues. "That is a
 // bug, not a decision." tStatic honours the runtime locale and keeps English as the LAST resort.
@@ -939,7 +1028,9 @@ const readerLang = () => {
    fallback silently changes what a reader sees, so this one was measured before it was deleted. */
 
 const SE_KIND = { PDF: 'PDF', audio: 'audio', sab: 'app', study: 'study notes', viewer: 'read online' }
-const seKinds = (k) => (Array.isArray(k) ? k : []).map((x) => SE_KIND[x] || x).join(', ')
+// CONJUNCTION: Scripture Earth holds all of these kinds for the language, and they render beside a
+// keyed label at the pin sheet, so the separator is read by the same reader as the label.
+const seKinds = (k) => formatList((Array.isArray(k) ? k : []).map((x) => SE_KIND[x] || x), { type: 'conjunction' })
 
 const prayKey = (name, iso3) =>
   `${String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}|${String(iso3 || '').toUpperCase()}`
@@ -1077,7 +1168,7 @@ const withoutResources = computed(() => groupsForCountry.value.filter((r) => !ha
  * coastal Karnataka; four more share a second point a few kilometres away.
  *
  * The coordinates also carry FALSE PRECISION: 1,274 of them are given to six decimal places,
- * which is metre resolution on a figure that describes where a people is found. Rendering that
+ * which is metre resolution on a point that is only approximate (locations are generalised). Rendering that
  * without comment invites a reader to treat a dot as an address.
  *
  * So the sheet says what the dot is, and where a point is shared it says how many share it.
@@ -1215,7 +1306,7 @@ const VSTATE = {
 }
 // A URL with no verification entry is UNCHECKED — never quietly shown as working.
 const vchip = (url) => VSTATE[verifyOf(url)?.state || 'unknown'] || VSTATE.unknown
-const vtitle = (url) => verifyOf(url)?.detail || 'This link has not been checked.'
+const vtitle = (url) => verifyOf(url)?.detail || t('gospel.ui.linkUnchecked')
 
 // A big field (India carries 856 groups) would otherwise render hundreds of buttons
 // into a phone sheet on the first tap. Capped, with the real total always stated and
@@ -1627,12 +1718,18 @@ function openPin(i) {
  * positioned by no stylesheet at all.
  *
  * ONE IMPLEMENTATION, NOT TWO. This was first fixed with a local copy built on the already-
- * exported engineStylesheetUrl, because nothing shared needed changing for it. exp-shepherd
+ * exported engineStylesheetUrl, because nothing shared needed changing for it. The library
  * then exported ensureEngineCSS for the same defect on connectivity-map, so this converges
  * onto theirs — and theirs is the better one: it also waits on a link that is PRESENT BUT
  * NOT YET LOADED, a case the local copy would have skipped straight past.
  */
 onMounted(async () => {
+  if (!cardMode.value) {
+    announceInfoPending(true)
+    window.addEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
+    watchLegend()
+    detachEdges = useEdgeScrollAffordance(mapEl.value?.parentElement || null, { enabled: EDGE_SCROLL_AFFORDANCE.value })
+  }
   /* ⚠ CARD MODE RETURNS BEFORE THE ENGINE. Everything below this block — the engine script, its
      stylesheet, the boundaries, the pin index — is what makes the card expensive, so none of it
      runs. One fetch, then render. */
@@ -1721,7 +1818,7 @@ onMounted(async () => {
       style: resolveNamedStyle(isDark.value ? 'ink' : 'paper', grProvider).style
         || (isDark.value ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v11'),
       accessToken: mapboxToken.value,
-      /* THE ENGINE'S OWN STRINGS, IN THE READER'S LANGUAGE (rega row 34). This leaf calls
+      /* THE ENGINE'S OWN STRINGS, IN THE READER'S LANGUAGE. This leaf calls
          `new gl.Map` directly instead of going through useMapInstance, so it did not inherit
          the locale map the shared composable passes — "Toggle attribution" and the canvas's
          accessible name "Map" stayed English under ar while every string we own was Arabic.
@@ -1746,7 +1843,7 @@ onMounted(async () => {
     /**
      * ═══ THE CREDIT MUST NAME THE BASEMAP THAT IS ACTUALLY DRAWN ═════════════════════════
      *
-     * REPORTED by rega: under ?provider=maplibre this line read "geoBoundaries · Mapbox ·
+     * Under ?provider=maplibre this line used to read "geoBoundaries · Mapbox ·
      * © OpenStreetMap" while the tiles came from OpenFreeMap. Crediting the wrong supplier is
      * worse than crediting none — it is a false statement about whose work is on screen, and
      * OpenFreeMap's terms ask for their credit.
@@ -1762,14 +1859,15 @@ onMounted(async () => {
      * against https://tiles.openfreemap.org/planet before writing this.
      */
     const isMaplibre = grProvider === 'maplibre'
-    addMapAttribution(map, { boundaries: true, basemap: !isMaplibre })
-    if (isMaplibre && typeof gl.AttributionControl === 'function') {
-      try { map.addControl(new gl.AttributionControl({ compact: false })) } catch (_) { /* credit is not worth breaking the map for */ }
-    }
+    // ★ NOW ONE CREDIT: the engine's own control on BOTH engines, compact on a narrow map (plugin-designer 5.8),
+    // with geoBoundaries as custom attribution. It still reads the basemap wording from the style, as above; under
+    // Mapbox the style names Mapbox and OpenStreetMap. An engine without the control keeps the shared line, with
+    // the basemap credit it can name.
+    if (!addCompactCredit(map, gl)) addMapAttribution(map, { boundaries: true, basemap: !isMaplibre })
     /**
      * ═══ 'load' MAY HAVE ALREADY FIRED ════════════════════════════════════════════════════
      *
-     * ⚠ THE DEFECT THIS WAS WRITTEN FOR WAS RETRACTED. rega first reported that under
+     * ⚠ THE DEFECT THIS WAS WRITTEN FOR WAS RETRACTED. A first reading said that under
      * ?provider=maplibre this map drew the basemap and nothing else; re-measured by polling
      * until the tiles and features were actually in, it draws 170 fills and 2,107 pins on both
      * engines. The original reading was taken on a fixed 18 s timer, right as the layers
@@ -1796,6 +1894,12 @@ onMounted(async () => {
   } catch (e) { err.value = String(e.message || e) }
 })
 onBeforeUnmount(() => {
+  if (creditTimer) { clearTimeout(creditTimer); creditTimer = 0 }
+  if (typeof window !== 'undefined') window.removeEventListener('dxmaps:mapinfo-host', reannounceInfoPending)
+  try { legendRO?.disconnect() } catch (_) {}
+  try { detachEdges?.() } catch (_) {}
+  detachEdges = null
+  if (!mapRef.value) announceInfoPending(false)
   // ★ RELEASE THE TEST HOOKS. Each pins whatever it closes over — a map instance pins its
   // canvas, its sources, and through them the whole app — so every mount that leaves one behind
   // leaks another copy, measured at roughly 10 MB each.
@@ -1818,7 +1922,7 @@ function setMode(m) {
   repaintProvinces()
 }
 
-/* ═══ NUMBER FORMAT IS HELD FOR THE DRIVER ════════════════════════════════════════════════
+/* ═══ NUMBER FORMAT IS HELD FLEET-WIDE ════════════════════════════════════════════════
  * This briefly formatted with the locale i18n resolved, which is almost certainly the right
  * answer — but it decides number format for THIS map alone, and the decision belongs to every
  * map at once or none. Reverted on that ground, not because the finding was wrong.
@@ -1941,6 +2045,15 @@ useShadowStyles(
   // 2,107 pins to queryRenderedFeatures, because that API does not care whether anything
   // is visible. The size is stated outright now so no engine stylesheet can take it.
   '.gm-map{position:absolute;inset:0;width:100%;height:100%}' +
+  // THE CREDIT CORNER (plugin-designer 5.8; this map has no footer sheet, its legend panel is at the top). The
+  // engine's compact credit sits at the bottom END corner, opposite the gallery's round ☰ (bottom-right;
+  // bottom-left in Arabic), and is NOT lifted by --map-fab-clearance: lifted, it floated up the page. Where the
+  // round button can show, the corner sits above the scroll-edge strips so a tap on its (i) lands, and the
+  // expanded credit stops 64px short of the far edge, clear of the button.
+  '@media(max-width:767.98px){' +
+  '.gm .maplibregl-ctrl-bottom-right,.gm .mapboxgl-ctrl-bottom-right{inset-inline-end:0 !important;inset-inline-start:auto !important;max-width:calc(100% - 64px);z-index:3}' +
+  '.gm .maplibregl-ctrl-bottom-right .maplibregl-ctrl,.gm .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl{margin:0 0 10px;margin-inline-end:10px}' +
+  '}' +
   // LEGEND: a BOUNDED, left-anchored panel — NOT a full-width strip.
   // It used to be `left:8px;right:8px`, which is a strip spanning the whole map
   // (MEASURED 1264px of a 1280px map, 98.75%). That collided with the floating
@@ -1957,7 +2070,7 @@ useShadowStyles(
   // KEEP THIS BYTE-IDENTICAL to cities-internet/connectivity-map.vue: they are
   // clones and the whole point of fixing them together is that they not diverge.
   /* ═══ THE LEGEND MUST NEVER RUN OFF THE MAP ═══════════════════════════════════════════
-     Reported by the Driver: it overlapped the bottom of the page. It is absolutely
+     Reported from use: it overlapped the bottom of the page. It is absolutely
      positioned inside the map, so its height was whatever its content happened to be — on a
      short viewport that is taller than the map itself, and the overflow simply escaped.
      Capped to the map's own height and scrolled inside. The cap is the CONTAINER's height,
@@ -1970,7 +2083,7 @@ useShadowStyles(
   '.gm-linklist span{color:#6d766e}' +
   '.is-dark .gm-linklist{background:rgba(59,70,61,.6);border-color:#6d766e;color:#f3f3f1}' +
   '.is-dark .gm-linklist span{color:#d1d4cd}' +
-  /* ⚠ LOGICAL, NOT PHYSICAL (Driver-found, rega measured on main 52eeb0db). Under ar the five
+  /* ⚠ LOGICAL, NOT PHYSICAL (found in use, measured on main 52eeb0db). Under ar the five
      map controls mirror to the LEFT while `left:8px` kept the legend physically left, so the
      legend sat underneath all five of them. cities-internet shares this class name and passed
      for one reason: it anchors inline. Every physical left/right in this stylesheet that has a
@@ -1982,14 +2095,27 @@ useShadowStyles(
   '.gm-sheet-full{top:0;max-height:100%;border-radius:0}' +
   '@media(min-width:700px){.gm-sheet-full{inset:0;width:auto;border-radius:0}}' +
   '.gm-card-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;color:#6d766e;padding:24px;text-align:center}' +
+  '@media(max-width:699px){.gm .map-toolbar.map-toolbar{top:var(--gm-toolbar-top,72px)}}' +
+  // The strips sit at z-index 1: above the canvas, so a vertical drag on them scrolls the page, and UNDER
+  // everything else, including the engine's corner controls (z 2), so the licence credit stays on top.
+  '.map-scroll-edge{position:absolute;top:0;bottom:0;width:40px;z-index:1;touch-action:pan-y;pointer-events:auto;background:transparent}' +
+  '.map-scroll-edge--left{left:0}' +
+  '.map-scroll-edge--right{right:0}' +
   '.gm-legend{position:absolute;top:8px;inset-inline-start:8px;width:var(--map-legend-width,380px);' +
   'max-height:calc(100% - 16px);overflow-y:auto;overscroll-behavior:contain;' +
-  'max-width:calc(100% - 16px);box-sizing:border-box;z-index:4;padding:8px 10px;' +
+  'max-width:calc(100% - 16px);box-sizing:border-box;z-index:21;padding:8px 10px;' +
   'border-radius:10px;background:rgba(255,255,255,.94);color:#0f1419;' +
   "font:12px/1.35 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.16)}" +
   // Narrow screens: the rail is still on the right, so the legend must stop short
   // of it rather than run under it. 46px = 32px button + 3px inset + clearance.
   '@media(max-width:480px){.gm-legend{width:auto;inset-inline-end:46px}}' +
+  // THE LEGEND OVERLAPS ITS MAP CONTROLS (the legend's z-index 21 above). It shares one stacking context with the
+  // gallery's ⓘ pointer (z 20; the gallery pane and this map's host form none of their own), and at 4 that pointer
+  // was drawn over the open legend's title; the map's own toolbar is z 10. It never meets the gallery's round ☰
+  // (z 15): the legend hangs from the top and stops at 70% on a phone, and the button sits at the bottom. While a
+  // country or state SHEET is open the legend drops back under it (z 4 < the sheet's 6), so the sheet stays on top
+  // and the round ☰ stays above the sheet; the gallery's drawer and the ⓘ dialog stay above all of it.
+  '.gm.has-sheet .gm-legend{z-index:4}' +
   // The caret's box matches .stl-collapse-btn exactly (22x20, 5px radius, 1px border) so the
   // two legends read as the same control. The colours are this map's, because the palette is
   // the map's and the geometry is the fleet's.
@@ -2064,7 +2190,10 @@ useShadowStyles(
   '.gm-sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;max-height:62%;overflow-y:auto;' +
   'background:#fff;color:#0f1419;border-radius:14px 14px 0 0;padding:14px 16px 22px;' +
   "font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;box-shadow:0 -6px 26px rgba(0,0,0,.28)}" +
-  '@media(min-width:700px){.gm-sheet{left:auto;right:14px;bottom:14px;width:330px;border-radius:12px}}' +
+  // The corner card sits at the inline END, opposite the legend (inline START), in both directions.
+  // It said right:14px, so in Arabic the legend mirrored to the right and the card stayed on it,
+  // covering it at every desktop width. Cities' copy of this rule was already logical.
+  '@media(min-width:700px){.gm-sheet{inset-inline-start:auto;inset-inline-end:14px;bottom:14px;width:330px;border-radius:12px}}' +
   '.is-dark .gm-sheet{background:#132019;color:#e5e7eb}' +
   '.gm-sh-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}' +
   '.gm-sh-name{font-weight:800;font-size:18px}' +
@@ -2090,7 +2219,8 @@ useShadowStyles(
   '.gm-qn{font-weight:700}' +
   '.gm-ql{opacity:.7}' +
   '.gm-qnone,.gm-qmore{padding:6px 8px;font-size:13.5px;color:#6d766e}' +
-  '.gm-modes{display:flex;gap:6px;margin-bottom:6px}' +
+  '.gm-modes{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px}' +
+  '.gm-modes .gm-fold{width:auto;margin:0;margin-inline-start:auto}' +
   '.gm-mode{font:600 10.5px inherit;padding:4px 10px;border-radius:999px;cursor:pointer;' +
   'border:1px solid rgba(0,0,0,.16);background:transparent;color:inherit;min-height:26px}' +
   '.gm-mode.on{background:#3b463d;border-color:#3b463d;color:#fff}' +
@@ -2177,21 +2307,28 @@ useShadowStyles(
   'font:600 11px inherit;padding:5px 11px;border-radius:8px;cursor:pointer;min-height:30px}' +
   '.is-dark .gm-back{border-color:rgba(255,255,255,.22)}' +
   '.gm-more{font-size:14px;opacity:.66;margin-top:2px}' +
-  /* ═══ THUMB-SIZED ON A PHONE, MEASURED AT 390x844 ═══════════════════════════════════════════
-   * The Gap / Resources toggle rendered 48x26 and 129x26, and the legend's fold button 316x32.
-   * WCAG 2.5.8 puts the AA floor at 24x24, so none of these FAILED — they were simply small for a
-   * thumb on a map that is mostly drag and pinch, where a missed tap pans the map instead. 44px is
-   * the comfortable target, and it costs nothing here: the legend is 124px of an 844px screen after
-   * the fold, so there is room. Narrow screens only — on a desktop these sit in a 290px card beside
-   * a pointer and 26px is the right density there.
+  /* ═══ SIZED FOR A PHONE, MEASURED AT 390x844 ════════════════════════════════════════════════
+   * History: the Gap / Resources toggle rendered 48x26 and 129x26, and the fold button 316x32; they
+   * went to 44px as the comfortable thumb target. Then the phone review found the folded legend too
+   * big (three rows, pill-round buttons, about 30% of the page), so they are 32px now and the fold
+   * button shares the mode row. 32px is still above WCAG 2.5.8's 24x24 AA floor. Narrow screens only;
+   * on a desktop these sit in a 290px card beside a pointer and 26px is the right density there.
    *
    * ⚠ AND IT MUST COME LAST. Written above .gm-mode's own rule it changed the font size and nothing
    * else: a media query adds NO specificity, and that rule sets min-height:26px, so the later plain
    * selector won. Measured by reading the computed style — min-height resolved to 26px while my
    * font-size had applied, which is what told me the rule was live and merely losing. */
+  // OPEN, the phone legend stops at 70% of the map and scrolls inside rather than covering all of it.
+  // FOLDED, it is one search line and one row of buttons: 30px buttons, a 28px search, 4px gaps and
+  // 6px/8px panel padding. At 32px with 10px sides the Arabic row overflowed by 9px and wrapped to a
+  // third line (133px folded at 390); these sizes keep it on two lines in both directions.
   '@media(max-width:699px){' +
-  '.gm-mode{min-height:44px;padding:0 14px;font-size:12px}' +
-  '.gm-fold{min-height:44px;font-size:12px}' +
+  '.gm-mode{min-height:30px;padding:0 8px;font-size:12px;border-radius:8px}' +
+  '.gm-fold{min-height:30px;font-size:12px;padding:3px 8px}' +
+  '.gm-q{min-height:28px;padding:4px 26px 4px 9px}' +
+  '.gm-search{margin-bottom:4px}' +
+  '.gm-modes{gap:4px;margin-bottom:4px}' +
+  '.gm-legend{max-height:70%;padding:6px 8px}' +
   '}',
   'doxa-gospel-map',
 )
@@ -2206,8 +2343,14 @@ useShadowStyles(
        override is gone. What stays LTR is each block of English EXPLANATORY PROSE, marked
        where it sits: those are still English by decision, and English inside an RTL box is
        the defect this replaced. -->
-  <div class="gm" :class="{ 'is-dark': isDark, 'has-sheet': !!(selected || showGapList) }">
+  <div class="gm" :class="{ 'is-dark': isDark, 'has-sheet': !!(selected || showGapList || selectedProvince) }" :style="narrow && toolbarTop ? { '--gm-toolbar-top': toolbarTop + 'px' } : null">
     <div v-show="!cardMode" ref="mapEl" class="gm-map"></div>
+    <!-- The edge scroll strips: direct siblings of the map inside .gm, the wrapper handed to
+         useEdgeScrollAffordance. The single-card page has no map, so no strips. -->
+    <template v-if="EDGE_SCROLL_AFFORDANCE && !cardMode">
+      <div class="map-scroll-edge map-scroll-edge--left" />
+      <div class="map-scroll-edge map-scroll-edge--right" />
+    </template>
     <!-- ⚠ CARD MODE RENDERED BLANK TWICE. First because the sheet read selected.country when card
          mode had no country; then because the sheet mounted on cardMode ALONE, before the shard
          fetch had set it. The sheet now waits for data, and this is what stands in until then —
@@ -2220,7 +2363,11 @@ useShadowStyles(
     <!-- Shared control rail — MapToolbar self-positions top-right. Zoom/Location/
          Fullscreen gate on the live map instance; ShareButton needs neither and
          always renders so the map is embeddable. -->
+    <!-- The TOP control is "What can this map do?": it opens the gallery's MapInfo for this tab, which then
+         hides its own floating button. It renders only where a MapInfo answers it, so a standalone page
+         has no dead button. Round and spaced, the library default. -->
     <MapToolbar v-if="mapRef">
+      <MapInfoButton    :is-dark="isDark" />
       <ZoomInButton     :map="mapRef"          :is-dark="isDark" />
       <ZoomOutButton    :map="mapRef"          :is-dark="isDark" />
       <LocationButton   :map="mapRef"          :is-dark="isDark" />
@@ -2228,7 +2375,7 @@ useShadowStyles(
       <ShareButton      :is-dark="isDark"      :embed-path="shareEmbedPath" />
     </MapToolbar>
 
-    <div v-if="!cardMode" class="gm-legend" :class="{ closed: !legendOpen && !narrow }">
+    <div v-if="!cardMode" ref="legendEl" class="gm-legend" :class="{ closed: !legendOpen && !narrow }">
       <!-- ═══ SOMEBODY ELSE'S LIST, SAID PLAINLY ════════════════════════════════════════
            First thing in the legend, because it is the first thing that is different about
            this map: the reader is looking at a subset somebody chose. Two numbers and one
@@ -2244,7 +2391,7 @@ useShadowStyles(
              accepts; the aria-label stays long, because a screen reader has no width. -->
         <input type="search" class="gm-q" v-model="q"
                :placeholder="narrow ? t('gospel.search.placeholderShort') : t('gospel.search.placeholder')"
-               aria-label="Find a people group, language or ISO code">
+               :aria-label="t('gospel.search.aria')">
         <button v-if="q" type="button" class="gm-qx" @click="q = ''" :aria-label="t('gospel.search.clear')">&times;</button>
       </div>
       <div v-if="q.trim().length >= 2" class="gm-qres">
@@ -2253,7 +2400,7 @@ useShadowStyles(
           <button v-for="m in matches.slice(0, 8)" :key="m.i" type="button" class="gm-qrow" @click="gotoMatch(m)">
             <i class="gm-dot" :style="{ background: PIN_COLOR[m.tier] }"></i>
             <span class="gm-qn">{{ m.name }}</span>
-            <span class="gm-ql">{{ m.lang || 'unnamed language' }} · {{ m.iso3 }}</span>
+            <span class="gm-ql">{{ m.lang || t('gospel.ui.unnamed') }} · {{ m.iso3 }}</span>
           </button>
           <div v-if="matches.length > 8" class="gm-qmore"><bdi dir="ltr">Showing 8 of {{ fmt(matches.length) }} matches — keep typing to narrow.</bdi></div>
         </template>
@@ -2262,16 +2409,19 @@ useShadowStyles(
       <div class="gm-modes">
         <button type="button" class="gm-mode" :class="{ on: mode === 'gap' }" @click="setMode('gap')">{{ t('gospel.mode.gap') }}</button>
         <button type="button" class="gm-mode" :class="{ on: mode === 'coverage' }" @click="setMode('coverage')">{{ t('gospel.mode.coverage') }}</button>
+        <!-- On a phone the fold button shares the mode row: two rows folded instead of three. -->
+        <button v-if="narrow" type="button" class="gm-fold" @click="toggleLegend"
+                :aria-expanded="legendOpen ? 'true' : 'false'">
+          <!-- The label names the ACTION: "Expand legend" / "Collapse legend", the same words, in all 11
+               locales, as the desktop collapse button's aria.expandLegend / aria.collapseLegend. They live in
+               this map's own gospel.ui keys because Cities' area-scoped translator cannot read the aria area
+               where the gallery has no vue-i18n: both maps keep their own keys, same words. (Never write that
+               translator's call with an area name in a comment: the build's area scan reads comments too.)
+               "Key & notes" and then "Key & filters" named what sits behind the button, and readers did not
+               know what a "key" was. The panel still holds the pin filters and the way into the gap list. -->
+          {{ legendOpen ? t('gospel.ui.hideKey') : t('gospel.ui.showKey') }}
+        </button>
       </div>
-      <button v-if="narrow" type="button" class="gm-fold" @click="toggleLegend"
-              :aria-expanded="legendOpen ? 'true' : 'false'">
-        <!-- "Key & notes" advertised only half of what is behind it. This panel also holds
-             the pin FILTERS — by design, because the key doubles as the filter (see below) —
-             so on a phone the whole gap workflow sat behind a label that sounded like
-             documentation. Reaching the ranked gap list means opening this first, and a
-             reader with no reason to open "notes" never finds it. -->
-        {{ legendOpen ? 'Hide key &amp; filters' : 'Key &amp; filters' }}
-      </button>
       <!-- ★ HEADER ROW, NOT A FLOATING CORNER. The caret used to be absolutely positioned over
            the panel's top-right, and the title was hidden when collapsed — so collapsing left a
            lone glyph floating on the map with nothing saying what it would reopen. The shared
@@ -2358,7 +2508,7 @@ useShadowStyles(
                  language. -->
             <!-- ⚠ THIS SENTENCE IS NOT PROSE AND MUST NOT STAY ENGLISH. It is the legend's one
                  piece of news — that almost every group with nothing has somewhere to start — and
-                 rega measured it as the Latin left in an Arabic legend once the explainer was
+                 it measured as the Latin left in an Arabic legend once the explainer was
                  folded away. Through t() with its numbers as parameters, so it renders the catalogue's
                  English until the key lands and then switches. The CAVEAT that followed it ("a way
                  in is not the gospel in their own language") moved into the fold below, where the
@@ -2379,13 +2529,13 @@ useShadowStyles(
           </button>
         </div>
         <div v-if="pinFilter !== 'all' && legendOpen" class="gm-filtered">
-          Showing only <b>{{ pinFilter === 'none' ? 'groups with nothing found'
-            : pinFilter === 'some' ? 'groups with some resource'
-            : pinFilter === 'hnr' ? 'groups that can hear the gospel but have no text Scripture in the pools checked'
-            : 'groups with Scripture and film' }}</b>.
+            <!-- ONE SENTENCE, ONE KEY: the bold phrase varies by filter, so each branch is its own
+                 key and slots into the sentence. Concatenating "Showing only" with a branch would
+                 fix the clause order in English. -->
+            {{ t('gospel.gap.showingOnly', { what: t('gospel.gap.kind.' + (pinFilter === 'none' ? 'none' : pinFilter === 'some' ? 'some' : pinFilter === 'hnr' ? 'hnr' : 'all')) }) }}
           <button type="button" class="gm-kclear" @click="setPinFilter('all')">{{ t('gospel.filter.showAll', { count: fmt(pinTally.total) }) }}</button>
           <button v-if="pinFilter === 'none'" type="button" class="gm-kclear" @click="openGapList">
-            See the 40 largest →
+            {{ t('gospel.sheet.seeLargest', { n: 40 }) }}
           </button>
         </div>
       </div>
@@ -2470,10 +2620,10 @@ useShadowStyles(
         <b>{{ fmt(selectedProvince.nobody_praying_groups) }} / {{ fmt(selectedProvince.prayer_pages) }}</b>
       </div>
       <p class="gm-note" dir="ltr" style="margin:6px 0 0">
-        A group is placed in a province from its own coordinate, which marks where a people is
-        found rather than a settlement. Near a border that point can fall on the wrong side.
+        A group is placed in a province from its dot on the map, which marks a people group, not a
+        settlement. The dot's position is approximate, so near a border it can fall on the wrong side.
       </p>
-      <!-- The brief's THIRD requirement at the province grain: clicking a place filters the
+      <!-- The THIRD requirement at the province grain: clicking a place filters the
            table to it. Same split as the country and language links — a filter when the tables
            are already beneath this map, a link when they are not. -->
       <button v-if="composed" type="button" class="gm-tablink"
@@ -2502,10 +2652,10 @@ useShadowStyles(
       <!-- ITEM 0 — the ranked gap: the largest groups with nothing found anywhere. -->
       <template v-if="showGapList && !selected">
         <div class="gm-sh-head">
-          <span class="gm-sh-name">{{ gapBy === 'groups' ? 'Largest groups with nothing found'
-            : gapBy === 'noprayer' ? 'Nothing found, and nobody praying'
+          <span class="gm-sh-name">{{ gapBy === 'groups' ? t('gospel.ui.largest')
+            : gapBy === 'noprayer' ? t('gospel.ui.nobodyPraying')
             : gapBy === 'hnr' ? 'Can hear the gospel, no text to read'
-            : 'Where the gap concentrates' }}</span>
+            : t('gospel.ui.concentrates') }}</span>
           <button type="button" class="gm-x" @click="closeGapList">{{ t('gospel.sheet.close') }}</button>
         </div>
         <p class="gm-note" dir="ltr" style="margin-top:0">
@@ -2603,8 +2753,8 @@ useShadowStyles(
         <template v-if="gapBy === 'hnr'">
           <button v-for="g in gapHnr" :key="g.i" type="button" class="gm-pg gm-pg-btn" @click="gotoGap(g)">
             <span class="gm-pg-n">{{ g.name }}</span>
-            <span class="gm-pg-l">{{ fmt(g.pop) }} people · {{ g.iso3 }}<code class="gm-code">{{ g.code || 'no code' }}</code></span>
-            <span class="gm-pg-rel">has {{ g.has }} — no text found</span>
+            <span class="gm-pg-l">{{ t('gospel.gap.popLine', { pop: fmt(g.pop), iso3: g.iso3 }) }}<code class="gm-code">{{ g.code || t('gospel.ui.noCode') }}</code></span>
+            <span class="gm-pg-rel">{{ t('gospel.gap.hasNoText', { what: g.has }) }}</span>
           </button>
         </template>
 
@@ -2612,7 +2762,7 @@ useShadowStyles(
           <a v-for="g in gapNoPrayer" :key="g.i" class="gm-pg gm-pg-btn" :href="g.url"
              target="_blank" rel="noopener noreferrer">
             <span class="gm-pg-n">{{ g.name }}</span>
-            <span class="gm-pg-l">{{ fmt(g.pop) }} people · {{ g.iso3 }}<code class="gm-code">{{ g.code || 'no code' }}</code></span>
+            <span class="gm-pg-l">{{ t('gospel.gap.popLine', { pop: fmt(g.pop), iso3: g.iso3 }) }}<code class="gm-code">{{ g.code || t('gospel.ui.noCode') }}</code></span>
             <span class="gm-pg-rel"><bdi dir="ltr">nothing found, and nobody praying — open their prayer page ↗</bdi></span>
           </a>
         </template>
@@ -2637,11 +2787,11 @@ useShadowStyles(
 
         <button v-else v-for="g in gapList" :key="g.i" type="button" class="gm-pg gm-pg-btn" @click="gotoGap(g)">
           <span class="gm-pg-n">{{ g.name }}</span>
-          <span class="gm-pg-l">{{ fmt(g.pop) }} people · {{ g.iso3 }}<code class="gm-code">{{ g.code || 'no code' }}</code></span>
-          <span v-if="g.wayIn" class="gm-pg-way">way in: {{ g.wayIn }}</span>
+          <span class="gm-pg-l">{{ t('gospel.gap.popLine', { pop: fmt(g.pop), iso3: g.iso3 }) }}<code class="gm-code">{{ g.code || t('gospel.ui.noCode') }}</code></span>
+          <span v-if="g.wayIn" class="gm-pg-way">{{ t('gospel.gap.wayIn', { via: g.wayIn }) }}</span>
           <span v-if="g.rel" class="gm-pg-rel"
                 :title="'ISO 639-3 files this under macrolanguage ' + g.rel.m + ' with ' + g.rel.l + ', which has resources. That is how the standard groups the codes, not a claim they are mutually intelligible.'">
-            related: {{ g.rel.l }} has resources
+            {{ t('gospel.sheet.hasResources', { lang: g.rel.l }) }}
           </span>
         </button>
       </template>
@@ -2655,13 +2805,13 @@ useShadowStyles(
         <div class="gm-sh-name" style="margin-bottom:6px">{{ selectedGroup.people_group }}</div>
         <div class="gm-stat">
           <span>{{ t('gospel.stat.language') }}</span>
-          <b>{{ selectedGroup.language }}<code class="gm-code">{{ selectedGroup.iso639_3 || 'no code' }}</code></b>
+          <b>{{ selectedGroup.language }}<code class="gm-code">{{ selectedGroup.iso639_3 || t('gospel.ui.noCode') }}</code></b>
         </div>
         <div class="gm-stat"><span>{{ t('gospel.stat.population') }}</span><b>{{ fmt(selectedGroup.population) }}</b></div>
         <div class="gm-stat"><span>{{ t('gospel.stat.countries') }}</span><b>{{ selectedGroup.countries }}</b></div>
 
         <!-- ═══ WHAT THE DOT MEANS, SAID ON THE SHEET THAT THE DOT OPENED ══════════════════
-             A pin marks where a PEOPLE is found, not a settlement, and the data shows it: 108
+             A pin marks a PEOPLE group, not a settlement, and its position is approximate: 108
              of the 2,107 placed groups sit on a coordinate they share with another group. Where
              this one does, it names them, because "approximate" on its own hides the part a
              reader would never otherwise discover — that some dots are literally the same dot.
@@ -2678,7 +2828,10 @@ useShadowStyles(
         <p class="gm-note" :dir="isEnglish ? 'ltr' : null" style="margin:6px 0 0">
           {{ t('pins.approximate') }}
           <template v-if="sharedWith(selectedGroup).length">
-            {{ t('pins.sharedPoint', { names: sharedWith(selectedGroup).join(', '), n: sharedWith(selectedGroup).length + 1 }) }}
+            <!-- CONJUNCTION: these groups all share the point. The names go INTO a translated
+                 sentence (pins.sharedPoint), so a hardcoded ", " printed English separators inside
+                 Arabic prose — the same defect studio fixed in ApproxPinNote. -->
+            {{ t('pins.sharedPoint', { names: formatList(sharedWith(selectedGroup), { type: 'conjunction' }), n: sharedWith(selectedGroup).length + 1 }) }}
           </template>
         </p>
 
@@ -2726,7 +2879,7 @@ useShadowStyles(
                :href="selectedGroup.audio.u" target="_blank" rel="noopener noreferrer"
                :title="selectedGroup.audio.n + ' — Scripture from Faith Comes By Hearing (' + (selectedGroup.audio.m || 'audio') + '), free in a browser.'
                  + (selectedGroup.audio.vsc ? ' Video covers: ' + selectedGroup.audio.vsc + '. That is Bible video, not the JESUS Film.' : '')">
-              Scripture, {{ selectedGroup.audio.m || 'audio' }} · {{ selectedGroup.audio.n }}
+              {{ t('gospel.chip.scriptureAudio', { medium: selectedGroup.audio.m || t('gospel.res.audio'), source: selectedGroup.audio.n }) }}
             </a>
             <!-- Not shown for a sign language. Telling a Deaf group that no AUDIO was found
                  is noise about a medium they cannot use, and it pushes the one line that
@@ -2743,7 +2896,7 @@ useShadowStyles(
             <a v-if="selectedGroup.bible_video" class="gm-chip ok wrap"
                :href="selectedGroup.bible_video.u" target="_blank" rel="noopener noreferrer"
                :title="selectedGroup.bible_video.n + ' — Bible narrative video from Faith Comes By Hearing. This is NOT the JESUS Film.'">
-              Bible video · {{ selectedGroup.bible_video.sc || selectedGroup.bible_video.n }}
+              {{ t('gospel.chip.bibleVideoOf', { source: selectedGroup.bible_video.sc || selectedGroup.bible_video.n }) }}
             </a>
             <!-- Door43 entries are real published repos, so they ship as real links. The
                  SUBJECT is shown verbatim: "Open Bible Stories" is 50 illustrated narratives,
@@ -2763,7 +2916,7 @@ useShadowStyles(
             <a v-if="selectedGroup.gospel_tract" class="gm-chip ok wrap"
                :href="selectedGroup.gospel_tract.u" target="_blank" rel="noopener noreferrer"
                :title="selectedGroup.gospel_tract.n + ' — a gospel presentation from Cru (GodTools), free to read in a browser in this language.'">
-              Gospel presentation · {{ selectedGroup.gospel_tract.n }}
+              {{ t('gospel.res.gospelPresentation') }} · {{ selectedGroup.gospel_tract.n }}
             </a>
 
             <!-- GOSPEL AUDIO — for a language with no writing system this may be the only
@@ -3076,7 +3229,7 @@ useShadowStyles(
            target="_blank" rel="noopener noreferrer"
            :title="'Open the prayer page for ' + selectedPray.n + ' on doxa.life.'">
           {{ t('gospel.sheet.pray') }} {{ selectedPray.n }}
-          <span v-if="selectedPray.praying" class="gm-pray-n">{{ fmt(selectedPray.praying) }} already praying</span>
+          <span v-if="selectedPray.praying" class="gm-pray-n">{{ t('gospel.sheet.alreadyPraying', { n: fmt(selectedPray.praying) }) }}</span>
         </a>
 
         <!-- A link when standalone, a filter when composed. Same words either way, because
@@ -3095,7 +3248,7 @@ useShadowStyles(
           <button v-for="g in sameLanguage.slice(0, 12)" :key="g.people_group + g.countries"
                   type="button" class="gm-pg gm-pg-btn" @click="openGroup(g)">
             <span class="gm-pg-n">{{ g.people_group }}</span>
-            <span class="gm-pg-l">{{ fmt(g.population) }} people · {{ g.countries }}</span>
+            <span class="gm-pg-l">{{ t('gospel.sheet.popCountries', { pop: fmt(g.population), countries: g.countries }) }}</span>
           </button>
           <div v-if="sameLanguage.length > 12" class="gm-more">
             <bdi dir="ltr">Showing 12 of {{ sameLanguage.length }} groups sharing this language.</bdi>
@@ -3165,24 +3318,24 @@ useShadowStyles(
         </a>
 
         <!-- Same split as the language link above: a filter when the tables are already on
-             screen beneath this map, a link when they are not. This is the brief's SECOND
+             screen beneath this map, a link when they are not. This is the SECOND
              requirement — click a country, see its resources — and in the composite it was
              answering by leaving the composite. -->
         <button v-if="selected.iso3 && composed" type="button" class="gm-tablink"
                 @click="filterComposedTables({ country: selected.iso3, label: selected.country || '' })">
-          Every resource used in {{ selected.country }} ↓
+          {{ t('gospel.sheet.everyIn', { country: selected.country }) }} ↓
         </button>
         <a v-else-if="selected.iso3" class="gm-tablink"
            :href="tableLink({ country: selected.iso3 || '', label: selected.country || '' })">
-          Every resource used in {{ selected.country }} →
+          {{ t('gospel.sheet.everyIn', { country: selected.country }) }} →
         </a>
 
-        <div v-if="pgLoading" class="gm-load">Loading resources…</div>
+        <div v-if="pgLoading" class="gm-load">{{ t('gospel.chip.loading') }}</div>
         <div v-else-if="pgErr" class="gm-err" style="position:static;text-align:start">{{ pgErr }}</div>
 
         <template v-else>
           <div class="gm-sec">
-            <div class="gm-sec-h">Gospel resources found ({{ withResources.length }})</div>
+            <div class="gm-sec-h">{{ t('gospel.sheet.found', { n: withResources.length }) }}</div>
             <div v-if="!withResources.length" class="gm-none">
               <bdi dir="ltr">Nothing found for any group here in the pools checked.</bdi>
             </div>
@@ -3195,7 +3348,7 @@ useShadowStyles(
                  class="gm-pg">
               <button type="button" class="gm-pg-open" @click="openGroup(g)">
                 <span class="gm-pg-n">{{ g.people_group }}</span>
-                <span class="gm-pg-l">{{ g.language }}<code class="gm-code">{{ g.iso639_3 || 'no code' }}</code></span>
+                <span class="gm-pg-l">{{ g.language }}<code class="gm-code">{{ g.iso639_3 || t('gospel.ui.noCode') }}</code></span>
               </button>
               <span class="gm-chips">
                 <!-- The URL the verification pass already proved. Surfacing it is the
@@ -3218,28 +3371,30 @@ useShadowStyles(
                 <a v-if="g.audio" class="gm-chip ok wrap" :href="g.audio.u"
                    target="_blank" rel="noopener noreferrer"
                    :title="g.audio.n + ' — Faith Comes By Hearing (' + (g.audio.m || 'audio') + ')'">
-                  Scripture, {{ g.audio.m || 'audio' }}
+                  <!-- The LABEL is keyed; g.audio.m stays raw — it is the table's own media
+                       descriptor, and 'audio' is its data default, not UI text. -->
+                  {{ t('gospel.res.scripture') }}, {{ g.audio.m || 'audio' }}
                 </a>
                 <a v-if="g.bible_video" class="gm-chip ok wrap" :href="g.bible_video.u"
                    target="_blank" rel="noopener noreferrer"
                    :title="g.bible_video.n + ' — Bible narrative video. This is NOT the JESUS Film. Covers: ' + (g.bible_video.sc || 'see site')">
-                  Bible video
+                  {{ t('gospel.res.bibleVideo') }}
                 </a>
                 <a v-if="g.zume_url" class="gm-chip ok" :href="g.zume_url"
                    target="_blank" rel="noopener noreferrer"
                    title="Zume Training publishes its discipleship course in this language.">
-                  Training
+                  {{ t('gospel.res.training') }}
                 </a>
               </span>
             </div>
             <div v-if="withResources.length > shown" class="gm-more">
-              Showing {{ shown }} of {{ withResources.length }}.
+              {{ t('gospel.sheet.showingOf', { shown, total: withResources.length }) }}
               <button type="button" class="gm-back" @click="shown = withResources.length">{{ t('gospel.legend.showAll') }}</button>
             </div>
           </div>
 
           <div class="gm-sec" v-if="withoutResources.length">
-            <div class="gm-sec-h">No resource found ({{ withoutResources.length }})</div>
+            <div class="gm-sec-h">{{ t('gospel.sheet.none', { n: withoutResources.length }) }}</div>
             <!-- These groups have NO verified URL, so NOTHING here becomes an anchor.
                  A dead <a> that navigates nowhere would claim a resource exists — the
                  exact overclaim this map refuses everywhere else. The row stays a plain
@@ -3248,13 +3403,13 @@ useShadowStyles(
                     type="button" class="gm-pg gm-pg-btn" @click="openGroup(g)">
               <span class="gm-pg-n">{{ g.people_group }}</span>
               <span class="gm-pg-l">
-                {{ g.language }}<code class="gm-code">{{ g.iso639_3 || 'no code' }}</code>
-                · {{ fmt(g.population) }} people
+                {{ g.language }}<code class="gm-code">{{ g.iso639_3 || t('gospel.ui.noCode') }}</code>
+                {{ t('gospel.sheet.popSuffix', { pop: fmt(g.population) }) }}
               </span>
-              <span v-if="wayInFor(g)" class="gm-pg-way">way in: {{ wayInFor(g) }}</span>
+              <span v-if="wayInFor(g)" class="gm-pg-way">{{ t('gospel.gap.wayIn', { via: wayInFor(g) }) }}</span>
             </button>
             <div v-if="withoutResources.length > shown" class="gm-more">
-              Showing {{ shown }} of {{ withoutResources.length }}.
+              {{ t('gospel.sheet.showingOf', { shown, total: withoutResources.length }) }}
               <button type="button" class="gm-back" @click="shown = withoutResources.length">{{ t('gospel.legend.showAll') }}</button>
             </div>
           </div>

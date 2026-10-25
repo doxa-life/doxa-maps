@@ -66,7 +66,7 @@ function deriveLanguageFamily(pg) {
     // Stable ISO 639-3 code path (locale-independent). primary_language.value is
     // the ISO code; its label is localized, so the family MUST be derived from the
     // code, not the display label, or the languageFamily color strategy breaks on
-    // every non-English locale (qa: 2026-06-22 locale color bug).
+    // every non-English locale (a locale colour bug).
     const iso = String(
         pg._raw?.primary_language?.value ||
         (pg.language && typeof pg.language === 'object' ? pg.language.value : '') ||
@@ -139,7 +139,7 @@ export function useMapData(options) {
     // THE ROWS THE MAP DRAWS, offered to the legends below it. research-map and countries-map provided
     // this themselves; the prayer map did not, so its legends fell back to the raw API cache, whose field
     // names the pin-note co-location index cannot read, and the shared-point sentence and the standing
-    // pin note never showed there (rega, row 46). Providing it here covers every map built on useMapData;
+    // pin note never showed there (row 46). Providing it here covers every map built on useMapData;
     // a component that also provides it passes this same ref.
     if (getCurrentInstance()) provide('normalizedPeopleGroups', normalizedPeopleGroups);
     const regionsData = ref(null);

@@ -55,7 +55,12 @@ const DECLARED_ABSENT = {
   // wearing more confidence. This entry shrinks as each locale's text is cited, not as a batch.
   point4_passage: 'Mark 5:1-20 — awaiting a CITED public-domain translation for hi/zh/pt/it/ro',
   point4_passage_credit: 'the attribution line for the passage above',
-  // ── The Driver's new packet pages, 2026-09-27: a 100-year life calendar, the same grid shaded by
+  point4_passage_bold: 'verse 19, verbatim from the passage above (so only where that passage is on file)',
+  // Numbers 6:24-26 on the lightweight list's first page: ro and hi have no strict public-domain text on the
+  // pipeline that vetted the other nine, so they print the English per key rather than an unvetted rendering.
+  blessing_text: 'Numbers 6:24-26 — no strict public-domain text for ro (only a Cyrillic-script 1924) or hi',
+  blessing_credit: 'the attribution line for the blessing above',
+  // ── The new packet pages, 2026-09-27: a 100-year life calendar, the same grid shaded by
   // the evangelical share of these groups' population, and the funnel's equation sidebar + tip.
   // ENGLISH-ONLY ON PURPOSE, and declared rather than back-filled: English text copied into ten
   // locale blocks would make them read as TRANSLATED to this gate and to a reader, which is worse
@@ -118,6 +123,38 @@ for (const loc of locales) {
     fails.push(`${loc} has ${present} string(s) and NOT ONE differs from English — `
       + 'the block is present but untranslated, which a reader cannot tell from a missing one')
   }
+}
+
+// ── SCRIPTURE ADDRESSES ARE ENGLISH'S, AND THE THEMES ARE WHOLE ───────────────────
+// A point's refs are canonical addresses: a language may not keep an older set (point 12 kept Acts 2 / Matthew 28
+// in ten languages after English moved to John 17). The prayer themes are seven and the scenes three in every
+// language, or the page falls back to English for the whole list.
+for (const loc of locales) {
+  const b = cat[loc]
+  ;(b.points || []).forEach((pt, i) => {
+    if (pt && pt.refs !== undefined && JSON.stringify(pt.refs) !== JSON.stringify((en.points[i] || {}).refs)) {
+      fails.push(`${loc} point ${i + 1} carries references ${JSON.stringify(pt.refs)}, not English's ${JSON.stringify((en.points[i] || {}).refs)}`)
+    }
+  })
+  if (!Array.isArray(b.themes) || b.themes.length !== 7 || b.themes.some((x) => typeof x !== 'string' || !x.trim())) fails.push(`${loc} needs 7 prayer themes`)
+  if (!Array.isArray(b.scenes) || b.scenes.length !== 3 || b.scenes.some((x) => typeof x !== 'string' || !x.trim())) fails.push(`${loc} needs 3 prayer scenes`)
+}
+if (!Array.isArray(en.scene_refs) || en.scene_refs.length !== 3 || en.scene_refs.some((r) => !Array.isArray(r) || r.length !== 2)) fails.push('en scene_refs must give each of the 3 scenes two references')
+
+// ── ARABIC: NO ALEF WASLA (U+0671) ─────────────────────────────────────────────
+// The Van Dyck texts write the article with alef wasla (ٱ). A device whose fonts lack U+0671 printed it as a
+// BOX, three times in the blessing and eight in Mark 5. The stored ar text uses plain alef (U+0627), the
+// ordinary print form: display only, no word or vowel changes (_meta.note_on_blessing). Asserted on EVERY ar
+// value, nested ones included, so the next passage pasted from the same source cannot bring it back.
+{
+  const hits = []
+  const walk = (v, path) => {
+    if (typeof v === 'string') { const n = [...v].filter((ch) => ch === '\u0671').length; if (n) hits.push(`${path} (${n})`) }
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`)
+  }
+  walk(cat.ar || {}, 'ar')
+  if (hits.length) fails.push(`ar carries U+0671 alef wasla, which prints as a box where a font lacks it — store plain alef (U+0627): ${hits.slice(0, 4).join(', ')}`)
+  else notes.push('ar: no U+0671 alef wasla in any value (plain alef, the print form every Arabic font draws)')
 }
 
 console.log('PACKET-STRINGS-PARITY')

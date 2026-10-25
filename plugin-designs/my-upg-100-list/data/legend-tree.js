@@ -82,10 +82,34 @@ function leafPopulation(row, records) {
  *                 Omit to keep the prior count-only behaviour (pop undefined).
  * @returns {Array} nested TreeNode[] (3 top-level groups, 26 leaves total)
  */
+// ★ THE UNIFIED DEAF LEAF'S SELECTOR, DEFINED ONCE. The legend collapses the two deaf_lists into one
+// leaf (affinity bloc A017) whose selector exists nowhere in clusters.json, so every consumer that
+// RESOLVES zones had to know it — and each typed its own copy of the literal (the map in
+// upg-100-list.vue, generate.mjs, packet.mjs). The browser packet path had no copy at all, which is why
+// the Deaf packet could not be printed from the UI: the zone lookup found nothing and returned silently.
+export const DEAF_SELECTOR = { type: 'affinity_bloc', rop1: 'A017' };
+
+// The catalogue key (poster.<key>) that names each REGION_OF grouping in the reader's language. The
+// English values stay the grouping identity (ids are derived from them), so the heading is translated
+// at render: here for the legend via opts.regionTitle, and by poster-wall.vue for the wall's sections.
+// One table for both surfaces, so a region added here cannot be translated on one and English on the other.
+export const REGION_KEY = {
+  'Africa': 'region_africa',
+  'Middle East': 'region_middle_east',
+  'Central Asia': 'region_central_asia',
+  'Southeast Asia + Oceania': 'region_southeast_asia_oceania',
+  'China + Mongolia': 'region_china_mongolia',
+  'India': 'region_india',
+  'Other': 'region_other',
+  'Americas': 'region_americas',
+  'Europe': 'region_europe',
+  'Deaf': 'region_deaf',
+};
+
 export function buildLegendNodes(clusters, opts = {}) {
   const deafCount = opts.deafCount ?? 123;
   const records = Array.isArray(opts.records) ? opts.records : null;
-  // ★ OPTIONAL GENERATED TITLE (Driver, 2026-09-27). `opts.title(zone)` returns a localized title
+  // ★ OPTIONAL GENERATED TITLE (2026-09-27). `opts.title(zone)` returns a localized title
   // composed from already-translated parts, or NULL for a zone whose title cannot be generated — see
   // data/zone-title.js. Passing nothing keeps every hand-written English label exactly as it was, which
   // is why this is an option rather than a rewrite: the legend, the poster and the packet adopt it
@@ -95,6 +119,11 @@ export function buildLegendNodes(clusters, opts = {}) {
   const titleOf = typeof opts.title === 'function'
     ? (zone, fallback) => opts.title(zone) || fallback
     : (_zone, fallback) => fallback;
+  // `opts.regionTitle(english)` names a region section in the reader's language (see REGION_KEY); the
+  // node id stays derived from the English grouping key, so selection and ids never depend on a locale.
+  const regionTitleOf = typeof opts.regionTitle === 'function'
+    ? (english) => opts.regionTitle(english) || english
+    : (english) => english;
   const lists = clusters.lists || [];
   const asia = clusters.asia_lists || [];
   // slice 09b-6 §1(a): wire the 7 uncovered "Frontier Asia" zones (Nepal,
@@ -105,8 +134,7 @@ export function buildLegendNodes(clusters, opts = {}) {
   const uncovered = clusters.uncovered_lists || [];
 
   // Deaf row's selector is implicit (affinity bloc A017), so population can be
-  // summed the same way as the regional rows.
-  const DEAF_SELECTOR = { type: 'affinity_bloc', rop1: 'A017' };
+  // summed the same way as the regional rows. Module-level and exported — see DEAF_SELECTOR below.
 
   // ── ordered leaf list (drives color index space) ───────────────────────────
   // order: 13 regional, 1 deaf, asia (10 India + 2 China), then the Frontier-Asia
@@ -166,7 +194,9 @@ export function buildLegendNodes(clusters, opts = {}) {
     {
       id: 'deaf',
       zoneKey: 'deaf',
-      label: 'Deaf (affinity bloc A017)',
+      // Named like every other leaf: opts.title reads the bloc's name from the strings it was given
+      // (zone-title.js, zone_affinity_A017); the English label is only the no-title fallback.
+      label: titleOf({ id: 'deaf', selector: DEAF_SELECTOR }, 'Deaf (affinity bloc A017)'),
       color: colorOf('deaf'),
       count: deafCount,
       info: 'Unified deaf row — affinity bloc rop1=A017 (collapses the two deaf_lists; zero-delta vs old deaf_predicate). Population double-counts vs geographic rows (design-approved, slice 08).',
@@ -202,32 +232,10 @@ export function buildLegendNodes(clusters, opts = {}) {
     );
   const indiaChildren = indiaRows.map(mkAsiaLeaf);
   const chinaChildren = chinaRows.map(mkAsiaLeaf);
-  const sumCount = (rows) => rows.reduce((s, r) => s + (leafCount(r) || 0), 0);
 
-  const indiaNode = {
-    id: 'asia-india',
-    label: 'India',
-    count: sumCount(indiaRows),
-    children: indiaChildren,
-  };
-  const chinaNode = {
-    id: 'asia-china',
-    label: 'China',
-    count: sumCount(chinaRows),
-    children: chinaChildren,
-  };
-  if (records) {
-    indiaNode.pop = sumPop(indiaChildren);
-    chinaNode.pop = sumPop(chinaChildren);
-  }
-
-  const asiaNode = {
-    id: 'asia',
-    label: 'Asia (admin-1)',
-    count: sumCount(asia),
-    children: [indiaNode, chinaNode],
-  };
-  if (records) asiaNode.pop = sumPop([indiaNode, chinaNode]);
+  // (The India / China / "Asia (admin-1)" and "Frontier Asia (uncovered)" PARENT nodes that used to be
+  // built here are gone: since the regional grouping below, the tree is assembled from the LEAVES, so those
+  // parents were constructed and never returned — dead code whose English labels read as reader text.)
 
   // ── Frontier Asia parent ▸ 7 uncovered zones (09b-6 §1a, W-D1) ─────────────
   // Each uncovered row carries a `country_codes` selector → ADM0 polygons
@@ -247,26 +255,12 @@ export function buildLegendNodes(clusters, opts = {}) {
       u,
     );
   const uncoveredChildren = uncovered.map(mkUncoveredLeaf);
-  const frontierNode =
-    uncoveredChildren.length > 0
-      ? (() => {
-          const node = {
-            id: 'frontier-asia',
-            label: 'Frontier Asia (uncovered)',
-            count: sumCount(uncovered),
-            children: uncoveredChildren,
-          };
-          if (records) node.pop = sumPop(uncoveredChildren);
-          return node;
-        })()
-      : null;
 
   // ── REGIONAL GROUPING — the SAME sections the poster page uses ─────────────
   // The legend used to emit 14 LOOSE LEAVES at top level (West Africa, Sudan,
   // Brazil, Laos, …) beside two odd parents, "Asia (admin-1)" and "Frontier Asia
-  // (uncovered)". Brief: "the legend itself is not really well grouped — it says
-  // Asia and it mentions other groups… find the sections on the poster page and
-  // use those as the legend sections."
+  // (uncovered)". That grouping read poorly beside the poster page, so the legend
+  // now uses the poster page's own sections.
   //
   // So the same 28 zones now group into the poster page's nine regions. The
   // mapping is duplicated from poster-wall.vue rather than imported because this
@@ -289,7 +283,7 @@ export function buildLegendNodes(clusters, opts = {}) {
      :  'Other');
 
   // Every leaf the tree can paint, flattened out of its source block. India and
-  // China leaves come from asiaNode's children; the rest are already flat.
+  // China leaves are indiaChildren / chinaChildren; the rest are already flat.
   const allLeaves = [
     ...regionLeaves,
     deafLeaf,
@@ -314,14 +308,14 @@ export function buildLegendNodes(clusters, opts = {}) {
       const node = {
         // ★ FOLD DIACRITICS BEFORE STRIPPING, or the mark is DELETED and the id silently becomes a
         // different id: Gujarāt -> 'region-gujar-t', not 'region-gujarat'. Today's labels are the
-        // fixed ASCII set from regionFor(), so nothing is broken — but the brief's whole point is that
+        // fixed ASCII set from regionFor(), so nothing is broken — but the whole point is that
         // a fork brings its OWN people-group set and names its own regions, and the first accented
-        // label would split one region into two with no error and no empty state. Same class gospel
-        // measured joining admin-to-list.json: a naive fold matched 514 of 1009 rows and lost THREE
+        // label would split one region into two with no error and no empty state. Same class as a measured
+        // join of admin-to-list.json: a naive fold matched 514 of 1009 rows and lost THREE
         // whole zones, while every surviving zone still looked populated. Fix the class, not the six
         // spellings we happen to know.
         id: 'region-' + label.normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        label,
+        label: regionTitleOf(label),
         count: children.reduce((n, c) => n + (c.count || 0), 0),
         children,
       };
@@ -355,12 +349,13 @@ export function assertUniformLeafShape(leaves, { withPop = false } = {}) {
     if (typeof z.color !== 'string' || !z.color) errs.push('color');
     if (typeof z.count !== 'number') errs.push('count');
     if (withPop && typeof z.pop !== 'number') errs.push('pop');
-    if (errs.length) bad.push(`${z.id || '(no-id)'}: missing/!type [${errs.join(', ')}]`);
+    if (errs.length) bad.push({ id: z.id || '(no-id)', errs });
   }
   if (bad.length) {
+    // A developer assertion: the text is composed here, inside the throw, so it is plainly not reader copy.
     throw new Error(
       `legend-tree L15: ${bad.length} leaf node(s) violate the uniform consumer shape:\n  ` +
-        bad.join('\n  '),
+        bad.map((b) => `${b.id}: missing/!type [${b.errs.join(', ')}]`).join('\n  '),
     );
   }
   return true;
@@ -377,6 +372,30 @@ export function leafZones(nodes) {
   };
   walk(nodes || []);
   return out;
+}
+
+/**
+ * Every printable zone — the legend's leaves — each carrying the selector that resolves its groups.
+ *
+ * ★ THE ENUMERATION IS THE LEGEND'S, NOT clusters.json's BUCKETS. Spreading lists/asia_lists/
+ * uncovered_lists gives 27 zones and silently drops `deaf`, which the legend shows as one row; a
+ * packet lookup built that way cannot print Deaf, and a count built that way prints "one of 27" on
+ * page 1 and at the triangle's tip while 28 packets exist. Leaves do not carry selectors, so they are
+ * attached here by id, the unified deaf leaf taking DEAF_SELECTOR.
+ * Returns COPIES; the legend's own node objects are left untouched.
+ *
+ * @param {object} clusters  the zone catalogue (clusters.json shape)
+ * @param {object} [opts]    passed through to buildLegendNodes
+ * @returns {Array<{id:string, zoneKey:string, label:string, selector:object}>}
+ */
+export function zonesWithSelectors(clusters, opts = {}) {
+  const byId = {};
+  for (const k of ['lists', 'asia_lists', 'uncovered_lists']) {
+    for (const z of (clusters && clusters[k]) || []) byId[z.id] = z.selector;
+  }
+  byId.deaf = DEAF_SELECTOR;
+  return leafZones(buildLegendNodes(clusters, opts))
+    .map((z) => ({ ...z, zoneKey: z.zoneKey || z.id, selector: byId[z.id] }));
 }
 
 export default buildLegendNodes;

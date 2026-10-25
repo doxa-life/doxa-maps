@@ -97,9 +97,21 @@ export function areasForBundle(root, bundle, { extra = [] } = {}) {
   const files = bundleGraph(root, bundle)
   const text = files.map((f) => { try { return readFileSync(f, 'utf8') } catch { return '' } }).join('\n')
   const used = new Set(extra)
+  // ★ A BARE NAME COUNTS ONLY WHERE IT BUILDS A KEY. The first version kept an area wherever its name
+  // appeared as ANY string literal, to cover keys assembled at runtime. But several area names are also
+  // ordinary ids — 'gospel' is a colour strategy, a data source and a chart id; 'religion', 'regions',
+  // 'detail', 'poster' are fields and modes — so every bundle importing those modules carried catalogues
+  // it never shows: measured, 80 area inclusions across 26 bundles, and gospel's catalogue alone pushed
+  // country-posters 9.5 KB over the 1.5 MB ceiling. The ways a bare name really does build a key here are
+  // few and named: a namespace helper (useOptionalT / useOptionalI18n / qualify) or a translator reading a
+  // whole area (tm / t / te / tStatic / rt with the name alone). A bundle whose code assembles a key with a
+  // leading `${…}` keeps the old, generous rule, since its area cannot be read from the source.
+  const assemblesUnknownKeys = /\b(?:t|te|tm|tStatic|T)\(\s*`\$\{/.test(text)
   for (const a of areas) {
     const esc = a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    if (new RegExp(`['"\`]${esc}[.'"\`]`).test(text)) used.add(a)
+    if (new RegExp(`['"\`]${esc}\\.`).test(text)) { used.add(a); continue }                  // 'area.key'
+    if (new RegExp(`\\b(?:useOptionalT|useOptionalI18n|qualify|tm|t|te|tStatic|rt)\\(\\s*['"\`]${esc}['"\`]`).test(text)) { used.add(a); continue }
+    if (assemblesUnknownKeys && new RegExp(`['"\`]${esc}['"\`]`).test(text)) used.add(a)
   }
   return { areas: [...used].filter((a) => areas.includes(a)).sort(), files: files.map((f) => relative(root, f)) }
 }

@@ -1,5 +1,5 @@
 // useNeighborT — My UPG Neighbors' UI text: library/i18n/locales/<lc>/neighbor.json (11 locales).
-// Chrome only, by decision (dx-shepherd, 2026-09-26): research terms, provenance lines and proper
+// Chrome only, by decision: research terms, provenance lines and proper
 // nouns (SEND, doxa-2000, Bounded set, JP, PPLR…) stay in English as named sources.
 // i18n is OPTIONAL: useI18n() throws on a host that never installed it, so the catalogue is the
 // fallback, never a blank or a raw key. Call it inside setup().

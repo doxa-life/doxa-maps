@@ -7,7 +7,7 @@
     "gospelResources": "Risorse del Vangelo",
     "languageFamilies": "Famiglie linguistiche",
     "prayer": "Avanzamento della preghiera",
-    "upg100List": "La mia lista UPG 100",
+    "upg100List": "La mia lista UPG100",
     "batchSelect": "Selezione multipla"
   },
   "header": {
@@ -58,9 +58,19 @@
     "languages": "Lingue"
   },
   "tabInfo": {
-    "upg100Region": "Regione — ordina le liste UPG-100 per area del mondo (Africa, India, Medio Oriente, Sordi, …). I totali sono gli UUPG e la popolazione sommati di ogni lista sottostante.",
-    "upg100Zone": "Liste UPG-100 — ognuna è una lista di preghiera dei gruppi etnici non raggiunti di un’area, ed è ciò che la mappa disegna e colora. Ogni lista si stampa come il proprio fascicolo.",
-    "upg100Group": "Gruppo etnico — i singoli gruppi non raggiunti dentro una lista, prima quelli con maggiore bisogno di preghiera. Ogni punto della mappa è uno di questi."
+    "upg100Region": "Regione — ordina le liste UPG100 per area del mondo (Africa, India, Medio Oriente, Sordi, …). I totali sono gli UUPG e la popolazione sommati di ogni lista sottostante.",
+    "upg100Zone": "Liste UPG100 — ognuna è una lista di preghiera dei gruppi etnici non raggiunti di un’area, ed è ciò che la mappa disegna e colora. Ogni lista si stampa come il proprio fascicolo.",
+    "upg100Group": "Gruppo etnico — i singoli gruppi non raggiunti dentro una lista, prima quelli con maggiore bisogno di preghiera. Ogni punto della mappa è uno di questi.",
+    "family": "Famiglia ling. — un insieme di lingue discese da un antenato comune (p. es. indoeuropea, afroasiatica).",
+    "language": "Lingua — un sistema di comunicazione usato da un popolo (p. es. arabo, bengalese, hindi).",
+    "dialect": "Dialetto/Variante — una forma regionale o sociale di una lingua (p. es. arabo sudanese; lingua dei segni pakistana).",
+    "bloc": "Blocco di affinità — il raggruppamento più ampio, per affinità culturale, linguistica e geografica (p. es. popoli malesi, popoli dell’Asia meridionale, sordi, mondo arabo).",
+    "cluster": "Cluster — un raggruppamento più fine all’interno di un blocco (p. es. Borneo-Kalimantan tra i popoli malesi). Le righe recano «(cluster)» per distinguerle dai popoli.",
+    "group": "Popolo — un’identità etnolinguistica in sé, indipendente dal paese. Le righe recano «(popolo)». Uno stesso popolo può vivere in molti paesi (i sordi, per esempio, in più di cento).",
+    "pgic": "Popolo nel paese — una riga per ogni popolo in ciascun paese in cui vive (p. es. «Abai Sungai, Malesia»). Le righe recano «(popolo nel paese)».",
+    "region": "Regione WAGF — la macroregione cui appartiene un paese (p. es. Asia, Africa). Ciascuna ha il proprio colore sulla mappa.",
+    "block": "Blocco WAGF — la suddivisione all’interno di una regione (p. es. Sud-est asiatico, Africa occidentale).",
+    "country": "Paese — i singoli paesi, ordinati per popolazione non raggiunta all’interno del loro blocco."
   },
   "a11y": {
     "expandRow": "Espandi {label}",
@@ -70,7 +80,7 @@
   },
   "export": {
     "poster": "Manifesto",
-    "packet": "UPG 100",
+    "packet": "UPG100",
     "packetExplain": "Una lista di preghiera di circa 50-100 popoli non raggiunti: una persona può portarne una.",
     "packetAria": "Dettaglio del pacchetto di preghiera",
     "packetFull": "Dettaglio completo",

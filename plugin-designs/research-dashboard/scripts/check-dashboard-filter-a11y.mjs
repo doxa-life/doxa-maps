@@ -33,7 +33,7 @@
  * failure here (check-composite-interop carries the same part B for the same reason): a gate that
  * only reads source will pass while the reader gets last week's element.
  *
- * NO BROWSER. Playwright is rega's alone (fleet policy). Nothing here launches one.
+ * NO BROWSER. Playwright runs only in the browser QA step (project policy). Nothing here launches one.
  *
  * NEGATIVE-TESTED 2026-09-26 — each of these makes it FAIL, naming the file and the reason:
  *   chips back to <span>                        -> A1 "chip is a <span>, not a <button>"
@@ -261,7 +261,7 @@ const shellAst = templateAst(SHELL)
     // ONLY markers that are actually MOUNTED. `data-filter-chip` and `aria.removeFilter` belong to
     // the unmounted kit component and are correctly tree-shaken out of this bundle — requiring them
     // here would be a gate demanding that dead code ship, which is how a check teaches the next
-    // author to mount something the Driver asked to have removed.
+    // author to mount something that was asked to be removed.
     const need = [
       ['aria-live', 'the polite live region'],
       ['data-live-region', 'the live region marker'],

@@ -104,6 +104,14 @@ useShadowStyles(`
 .lt-dark .lt-popup-row{color:rgba(243,243,241,0.85);}
 .lt-dark .lt-popup-row:hover{background:rgba(255,255,255,0.06);}
 .lt-dark .lt-popup-row.active{background:rgba(124,140,248,0.18);color:#7c8cf8;}
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .legend-tools, .lt-btn, .lt-panel { transition: none !important; animation: none !important; }
+}
 `, 'legend-tools')
 
 const props = defineProps({

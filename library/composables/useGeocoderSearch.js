@@ -99,7 +99,7 @@ export function useGeocoderSearch(opts) {
     // selected feature's text in the DOM input (especially after user picked
     // an aggregate result). Force-reset the input element directly so tab
     // switches don't carry over the prior tab's "Afro-Asiatic (219)" text.
-    // qa: 2026-05-02 — user reported persistent search text across tabs.
+    // Without this, search text persisted across tabs.
     const input = inst?._inputEl
       || inst?.container?.querySelector?.('input.mapboxgl-ctrl-geocoder--input')
     if (input) {

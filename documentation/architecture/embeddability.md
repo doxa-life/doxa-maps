@@ -65,7 +65,7 @@ The built tree has TWO kinds of page, and they need DIFFERENT framing policy:
 | **Direct embed** (the product) | `<bundle>/<profile>/index.html`, `<bundle>/<profile>/<instance>/index.html` — the bare map pages the manifest's `iframeUrl` points at | **`*`** — framable on any partner site (that's the whole point) |
 | **Staging** (internal preview) | tree root `index.html`, per-bundle `<bundle>/index.html` | **`'self'`** — preview only |
 
-The Research Gallery (`doxa-maps-spa/doxa-maps-spa/index.html`) is a direct-embed page like any
+Deep Research (`doxa-maps-spa/doxa-maps-spa/index.html`) is a direct-embed page like any
 other leaf. Its full embed contract (script and iframe) is in
 `plugin-designs/doxa-maps-spa/EMBED.md`.
 

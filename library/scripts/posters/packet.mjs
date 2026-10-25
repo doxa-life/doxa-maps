@@ -1,7 +1,6 @@
 // packet.mjs — the UPG-100 PRAYER PACKET generator.
 //
-// One printable packet per zone. Structure is the Driver's, from the ideation
-// (_qa-cycle/01-ideation-research/prayer-points.md):
+// One printable packet per zone, page by page:
 //
 //   page 1      the MAP — a lightweight vertical one-pager, NOT the poster format
 //   pages 2..n  the PEOPLE GROUPS — 20 per page, photo + name + brief detail
@@ -17,8 +16,8 @@
 // never disagree with its poster about which groups belong to a zone.
 //
 // ── EVERY STRING IS IN packet-strings.json ──────────────────────────────────
-// Driver: "it all needs to be generative so that I can generate it in multiple
-// languages." So no human-readable text is written in this file. LANG=xx picks a
+// It all has to be generated, so the packet can be generated in every language.
+// So no human-readable text is written in this file. LANG=xx picks a
 // block; missing keys fall back to English individually, so a partial translation
 // renders what it has rather than blanking the page.
 //
@@ -38,7 +37,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '../../..');
@@ -47,7 +46,7 @@ const REPO = join(__dirname, '../../..');
 // ★ WHY THIS EXISTS. The country posters shipped rendering the UPG-100 packet: its kicker, its
 // "1 of {n} UPG-100 lists" line, its narrowing funnel. Not a mislabel — there was NO series
 // parameter anywhere, so "the packet" and "the UPG-100 packet" were the same thing and nothing
-// could disagree. Reported by the Driver, 2026-09-28.
+// could disagree.
 // UNKNOWN OR ABSENT RESOLVES TO upg100, deliberately: every existing run must render byte-identical
 // output with no env var set, or this refactor is a rewrite wearing a parameter's clothes.
 const SERIES_ALL = JSON.parse(readFileSync(join(__dirname, 'series.json'), 'utf8'));
@@ -60,14 +59,45 @@ if (!SERIES_ALL[SERIES_ID] || SERIES_ID.startsWith('_')) {
 const SERIES = SERIES_ALL[SERIES_ID];
 // The data folder is a SERIES property, not a constant. It was hard-wired to my-upg-100-list,
 // which is the other half of why a country run could only ever be a UPG-100 run.
-const DATA = join(REPO, SERIES.dataDir);
-const OUT = join(__dirname, 'out', 'packets');
+// ★ DATA_DIR overrides the series folder entirely — the FORK CONTRACT (see the plugin's
+// documentation/STANDARD-GROUP-SET.md): one folder with clusters.json + records.json +
+// selector-evaluator.js generates packets with NO series.json edit. Series flags (funnel,
+// strings, countryMode) still come from SERIES_ID, defaulting to upg100's.
+const DATA = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(REPO, SERIES.dataDir);
+if (process.env.DATA_DIR && !existsSync(join(DATA, 'clusters.json'))) {
+  console.error(`[packet] DATA_DIR set but ${join(DATA, 'clusters.json')} does not exist.`);
+  process.exit(1);
+}
+// Generated zone titles (zone-title.js) and the ISO-3 to ISO-2 table Intl needs for them. countryName.js
+// cannot load under Node (it imports JSON without an attribute), so the table is read here and INJECTED,
+// which is the path zone-title.js was built for. A data set without zone-title.js keeps its labels.
+const ALPHA2 = JSON.parse(readFileSync(join(REPO, 'library/data/iso3-to-alpha2.json'), 'utf8')).map;
+const ZONE_TITLE = await import(join(DATA, 'zone-title.js')).then((m) => m.zoneTitle).catch(() => null);
+// PACKET_OUT keeps a fork's (or a test's) output out of the real artifact directory — toy packets
+// beside the real ones would make check:packets-all count fiction as coverage.
+const OUT = process.env.PACKET_OUT ? resolve(process.env.PACKET_OUT) : join(__dirname, 'out', 'packets');
 mkdirSync(OUT, { recursive: true });
 
 // ⚠ NOT process.env.LANG — that is the SHELL's POSIX locale ("en_US.UTF-8"), which
 // is not a valid BCP-47 tag and throws in localeCompare/toLocaleString. Measured:
 // it crashed the first run. PACKET_LANG is the only source.
 const LANG = process.env.PACKET_LANG || 'en';
+// ★ BOTH PACKETS FROM ONE GENERATOR: PACKET_VARIANT=lightweight, else full detail. It was hardcoded to
+// 'full', so the lightweight packet could only ever be printed from the browser. An unknown value falls
+// back to full, exactly as the renderer's own VARIANTS does — a typo must not print a shorter packet.
+const VARIANT = process.env.PACKET_VARIANT === 'lightweight' ? 'lightweight' : 'full';
+// ⚠ DECLARED AFTER LANG, NOT BESIDE THE OTHER DATA IMPORTS. It reads LANG, and the first placement
+// sat above LANG's declaration: a temporal-dead-zone ReferenceError at startup that stopped every
+// offline packet run, invisible to `node --check`, which checks syntax and not evaluation order.
+// The map's country names in the packet's language (mapLabels.js), from the zone data's ISO3_NAME — the
+// table generate.mjs labels the map from — with the same injected ISO-3 table for Intl. null in English.
+const { makeCountryLabelFor } = await import('../../packet/mapLabels.js');
+const ISO3_NAME_TABLE = await import(join(DATA, 'territory-counts.js')).then((m) => m.ISO3_NAME).catch(() => null);
+const LABEL_FOR = makeCountryLabelFor({
+  iso3Name: ISO3_NAME_TABLE,
+  countryName: (iso3, lc) => { const two = ALPHA2[iso3]; try { return two ? new Intl.DisplayNames([lc], { type: 'region' }).of(two) : '' } catch { return '' } },
+  lang: LANG,
+});
 const ONLY = process.env.ONLY || '';
 const NOPHOTOS = process.env.NOPHOTOS === '1';
 const API = process.env.VITE_API_BASE_URL || process.env.MAP_APP_API_URL;
@@ -84,7 +114,8 @@ const API = process.env.VITE_API_BASE_URL || process.env.MAP_APP_API_URL;
 // the program refuses. Any env var that makes the API unnecessary must be named HERE, next to the
 // guard, or it is decoration.
 const CACHE_OK = process.env.OFFLINE && existsSync(join(__dirname, 'out', '_records.json'));
-if (!API && !process.env.PACKET_RECORDS && !CACHE_OK) {
+const DATA_RECORDS_EARLY = process.env.DATA_DIR && existsSync(join(resolve(process.env.DATA_DIR), 'records.json'));
+if (!API && !process.env.PACKET_RECORDS && !CACHE_OK && !DATA_RECORDS_EARLY) {
   console.error('[packet] No API base — set VITE_API_BASE_URL, or PACKET_RECORDS for a fixture build,');
   console.error('         or OFFLINE=1 to reuse out/_records.json if a previous run cached it.');
   if (process.env.OFFLINE) {
@@ -100,8 +131,8 @@ const BASE_STRINGS = JSON.parse(readFileSync(join(__dirname, 'packet-strings.jso
 // The renderer gets `strings` as a whole and does its own per-key locale fallback, so an override
 // applied only to this file's t() would render in the pages THIS file writes and not in the pages
 // the RENDERER writes. One series, two different kickers, and nothing would fail.
-// Overrides are ENGLISH-ONLY until the Driver signs the wording off (series.json
-// _draft_awaiting_driver), so they are applied to every locale ON PURPOSE: an English country
+// Overrides are ENGLISH-ONLY until the wording is approved (series.json
+// _draft_pending_decision), so they are applied to every locale ON PURPOSE: an English country
 // kicker is visibly awaiting translation, whereas inheriting the translated UPG-100 kicker would
 // silently print the WRONG SERIES in fluent Russian. Loud beats wrong.
 const SERIES_STRINGS = SERIES.strings || {};
@@ -179,16 +210,18 @@ const { mapPage, listPages, pointsPage, wheelPage, css, mapCss, PER_PAGE, W, H }
 // ── DATA ────────────────────────────────────────────────────────────────────
 const clusters = JSON.parse(readFileSync(join(DATA, 'clusters.json'), 'utf8'));
 
-// ── THE CHRISTIAN-SHARE PAGE (packet page 3) ────────────────────────────────
-// READ, NEVER COMPUTED HERE. data/people-groups/christian-share.json is generated from the IMB CSV
-// joined to DOXA's snapshot on ROP3+country — the same join the Vision Card uses — and it carries its
-// own _method and provenance. Re-deriving the percentage in this file would give one fact two sources
-// that drift apart, which is the mistake the funnel page already documents for its four steps.
-// A missing file yields null and buildPacket omits page 3 rather than printing a number it could not read.
-let CHRISTIAN = null;
+// ── THE %-EVANGELICAL PAGE — this packet's OWN groups ───────────────────────
+// The page says each box is a share of the people in this list, so each packet sums its own groups
+// from the per-group table (data/people-groups/evangelical-by-slug.json, built by
+// library/scripts/people-groups/build-evangelical-share.mjs, which refuses to write unless the table,
+// summed over every DOXA group, reproduces christian-share.json exactly). The sum itself is the shared
+// pure module the browser print uses, so neither path re-derives the method. A missing table yields
+// null and the page is omitted — never the DOXA-wide figure printed as a single list's.
+const { evangelicalShareFor } = await import('../../packet/evangelicalShare.js');
+let EV_TABLE = null;
 try {
-  CHRISTIAN = JSON.parse(readFileSync(join(__dirname, '../../../data/people-groups/christian-share.json'), 'utf8'));
-} catch (_) { /* page 3 is omitted, not faked */ }
+  EV_TABLE = JSON.parse(readFileSync(join(__dirname, '../../../data/people-groups/evangelical-by-slug.json'), 'utf8'));
+} catch (_) { /* the page is omitted, not faked */ }
 
 // ── THE PAGE-2 FUNNEL ───────────────────────────────────────────────────────
 // The same context the browser path builds in upg-100-list.vue's packetFunnel(), so the Node
@@ -231,16 +264,31 @@ function buildFunnel(membership) {
     // ("13 + 12 + 2 + 1 deaf = 28"). The packet's triangle tip prints this number as "1 of N", so a
     // 27 there is a visible wrong fact on the page. Same omission as allZones() had before 3ef164c0;
     // this was the last copy of it.
-    const listCount = allZones().length;
+    const listCount = ZONES_ALL.length;
     const listTotal = Number(raw.steps[raw.steps.length - 1].groups) || 0;
     return { ...raw, listCount, listTotal };
   } catch (_) { return null; }
 }
 const { evaluate } = await import(join(DATA, 'selector-evaluator.js'));
-const { normalizeRecords, extractRecords } = await import(join(DATA, 'normalize.js'));
+// normalize.js is OPTIONAL in the fork contract: a fork's records.json is its own shape, already
+// flat. Absent -> identity, said OUT LOUD once — a silent fallback would let a TYPO'd normalize.js
+// quietly skip normalization on the real series, which is the fail-open trap.
+const { normalizeRecords, extractRecords } = await (async () => {
+  try { return await import(join(DATA, 'normalize.js')); }
+  catch {
+    console.log('[packet] no normalize.js in the data folder — records are used as-is (fork contract).');
+    return { normalizeRecords: (r) => r, extractRecords: (r) => (Array.isArray(r) ? r : (r?.posts || r?.records || [])) };
+  }
+})();
 // The zone enumeration itself, so this generator, the poster generator and upg-100-list.vue cannot
 // disagree about which zones exist (see allZones below).
-const { buildLegendNodes, leafZones } = await import(join(DATA, 'legend-tree.js'));
+// legend-tree.js is loaded LAZILY, only for the bucketed (upg100) shape — a flat fork's file IS
+// its enumeration and must not be forced to ship a legend module it never uses.
+let _legend = null;
+async function legendModules() {
+  if (!_legend) _legend = await import(join(DATA, 'legend-tree.js'));
+  return _legend;
+}
 
 async function loadRecords() {
   // ★ A COMMITTED FIXTURE, so CI can build a packet at all. out/ is gitignored — both the
@@ -258,6 +306,10 @@ async function loadRecords() {
     if (!existsSync(fixture)) throw new Error(`PACKET_RECORDS set but missing: ${fixture}`);
     return JSON.parse(readFileSync(fixture, 'utf8'));
   }
+  // The FORK CONTRACT's records: a dataDir may carry its own rows, so a fork needs no API and no
+  // cache. Detected, not configured — the folder IS the interface.
+  const folderRecords = join(DATA, 'records.json');
+  if (existsSync(folderRecords)) return JSON.parse(readFileSync(folderRecords, 'utf8'));
   const cache = join(__dirname, 'out', '_records.json');
   if (process.env.OFFLINE && existsSync(cache)) return JSON.parse(readFileSync(cache, 'utf8'));
   // ★ THE FIELD LIST IS PART OF THE SELECTOR CONTRACT — every field a selector READS must be asked
@@ -315,15 +367,15 @@ async function loadRecords() {
 //
 // leafZones() carries id/zoneKey/label/count but NOT selector (leaves do not), so the selector is
 // re-attached by id exactly as generate.mjs:2801-2808 does it, deaf included.
-function allZones() {
+async function allZones() {
   // ★ COUNTRY MODE HAS ITS OWN ZONE SOURCE, and leaving it out broke the packet half of
-  // SERIES=country for every country. Measured by exp-shepherd on main, 2026-09-28:
+  // SERIES=country for every country. Measured on main, 2026-09-28:
   // `SERIES=country ONLY=country-yem node generate.mjs` made a poster, and the matching
   // packet.mjs run died with "no zone matches ONLY=country-yem" — because zones came from
   // clusters.json (the UPG-100 zoning), where a country id never appears.
-  // ⚠ MY OWN TEST MISSED IT BECAUSE IT WAS NOT END TO END. I only ever ran the country packet
+  // ⚠ THE EARLIER TEST MISSED IT BECAUSE IT WAS NOT END TO END. It only ran the country packet
   // against a UPG-100 zone id (ONLY=west-africa), which exercised the WORDING and never the zone
-  // source. The same "one concept, two switches" defect I had just removed from generate.mjs
+  // source. The same "one concept, two switches" defect just removed from generate.mjs
   // survived here, in the other file.
   // Built to MATCH generate.mjs's country branch exactly (same ids, labels and selector shape), so
   // a poster and its packet cannot describe different zones.
@@ -353,17 +405,22 @@ function allZones() {
         selector: { type: 'country_codes', values: [c.iso3] },
       }));
   }
-  const tops = buildLegendNodes(clusters, { records: null });
-  const byId = {};
-  for (const k of ['lists', 'asia_lists', 'uncovered_lists']) {
-    for (const z of clusters[k] || []) byId[z.id] = z.selector;
+  // ★ THE FORK CONTRACT'S GENERIC SHAPE: a FLAT lists[] with an optional unlisted:true per entry.
+  // Detected by the ABSENCE of upg100's extra buckets, so the 28-zone catalogue keeps its legend-
+  // tree enumeration (the deaf collapse and its reachability semantics) byte-for-byte, and a fork
+  // never needs a legend tree at all — its file IS the enumeration. unlisted:true is the same
+  // reachability idea as data: defined, selectable by ONLY=, but not generated by default.
+  const BUCKETED = !!(clusters.asia_lists || clusters.uncovered_lists || clusters.deaf_lists);
+  if (!BUCKETED) {
+    return (clusters.lists || [])
+      .filter((l) => !l.unlisted || (process.env.ONLY && process.env.ONLY === l.id))
+      .map((l) => ({ id: l.id, zoneKey: l.id, label: l.label || l.id, count: l.count, selector: l.selector }));
   }
-  // The unified deaf leaf's selector. DUPLICATED from legend-tree.js:99's DEAF_SELECTOR, which is
-  // function-scoped rather than exported, and from generate.mjs:2805 which hardcodes the same literal.
-  // Kept as a literal here rather than exporting a third consumer's dependency mid-hold; if a fourth
-  // caller ever needs it, export it once from legend-tree.js and delete all three copies.
-  byId.deaf = { type: 'affinity_bloc', rop1: 'A017' };
-  return leafZones(tops).map((z) => ({ ...z, zoneKey: z.zoneKey || z.id, selector: byId[z.id] }));
+  // The legend's leaves with their selectors, the unified deaf leaf included — ONE enumeration
+  // (legend-tree.js zonesWithSelectors) shared with the browser packet and the map, replacing the
+  // id->selector table and deaf literal this function used to type out itself.
+  const { zonesWithSelectors } = await legendModules();
+  return zonesWithSelectors(clusters, { records: null });
 }
 
 // ── PHOTOS: parallel fetch, inlined as data URIs ────────────────────────────
@@ -413,7 +470,7 @@ async function fetchPhotos(groups, limit = 16) {
 // (public/dx-maps/assets/tables/), not a plugin folder — the same copy the browser fetches, so the
 // offline packet and a printed-from-the-app packet chart identical rows. A missing table yields
 // null and buildPacketSets -> setsPage omit the page rather than failing the run: one way for the
-// page to be absent, not two (the FUNNEL/CHRISTIAN pattern above, applied unchanged).
+// page to be absent, not two (the FUNNEL / evangelical-share pattern above, applied unchanged).
 let NEAR_TABLE = null;
 try {
   NEAR_TABLE = JSON.parse(readFileSync(
@@ -425,7 +482,7 @@ try {
 async function buildPacket(zone, groups, mapSvg) {
   const photos = await fetchPhotos(groups);
   const sets = NEAR_TABLE ? buildPacketSets(groups, NEAR_TABLE) : null;
-  const html = R.buildPacket(zone, groups, photos, mapSvg, FUNNEL, CHRISTIAN, 'full', sets);
+  const html = R.buildPacket(zone, groups, photos, mapSvg, FUNNEL, evangelicalShareFor(groups, EV_TABLE), VARIANT, sets);
   const withPhoto = groups.filter((g) => photos.has(g.slug)).length;
   // ★ COUNT THE SHEETS IN THE EMITTED HTML, do not re-derive them from a formula. The old line
   // computed `1 + ceil(n/PER_PAGE) + 2` while its own comment claimed the number was "asked of the
@@ -442,9 +499,9 @@ const allRecords = await loadRecords();
 // ★ PACKET_LIST MAKES THE NON-DEFAULT-LIST PATH REACHABLE FROM THIS GENERATOR, and it needed to be.
 // The BROWSER path honours the universal `list` prop — upg-100-list.vue calls applyPeopleGroupList()
 // at every fetch site — but this generator had no list support at all, so the SIX-ROW funnel (a list's
-// own total inserted before the reader's row) could not be rendered by the only pipeline rega can
-// drive. Its only evidence was a harness I wrote about it, which is the state I have been objecting to
-// elsewhere: a code path whose sole witness is its author's own test.
+// own total inserted before the reader's row) could not be rendered by the only pipeline a browser
+// check can drive. Its only evidence was a harness written about it: a code path whose sole witness
+// is its author's own test.
 //
 // ⚠ IT READS THE MEMBERSHIP FILE FROM DISK rather than through loadListMembership(), which fetches
 // from the asset pool over HTTP — there is no server here. Same file, same `slugs`, same counts.doxa.
@@ -475,9 +532,15 @@ if (LIST_MEMBERSHIP) {
   console.log(`[packet] list=${LIST} — ${records.length} of ${allRecords.length} record(s) `
     + `belong to it (list total ${LIST_MEMBERSHIP.total})`);
 }
+// Resolved ONCE, and it MUST precede FUNNEL: packetFunnel reads ZONES_ALL.length inside a
+// try/catch whose catch returns null — so a use-before-init here does not crash, it silently
+// deletes the funnel page from every packet. That exact failure shipped for one run: the tip
+// probe found no "1 of 28" anywhere, which is how a swallowed TDZ was caught as missing CONTENT
+// rather than as an error.
+const ZONES_ALL = await allZones();
 const FUNNEL = buildFunnel(LIST_MEMBERSHIP);
 const bySlug = new Map(records.map((r) => [r.slug, r]));
-const zones = allZones().filter((z) => !ONLY || z.id === ONLY);
+const zones = ZONES_ALL.filter((z) => !ONLY || z.id === ONLY);
 if (!zones.length) { console.error(`[packet] no zone matches ONLY=${ONLY}`); process.exit(1); }
 
 let made = 0;
@@ -494,15 +557,22 @@ for (const z of zones) {
     .sort((a, b) => String(a.name).localeCompare(String(b.name), LANG));
   if (!groups.length) { console.warn(`[packet] ${z.id}: no groups resolved — skipped`); continue; }
 
-  // The map one-pager reuses the poster's SVG when it has been generated; without
-  // it the packet still builds (cover page without the map) rather than failing.
-  const posterPath = join(__dirname, 'out', 'posters', `${z.id}.html`);
+  // The map one-pager reuses the zone's generated map sheet — the map-only vertical sheet
+  // (FORMAT=packet) when it exists, else the poster, in the renderer's own preference order
+  // (R.mapSheetFiles) so this path and the browser's cannot prefer different files. Without either
+  // the packet still builds, and page 1 says the map is missing.
+  // Freshly generated sheets first (out/posters, after `bun run posters`), then the TRACKED poster
+  // sources in data/posters, which ship with the repo — so a fresh checkout's offline packets carry
+  // their page-1 map instead of the missing-map notice.
+  const SHEET_DIRS = [join(__dirname, 'out', 'posters'), join(REPO, 'data', 'posters')];
+  const posterPath = SHEET_DIRS.flatMap((d) => R.mapSheetFiles(z.id).map((f) => join(d, f))).find((p) => existsSync(p)) || null;
+  const sheetFile = posterPath ? posterPath.slice(REPO.length + 1) : null;
   let mapSvg = '';
   let mapMiss = null;                       // why page 1 has no map, if it has none
-  if (!existsSync(posterPath)) {
-    mapMiss = 'no out/posters/' + z.id + '.html';
+  if (!posterPath) {
+    mapMiss = 'no map sheet (' + R.mapSheetFiles(z.id).join(' or ') + ') in out/posters or data/posters';
   }
-  if (existsSync(posterPath)) {
+  if (posterPath) {
     const poster = readFileSync(posterPath, 'utf8');
     const m = poster.match(/<svg[\s\S]*?<\/svg>/);
     // ⚠ The map SVG carries almost NO presentation attributes — generate.mjs styles
@@ -526,39 +596,43 @@ for (const z of zones) {
     // living in a human's head, and the same bet already failed for "regenerating the tree alone
     // ships a stale .js" — written down, and it still happened. So the build ASSERTS it.
     // The marker is the NETWORKS text itself, which is the one thing that survives every stage of
-    // the pipeline into the artefact. Suggested by regions-plugin, 2026-09-28.
+    // the pipeline into the artefact (adopted 2026-09-28).
     const posterSeries = Object.entries(SERIES_ALL)
       .filter(([id]) => !id.startsWith('_'))
       .find(([, def]) => (def.networks || []).some(([head]) => m && m[0].includes(head)));
     if (m && posterSeries && posterSeries[0] !== SERIES_ID) {
       console.error(`\nSERIES MISMATCH — refusing to build a packet around the wrong poster.`);
       console.error(`  packet series : ${SERIES_ID}`);
-      console.error(`  poster series : ${posterSeries[0]}  (out/posters/${z.id}.html)`);
+      console.error(`  poster series : ${posterSeries[0]}  (${sheetFile})`);
       console.error(`  The poster's below-map text is drawn INTO its SVG, and this packet lifts that`);
       console.error(`  SVG whole, so the packet would print ${posterSeries[0]} wording on page 1.`);
       console.error(`  Regenerate the poster first:`);
       console.error(`    SERIES=${SERIES_ID} ONLY=${z.id} node generate.mjs`);
       process.exit(1);
     }
-    if (m) mapSvg = `<style>${mapCss(poster)}</style>
-      <div style="position:absolute;left:0;top:250px;width:${W}px;
-      transform:scale(0.62);transform-origin:top center">${m[0]}</div>`;
-    // The poster EXISTS but carries no <svg> — a truncated or failed generate run. Same
-    // outcome as a missing file (page 1 is blank) and it was equally silent, so it is
-    // reported the same way rather than left as the one unexplained branch.
-    else mapMiss = `out/posters/${z.id}.html has no <svg>`;
+    // ONE lift for every path (packet-render.js liftMap); this used to be one of three copies.
+    mapSvg = R.liftMap(poster, { labelFor: LABEL_FOR });
+    // The sheet EXISTS but yields nothing liftable — no <svg>, or one too small to be a map sheet:
+    // a truncated or failed generate run. Same outcome as a missing file (page 1 says the map is
+    // missing), and it is reported the same way rather than left as the one unexplained branch.
+    if (!mapSvg) mapMiss = `${sheetFile} has no map-sheet <svg>`;
   }
 
-  const { html, pageCount, withPhoto } = await buildPacket(z, groups, mapSvg);
-  // ⚠ THE LIST IS PART OF THE FILENAME, and leaving it out was a real hazard I created while arguing
+  // The title in the packet's language where it can be generated (one-country zones), else the
+  // hand-written label — the same rule the browser print applies.
+  const title = ZONE_TITLE ? ZONE_TITLE(z, { ...STRINGS.en, ...(STRINGS[LANG] || {}) }, { alpha2: (c) => ALPHA2[c], locale: LANG }) : null;
+  const { html, pageCount, withPhoto } = await buildPacket(title ? { ...z, label: title } : z, groups, mapSvg);
+  // ⚠ THE LIST IS PART OF THE FILENAME, and leaving it out was a real hazard, created while guarding
   // against exactly this. PACKET_LIST fails closed because "a packet that showed the wrong list is
   // printed and handed to someone" — and then wrote the frontier packet over the default-list packet of
-  // the same zone and language. rega measured it (2026-09-26): after a list run, out/packets/ held
+  // the same zone and language. Measured 2026-09-26: after a list run, out/packets/ held
   // frontier packets under the DEFAULT names beside an `ar` file that was still the default list, and
   // nothing in the filename could tell them apart. Guarding the input while leaving the output
   // ambiguous protects against asking for the wrong list, not against being unable to tell what you got.
   const listSuffix = LIST ? `.${LIST}` : '';
-  const name = LANG === 'en' ? `${z.id}${listSuffix}.html` : `${z.id}${listSuffix}.${LANG}.html`;
+  // The full packet keeps the names it always had; lightweight is named so, and cannot overwrite it.
+  const variantSuffix = VARIANT === 'lightweight' ? '.lightweight' : '';
+  const name = LANG === 'en' ? `${z.id}${listSuffix}${variantSuffix}.html` : `${z.id}${listSuffix}${variantSuffix}.${LANG}.html`;
   // ★ STAMP HOW THIS PACKET WAS BUILT, INTO THE PACKET. out/packets/ is gitignored, so the
   // sweep gate (check:packets-all) grades whatever .html files happen to be sitting there —
   // an ACCIDENTAL set, not a current one. MEASURED 2026-09-24: doxa-maps-plugin-studio, which
@@ -592,7 +666,7 @@ for (const z of zones) {
   // to be sitting there, and a packet that cannot describe its own provenance makes an accidental set
   // indistinguishable from a current one.
   const listAttr = LIST ? ` data-packet-list="${LIST}"` : '';
-  const stamped = html.replace('<html ', `<html data-packet-build="${provenance}"${listAttr} `);
+  const stamped = html.replace('<html ', `<html data-packet-build="${provenance}" data-packet-variant="${VARIANT}"${listAttr} `);
   writeFileSync(join(OUT, name), stamped);
   made++;
   if (mapMiss) mapless.push(z.id);

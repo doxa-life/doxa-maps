@@ -2,7 +2,7 @@
  * colocation.js — which people groups share ONE coordinate on a map (APPROXPIN, 2026-09-26).
  *
  * A people-group pin is a representative point, not an address, and some pins ARE THE SAME POINT:
- * measured on the Doxa roster (gospel-plugin): 2,107 groups on 2,048 distinct coordinates, 108 groups on
+ * measured on the Doxa roster: 2,107 groups on 2,048 distinct coordinates, 108 groups on
  * a point shared with another (41 pairs, 6 triples, 2 quadruples). Saying "approximate" hides that; naming
  * the co-located groups is the only version a reader can check. The index is built from THE ROSTER THE MAP
  * DRAWS (every map's roster differs), never hardcoded.
@@ -39,7 +39,7 @@ export function buildColocationIndex(rows) {
 /**
  * The roster key for a selected pin. A click hands over the RENDERED feature, whose geometry the engine
  * rebuilt from tile coordinates, so it is close to the roster's point but not equal to it at six decimals
- * (rega, row 46: a four-group point never matched). So the pin is resolved to its ROSTER ROW by name, and
+ * (row 46: a four-group point never matched). So the pin is resolved to its ROSTER ROW by name, and
  * when a name repeats (the same people in several countries) to the nearest of those rows. Only a name the
  * roster does not know falls back to the pin's own coordinate.
  */

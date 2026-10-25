@@ -48,7 +48,7 @@ for (const root of roots) {
   console.log(`[clean] reset ${root}`)
 }
 
-// ONE FOLDER (Driver decision, card BUILD-OUTPUT-IS-ONE-FOLDER, 2026-09-25): public/ now holds only the
+// ONE FOLDER (decision, card BUILD-OUTPUT-IS-ONE-FOLDER, 2026-09-25): public/ now holds only the
 // output folder + a generated README.md. These are the entries the OLD layout wrote beside the tree;
 // removing them here lets a checkout that still has them converge on the new layout at its next build
 // instead of carrying them forever. (public/api/ is left alone: write-token owns it, and only when a

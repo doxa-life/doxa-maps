@@ -7,9 +7,9 @@
  * `<strong>{{ selectedOption.label }}</strong>` appeared in the label. Measured before the fix: the
  * row grew 960 → 1294px and individual triggers reached 240px.
  *
- * ★ WHY IT IS NOT COSMETIC, in the Driver's own reasoning: the selections row with Clear All sits
+ * ★ WHY IT IS NOT COSMETIC: the selections row with Clear All sits
  * UNDERNEATH the filters. If a filter grows on selection, the row below re-flows and the whole group
- * stops being the aligned block he asked for. The stable width is what makes the centred stack hold
+ * stops being the aligned block that was asked for. The stable width is what makes the centred stack hold
  * still — so this is a layout invariant, not a preference about widths.
  *
  * The ellipsis rules were already present and doing nothing: `.filter-dropdown__label` lacked

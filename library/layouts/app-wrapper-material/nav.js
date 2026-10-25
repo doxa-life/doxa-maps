@@ -26,7 +26,7 @@ export const NAV = [
       // default view — no separate bundle needed. The `embed` icon (<>) marks it as
       // the embeddable/share-first map.
       { kind: 'item', id: 'prayer-progress', label: 'Prayer Progress',  icon: 'embed', target: 'both' },
-      { kind: 'item', id: 'upg-100-list',    label: 'My UPG 100 List',  icon: 'list',  target: 'both' },
+      { kind: 'item', id: 'upg-100-list',    label: 'UPG100 Posters',  icon: 'list',  target: 'both' },
       // REMOVED 'Prayer List' (2026-07-29): not a real app.
     ],
   },
@@ -92,7 +92,7 @@ export const NAV = [
     ],
   },
 
-  // ── a FOLDER at the BOTTOM (design note: "experimental maps") ──
+  // ── a FOLDER at the BOTTOM: the experimental maps ──
   {
     kind: 'folder', id: 'experimental', label: 'Experimental maps', icon: 'flask', target: 'both',
     open: false,

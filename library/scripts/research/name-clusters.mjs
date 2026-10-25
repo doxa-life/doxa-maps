@@ -5,8 +5,8 @@
 //   ALL=1 node name-clusters.mjs      # all 1,646 (slow: ~28 min at 1 req/s)
 //
 // ═══ WHY A GAZETTEER AND NOT CLUSTERING ═════════════════════════════════════
-// derive-city-candidates.mjs deliberately emits place_name:null. Pins are
-// people-group CENTROIDS, not settlements, so inferring a placename from pin
+// derive-city-candidates.mjs deliberately emits place_name:null. Each pin marks
+// a people group, not a settlement, so inferring a placename from pin
 // geometry would MANUFACTURE it — and a fabricated placename in a
 // persecution-sensitive dataset is the dangerous kind of wrong. Naming must come
 // from a source that can be cited per row. This is that step.

@@ -14,7 +14,7 @@
   },
   "expected_orphans": {
     "_why": "Groups in the list that belong to NO zone. An empty list here means 'every group must be zoned'. A gate cannot tell a deliberate exclusion from a silent drop; only this declaration can.",
-    "_status": "PENDING DRIVER — these 11 are TODAY'S ACTUAL orphans, recorded so the gate is green on arrival and any NEW orphan fails. They are all Japan / China / Mongolia and are plausibly deliberate (asia-china-tibet-autonomous-region is labelled 'Mainland China + Mongolia' and carries only 43 groups), but nobody has said so. In DRIVER-DECISIONS-DIGEST; do NOT change the memberships to make this list shorter.",
+    "_status": "PENDING A PRODUCT DECISION — these 11 are TODAY'S ACTUAL orphans, recorded so the gate is green on arrival and any NEW orphan fails. They are all Japan / China / Mongolia and are plausibly deliberate (asia-china-tibet-autonomous-region is labelled 'Mainland China + Mongolia' and carries only 43 groups), but nobody has said so. In the product-decisions digest; do NOT change the memberships to make this list shorter.",
     "slugs": [
       "ainu-japan",
       "jing",
@@ -31,7 +31,7 @@
   },
   "known_geographic_overlaps": {
     "_why": "Groups that DO sit in two geographic zones, declared so the gate fails on a NEW overlap rather than on these. Not an endorsement — see _status.",
-    "_status": "PENDING DRIVER — uncovered-scatter is country_codes AND,CCK,GUF,USA ('Scattered / Diaspora'), so it overlaps the regional zones it scatters across. Either a scatter zone is a THIRD partition (like a bloc) or these two memberships are wrong. In DRIVER-DECISIONS-DIGEST; do NOT change either membership. ⚠ deaf-cocos-islanders was MISSED by my own hand analysis and found by this gate: I had filtered out every A017 group as 'the design-approved deaf double-count', but its TWO GEOGRAPHIC claims (CCK is in both zones' country lists) are a SEPARATE fact from its bloc membership. Conflating them is exactly what the bloc/geographic split in A2 exists to prevent, and the gate got it right where I did not — which is the best argument for the gate existing.",
+    "_status": "PENDING A PRODUCT DECISION — uncovered-scatter is country_codes AND,CCK,GUF,USA ('Scattered / Diaspora'), so it overlaps the regional zones it scatters across. Either a scatter zone is a THIRD partition (like a bloc) or these two memberships are wrong. In the product-decisions digest; do NOT change either membership. ⚠ deaf-cocos-islanders was MISSED by my own hand analysis and found by this gate: I had filtered out every A017 group as 'the design-approved deaf double-count', but its TWO GEOGRAPHIC claims (CCK is in both zones' country lists) are a SEPARATE fact from its bloc membership. Conflating them is exactly what the bloc/geographic split in A2 exists to prevent, and the gate got it right where I did not — which is the best argument for the gate existing.",
     "slugs": [
       {
         "slug": "deaf-cocos-islanders",

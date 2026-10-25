@@ -1,9 +1,10 @@
+import { defineMapElement } from '@map/elements/defineMapElement.js'
 /**
  * plugin-designs/regions-dashboard/index.js
  *
  * Bundle entry — registers the regions-dashboard web component.
  *
- * This bundle ships the Driver's 2-tab Regions element as three flat profiles:
+ * This bundle ships the 2-tab Regions element as three flat profiles:
  *   regions-list.vue       — tab 1, "Regions List"
  *   region-dashboards.vue  — tab 2, "Region Dashboards"
  *   regions-mfe.vue        — the COMPOSITE that carries the SELECT VIEW switcher over both
@@ -20,7 +21,6 @@
  * `profile` must match a flat .vue filename in this folder (without the .vue).
  * The profile-config attribute is parsed by ProfileLoader (in @map).
  */
-import { defineMapElement } from '@map/elements/defineMapElement.js'
 
 // ─── Bundle-private profile registry ─────────────────────────────────────────
 // import.meta.glob is evaluated by Vite at build time relative to THIS file, so it

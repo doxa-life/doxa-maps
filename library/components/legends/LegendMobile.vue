@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, inject, toRef } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, inject, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useShadowStyles } from '../../composables/useShadowStyles.js'
 import { useLegendData } from '../../composables/legends/useLegendData.js'
@@ -21,29 +21,34 @@ useShadowStyles(`
    the SAME component desktop uses, with all the same default CSS. Mobile
    no longer overrides any .lrg-* rule — the bottom sheet is purely
    mobile chrome (pull tab, collapse/expand caret, touch drag). ── */
-/* bottom = 30% (the sheet's open height) + 16px gap. The Mapbox watermark lives bottom-right
-   and only rises by the collapsed strip, so nothing else needs room under this image. */
-.floating-mini-image{position:absolute;inset-inline-start:16px;bottom:calc(30% + 16px);z-index:999;pointer-events:auto;cursor:pointer;}
+/* bottom = the sheet's height (it shows only while the sheet is open, whose height fits its content)
+   + a 16px gap. */
+.floating-mini-image{position:absolute;inset-inline-start:16px;bottom:calc(var(--legend-img-seat,var(--legend-sheet-h,30%)) + 16px);z-index:999;pointer-events:auto;cursor:pointer;touch-action:none;}
+/* The image SITS on --legend-img-seat, a copy of the sheet's height that moves only while the image shows (the
+   sheet open, no finger on it; script: IMG_SEAT_VAR). Dragged up, and through the snap to full open, the sheet
+   (z 1000) slides over the still image (z 999), so it goes INTO the legend instead of riding its top edge; dragged
+   down, it waits and then follows the snap. It fades in and out instead of popping; the reduced-motion rule below
+   turns the fade off for those who ask. */
+.lm-img-enter-active,.lm-img-leave-active{transition:opacity .2s ease;}
+.lm-img-enter-from,.lm-img-leave-to{opacity:0;}
 .mini-image{width:120px;height:150px;object-fit:cover;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);display:block;}
 
 /* Containment root: clamps absolute children to the map area. */
 .legend-sheet-root{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
-/* Sits just above the sheet's top edge, tracking it via --legend-sheet-h. Text only, so it stays
-   pointer-events:none with the root — nothing here is tappable and it must never eat a map drag.
-   The scrim keeps it legible over an arbitrary basemap without becoming another panel. */
-.approx-pin-note--floating{position:absolute;inset-inline:0;bottom:calc(var(--legend-sheet-h,0px) + 6px);z-index:1001;margin:0 10px !important;text-align:center;pointer-events:none;text-shadow:0 1px 2px rgba(255,255,255,0.85);}
-/* The note's own text colour flips with the dark prop, so the scrim has to flip with it: a white
-   halo behind light text is a smear, not legibility. (No backticks in this comment: the whole
-   block is a JS template literal and a backtick would end it — which is what it just did.) */
-.approx-pin-note--floating-dark{text-shadow:0 1px 2px rgba(0,0,0,0.85);}
 .legend-sheet-root>*{pointer-events:auto;}
-/* ...except the floating note. The rule above re-enables pointer events for every direct child of
-   the root, at the same specificity as the note's own rule and AFTER it, so it was winning and the
-   note would have swallowed a map drag across the full width just above the sheet. It is text with
-   nothing tappable in it; stated here, after the rule that would otherwise override it. */
-.legend-sheet-root>.approx-pin-note--floating{pointer-events:none;}
-
-/* ── Attribution stays visible (driver bug 2026-09-16) ──
+/* ★ ATTRIBUTION PLACEMENT ON A PHONE MAP WITH THIS FOOTER SHEET (mobile pass 2026-09-30). The engine's credit
+   sits in the TOP corner on the START side (left; right in RTL), opposite the map's own control column,
+   compact: it shows expanded, then folds to its (i) 3 s after it first shows (script: CREDIT_FOLD_MS), and a
+   tap on the (i) opens it again. Its corner sits above the scroll-edge strips, so the tap always lands. The
+   sheet is flush at the map's bottom at FULL width. The layout's round menu button sits FIXED in the bottom
+   corner on the start side, over the sheet's corner, and never moves; it publishes the room it takes as
+   --map-fab-beside. So the COLLAPSED sheet pads its start edge by that much, keeping its caret and title
+   clear of the button, and the OPEN sheet keeps its full width under the button's small corner. MapLibre's
+   optional logo control goes; the credit, the licence term, stays. Every bottom placement of the credit
+   failed a reader (covered by the open sheet, floating mid-map, or pushing the legend off the map), which
+   is why it lives at the top here; a map with no footer sheet keeps it at the bottom-right. See the @media
+   block after the desktop rules; the desktop notes below are history. */
+/* ── Attribution stays visible (bug 2026-09-16) ──
    The sheet is a bottom overlay, so the engine's bottom-left logo / bottom-right
    attribution corners ended up UNDER it in every state (even the 48px collapsed
    footer fully covered the 19px logo). The sheet observes its own height
@@ -53,20 +58,54 @@ useShadowStyles(`
    height transition frame by frame. Desktop: the sheet slot is display:none, the
    observer sees 0 and never writes the var, so nothing moves. Every profile that
    renders this sheet loads this stylesheet — no per-profile wiring. */
-.mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right,
 /* One watermark, bottom-right, on every map: the Mapbox wordmark and the attribution "i" in a
    single tight row, slightly reduced and translucent. The corners sit just above the sheet's
    collapsed strip (48px), so the watermark is always visible when the legend is closed; an
    opened sheet covers it. */
-.mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right,.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right{transform:translateY(calc(-1 * min(var(--legend-sheet-h,0px),48px)));}
+/* ★ THE FAB SITS ON THE ATTRIBUTION TOO, not just the sheet (measured at 390x844 on DX Life's
+   /research: the gallery's 44px vtl-fab at (12,788) is topmost over Cities' bottom-left
+   attribution line "…oundaries · OpenFreeMap"). This rule already lifted the engine's bottom
+   corners clear of the legend SHEET; it never knew about the circle, which lives in the LAYOUT
+   outside every plugin's shadow root and therefore paints over plugin content at any internal
+   z-index. Attribution is a LICENCE TERM of the basemap, so a control covering it is not a
+   cosmetic overlap.
+   The lift is now the MAX of the two obstacles rather than the sheet alone: whichever is taller
+   decides, and neither is double-counted, because the fab and the sheet occupy the same corner.
+   Both are read from published variables — --legend-sheet-h (this component's own ResizeObserver)
+   and --map-fab-clearance (VerticalTabsLayout, set ONLY while the circle renders) — so a map with
+   no sheet and no fab still moves nothing. The 48px cap on the sheet term is kept as it was. */
+/* Every corner rule here is scoped to .lm-on (see the phone block): this stylesheet outlives the component,
+   and on Cities, which mounts the sheet only for its card, the credit stayed shrunken and translucent after
+   the card closed. */
+:host(.lm-on) .mapboxgl-ctrl-bottom-left,:host(.lm-on) .mapboxgl-ctrl-bottom-right,:host(.lm-on) .maplibregl-ctrl-bottom-left,:host(.lm-on) .maplibregl-ctrl-bottom-right,.lm-on .mapboxgl-ctrl-bottom-left,.lm-on .mapboxgl-ctrl-bottom-right,.lm-on .maplibregl-ctrl-bottom-left,.lm-on .maplibregl-ctrl-bottom-right{transform:translateY(calc(-1 * var(--map-fab-clearance,0px)));}
 /* The scroll-edge gutters (the hoverable side strips, z-index 2) run the full height of the
    map and would otherwise swallow taps meant for the attribution in the corner: the corner
    controls sit one tier above them. (Moves to the shared z tiers with the token work.) */
-.mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right,.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right{z-index:3;}
-.mapboxgl-ctrl-bottom-right,.maplibregl-ctrl-bottom-right{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:2px;opacity:0.72;transform:translateY(calc(-1 * min(var(--legend-sheet-h,0px),48px))) scale(0.85);transform-origin:bottom right;transition:opacity 0.15s;}
-.mapboxgl-ctrl-bottom-right:hover,.maplibregl-ctrl-bottom-right:hover{opacity:1;}
-.mapboxgl-ctrl-bottom-right .mapboxgl-ctrl,.maplibregl-ctrl-bottom-right .maplibregl-ctrl{margin:0 6px 6px 0;}
-.mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-attrib.mapboxgl-compact{margin-right:6px;}
+:host(.lm-on) .mapboxgl-ctrl-bottom-left,:host(.lm-on) .mapboxgl-ctrl-bottom-right,:host(.lm-on) .maplibregl-ctrl-bottom-left,:host(.lm-on) .maplibregl-ctrl-bottom-right,.lm-on .mapboxgl-ctrl-bottom-left,.lm-on .mapboxgl-ctrl-bottom-right,.lm-on .maplibregl-ctrl-bottom-left,.lm-on .maplibregl-ctrl-bottom-right{z-index:3;}
+:host(.lm-on) .mapboxgl-ctrl-bottom-right,:host(.lm-on) .maplibregl-ctrl-bottom-right,.lm-on .mapboxgl-ctrl-bottom-right,.lm-on .maplibregl-ctrl-bottom-right{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:2px;opacity:0.72;transform:translateY(calc(-1 * var(--map-fab-clearance,0px))) scale(0.85);transform-origin:bottom right;transition:opacity 0.15s;}
+:host(.lm-on) .mapboxgl-ctrl-bottom-right:hover,:host(.lm-on) .maplibregl-ctrl-bottom-right:hover,.lm-on .mapboxgl-ctrl-bottom-right:hover,.lm-on .maplibregl-ctrl-bottom-right:hover{opacity:1;}
+:host(.lm-on) .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl,:host(.lm-on) .maplibregl-ctrl-bottom-right .maplibregl-ctrl,.lm-on .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl,.lm-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl{margin:0 6px 6px 0;}
+:host(.lm-on) .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-attrib.mapboxgl-compact,.lm-on .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-attrib.mapboxgl-compact{margin-right:6px;}
+/* !important on the move: a plugin may lift its own bottom corners by the round button's height with a
+   plain rule of the same specificity (a translateY on the corner container), and up here that lift would
+   push the credit off the top of the map. The corners are not at the bottom on a phone any more. */
+/* ★ SCOPED TO .lm-on, a class on the HOST while at least one LegendMobile is mounted (script: LM_HOST_CLASS).
+   This CSS is injected once into the host's shadow root and never removed, so a map that mounts the sheet
+   only for a while (Cities with Internet: its phone people-group card) kept its credit at the top after
+   the sheet went, under the map's own legend (measured at 390: 1 of 11 points visible). Scoped, the move
+   ends with the last sheet. ".lm-on X" is the same rule for a page with no shadow root. */
+@media (max-width:767.98px){
+  :host(.lm-on) .mapboxgl-ctrl-bottom-left,:host(.lm-on) .mapboxgl-ctrl-bottom-right,:host(.lm-on) .maplibregl-ctrl-bottom-left,:host(.lm-on) .maplibregl-ctrl-bottom-right,.lm-on .mapboxgl-ctrl-bottom-left,.lm-on .mapboxgl-ctrl-bottom-right,.lm-on .maplibregl-ctrl-bottom-left,.lm-on .maplibregl-ctrl-bottom-right{top:0 !important;bottom:auto !important;inset-inline-start:0 !important;inset-inline-end:auto !important;transform:none !important;justify-content:flex-start;max-width:calc(100% - 44px);z-index:4;}
+  :host(.lm-on) .maplibregl-ctrl-logo,.lm-on .maplibregl-ctrl-logo{display:none !important;}
+  /* ONE LINE (mobile pass 2026-09-30, S8). Up here the credit shares the top edge with the map's control
+     column (the end side, 35px at 390), so it is capped short of it, in type small enough that the whole
+     licence text fits ONE line in the room left beside the column: measured at 390, the MapLibre credit
+     is 346px on one line at 10px, 312px at 9px and 294px at 8.5px, against about 302px of room (the box
+     keeps 36px of padding for its (i) toggle). It still wraps rather than clips, so a longer credit
+     (another style, another engine) shows whole on two lines instead of losing its terms. */
+  :host(.lm-on) .maplibregl-ctrl-attrib-inner,:host(.lm-on) .mapboxgl-ctrl-attrib-inner,.lm-on .maplibregl-ctrl-attrib-inner,.lm-on .mapboxgl-ctrl-attrib-inner{font-size:8.5px;line-height:12px;}
+  :host(.lm-on) .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl,:host(.lm-on) .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl,:host(.lm-on) .maplibregl-ctrl-bottom-left .maplibregl-ctrl,:host(.lm-on) .maplibregl-ctrl-bottom-right .maplibregl-ctrl,.lm-on .mapboxgl-ctrl-bottom-left .mapboxgl-ctrl,.lm-on .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl,.lm-on .maplibregl-ctrl-bottom-left .maplibregl-ctrl,.lm-on .maplibregl-ctrl-bottom-right .maplibregl-ctrl{margin:8px 0 0;margin-inline:8px 0;}
+}
 /* In the sheet the legend's rows fill the full width: the clear "x" column does not reserve
    space on the right — it floats over the row's right edge only when a row is selected. */
 .legend-mobile-sheet .stl-row{position:relative;}
@@ -79,23 +118,42 @@ useShadowStyles(`
    max-height reads --legend-sheet-top-reserve, set on this element from the
    TOP_RESERVE_PX constant in the script — the SAME number the touch-drag clamp
    uses, so CSS and JS can never disagree about how tall the sheet may get. */
-.legend-mobile-sheet{position:absolute;bottom:0;left:0;right:0;z-index:1000;background:white;border-top-left-radius:var(--map-radius,16px);border-top-right-radius:var(--map-radius,16px);box-shadow:0 -4px 20px rgba(0,0,0,0.2);transition:height 0.3s ease-out;display:flex;flex-direction:column;overflow:hidden;max-height:calc(100% - var(--legend-sheet-top-reserve,80px));}
+.legend-mobile-sheet{overscroll-behavior:contain;position:absolute;bottom:0;inset-inline-start:0;inset-inline-end:0;z-index:1000;background:white;border-top-left-radius:var(--map-radius,16px);border-top-right-radius:var(--map-radius,16px);box-shadow:0 -4px 20px rgba(0,0,0,0.2);transition:height 0.3s ease-out;display:flex;flex-direction:column;overflow:hidden;max-height:calc(100% - var(--legend-sheet-top-reserve,80px));}
 /* While a finger is resizing the sheet the height must be applied INSTANTLY —
    with the 0.3s transition left on, the measured height lagged the finger by
    14-30px (mobile-sheet-probe baseline 2026-09-16) and the release logic read a
    mid-animation value. Snapping on release re-enables the transition. */
 .legend-mobile-sheet.dragging{transition:none!important;}
+/* CONTENT-FIT OPEN STATE (mobile pass 2026-09-30): at rest in 'open' the sheet takes its content's
+   height, never more than 45% of the map, instead of a fixed 30% (a three-row legend sat in a mostly
+   empty sheet; a long tree scrolled inside one). A change to or from the fitted height snaps: a height
+   transition cannot run to auto, and interpolate-size:allow-keywords left the sheet stuck at the 48px
+   it started from (measured in Chrome 149, collapsed to open on Simple Research). */
+.legend-mobile-sheet.fit{max-height:min(45%, calc(100% - var(--legend-sheet-top-reserve,80px)));}
 
 /* Drag strip — thin top overlay holding the pull-tab handle + touch
    gestures. z-index puts it above content. */
 .sheet-drag-strip{position:absolute;top:0;left:0;right:0;height:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;z-index:2;}
+/* ★ THE HANDLE KEEPS ITS GESTURE (mobile pass 2026-09-30, S4b). A drag on the handle fell through to whatever
+   scrolls behind the map: measured on UPG-100's Map view at 390, a downward drag on the collapsed sheet
+   scrolled its pane column 655px back to the list. touch-action:none on the handle (the drag strip, the
+   title rows, and the whole sheet while collapsed) tells the browser not to pan from there; the sheet's own
+   touch handlers do the resizing, and a tap still reaches the caret. */
+.sheet-drag-strip,.legend-mobile-sheet.collapsed,.legend-mobile-sheet .stl-titlebar,.legend-mobile-sheet .lrg-title-row,.legend-mobile-sheet .collapsed-detail-footer{touch-action:none;}
+/* ★ A GRAB LIP ABOVE THE OPEN SHEET (mobile pass 2026-09-30, #9). A finger aimed at the open sheet's top edge often
+   landed just above it, on the hint pill (shown only while nothing is selected), and a drag there scrolled the
+   pane instead of resizing the sheet. This transparent 12px strip sits right above the sheet's top edge (it follows
+   --legend-sheet-h), above the pill, takes the pan (touch-action:none) and hands the gesture to the sheet's own
+   handlers, whose grab zone is measured from the sheet's top and so includes it. It is outside the sheet because
+   the sheet clips its children (overflow:hidden), and it exists only while the sheet is open. */
+.sheet-grab-lip{position:absolute;inset-inline:0;bottom:var(--legend-sheet-h,0px);height:12px;z-index:1001;touch-action:none;}
 .pull-tab-handle{width:40px;height:4px;background:#ccc;border-radius:2px;}
 
 /* Collapse caret — in-flow, injected via #title-caret slot into the title
    row's column-1 caret slot (LegendRows .lrg-title-caret-slot or
    SemanticTreeLegend .stl-tb-caret-slot). Vertical alignment with the
    title text comes from the slot's align-items:center, so no absolute
-   positioning or padding offsets are needed (qa: 2026-05-02 iter-9). */
+   positioning or padding offsets are needed. */
 /* Collapse caret — matches STL's .stl-collapse-btn exactly (22x20px,
    same bg/border/radius/hover as the desktop SemanticTreeLegend caret). */
 .mobile-collapse-caret{width:22px;height:20px;display:flex;align-items:center;justify-content:center;background:rgba(208,215,222,0.4);border:1px solid #d0d7de;border-radius:5px;cursor:pointer;color:#57606a;padding:0;transition:transform 0.3s ease-out,color 0.1s,background 0.1s,border-color 0.1s;transform-origin:center;outline:none;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
@@ -142,7 +200,7 @@ useShadowStyles(`
    a DEFINITE height via flex:1 — height:100% on a non-flex parent with only
    flex:1 (no explicit height) falls back to auto, which made the inner
    scrollable shorter than the sheet on tier-3 fullyOpen and left a white
-   gap at the bottom (qa: 2026-05-02 iter-10).
+   gap at the bottom.
    IMPORTANT: NO backticks anywhere in this comment block — it lives
    inside a JS template literal (useShadowStyles) and a stray backtick
    silently closes the string and blanks the entire mobile stylesheet. */
@@ -152,7 +210,9 @@ useShadowStyles(`
    The layout publishes --map-fab-clearance only while that button is rendered, so this reserves
    space ONLY when there is something to clear: no circle, no wasted whitespace, and the padding
    is additive so nothing that works today moves. */
-.legend-content{flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;padding:12px 0 calc(12px + var(--map-fab-clearance, 0px));-webkit-overflow-scrolling:touch;}
+.legend-content{flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;padding:12px 0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+/* overscroll-behavior:contain on the LIST, not on the pane: a fling that reaches the list's end stops
+   there instead of scrolling the page behind the map (and, on a phone, collapsing its URL bar). */
 /* Constrain only the table/tree shells to the .legend-content viewport so
    their inner scroll containers (.stl-rows / .lrg-items) bound correctly.
    PeopleGroupDetail keeps its natural size and lets .legend-content scroll. */
@@ -164,7 +224,7 @@ useShadowStyles(`
    breathing room on each side — caret doesn't hug the sheet edge. The
    title row's subgrid offsets the title text so it begins right after
    the caret without overlap. Same widening on column 5 (right gutter)
-   keeps the table visually balanced. qa: 2026-05-02 iter-9. */
+   keeps the table visually balanced. */
 .legend-mobile-sheet .legend-row-group{--lrg-caret-col:24px;}
 .legend-content::-webkit-scrollbar{width:4px;}
 .legend-content::-webkit-scrollbar-track{background:transparent;}
@@ -185,8 +245,10 @@ useShadowStyles(`
 /* Fully-collapsed sheet (showing only "Legend" + caret) drops the
    16px top-corner radius — square edges look cleaner when the sheet
    is acting as a thin bottom footer. Rounded corners return when
-   expanded (user feedback 2026-04-27). */
-.legend-mobile-sheet.collapsed{box-shadow:0 -2px 8px rgba(0,0,0,0.15);height:48px !important;min-height:48px;border-top-left-radius:0;border-top-right-radius:0;}
+   expanded. */
+.legend-mobile-sheet.collapsed{box-shadow:0 -2px 8px rgba(0,0,0,0.15);height:48px !important;min-height:48px;border-top-left-radius:0;border-top-right-radius:0;padding-inline-start:var(--map-fab-beside,0px);}
+/* The detail footer is placed absolutely, so the sheet's padding does not reach it: the same inset, directly. */
+.legend-mobile-sheet.collapsed .collapsed-detail-footer{inset-inline-start:var(--map-fab-beside,0px);}
 .legend-mobile-sheet.collapsed .legend-content{padding:0!important;display:flex;align-items:center;height:48px;}
 .legend-mobile-sheet.collapsed .lrg-items,
 .legend-mobile-sheet.collapsed .lft-items{padding:0!important;align-content:center;height:48px;}
@@ -208,7 +270,7 @@ useShadowStyles(`
 .legend-mobile-sheet.collapsed .lft-title-row,
 .legend-mobile-sheet.collapsed .stl-titlebar{padding:0 16px!important;display:flex;align-items:center;justify-content:center;gap:8px;height:48px;min-height:0!important;border-bottom:none!important;}
 /* line-height:1.4 (not 1) so the descender of 'g' in "Legend" / "Engagement
-   Progress" isn't clipped at the bottom — qa: 2026-05-02. */
+   Progress" isn't clipped at the bottom. */
 .legend-mobile-sheet.collapsed .stl-tb-title,
 .legend-mobile-sheet.collapsed .lrg-title,
 .legend-mobile-sheet.collapsed .lrg-title-row .lrg-title,
@@ -239,8 +301,8 @@ useShadowStyles(`
 .legend-mobile-sheet .stl-panel.closed{transform:none!important;opacity:1!important;pointer-events:auto!important;}
 .legend-mobile-sheet .stl-inner{border:none!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;}
 /* Slim row height on mobile prayer/engagement/adoption tabs so they read
-   as thin/dense like desktop, not chunky touch-targets (qa: 2026-05-03 user
-   feedback — "desktop legend rows are thinner, can you make mobile match").
+   as thin/dense like desktop, not chunky touch-targets (the mobile
+   rows match the thinner desktop rows).
    Drops .lrg-item-inner min-height 36→28, vertical padding 6→2, and tightens
    the .lrg-items row-gap 6→3 for the same compact-table feel. */
 .legend-mobile-sheet .lrg-item-inner{min-height:28px!important;padding:2px 0!important;}
@@ -251,7 +313,7 @@ useShadowStyles(`
    only sets flex:1 — without min-height:0, the flex item's default
    min-height:auto = content height, so a long list grows past the parent
    instead of scrolling, leaving white space below the panel on tier-3
-   fullyOpen (qa: 2026-05-02 iter-11). LegendRows' .lrg-items already has
+   fullyOpen. LegendRows' .lrg-items already has
    min-height:0 in its base CSS, which is why iter-10 fixed Prayer/Engagement/
    Adoption but missed Language Families. */
 .legend-mobile-sheet .stl-rows{min-height:0;}
@@ -260,7 +322,7 @@ useShadowStyles(`
 /* (Removed iter-1 rule that was setting padding-left:0 here — it was
     overriding the iter-5 padding-left:36px rule above, causing the caret
     to overlap the title text "Lan-guage Families" → "guage Families"
-    visible. qa: 2026-05-02.) Border-bottom color preserved. */
+    visible.) Border-bottom color preserved. */
 .legend-mobile-sheet .stl-titlebar{border-bottom-color:rgba(0,0,0,0.08)!important;}
 
 /* ── Mobile language-family tree overrides ──
@@ -268,8 +330,7 @@ useShadowStyles(`
    The desktop CSS makes the title-row a SUBGRID of .lft-items so the
    UPGS / POPULATION column headers line up with the data rows' badges.
    An explicit grid-template-columns on the title-row breaks subgrid
-   inheritance and causes the misaligned headers we saw in user feedback
-   (2026-04-27).
+   inheritance and causes misaligned headers.
    Tap-area: rows are 44px tall (Apple HIG) so the row is comfortably
    tappable; the in-row caret stays slim like desktop. The colored pill
    keeps its desktop look.
@@ -292,6 +353,15 @@ useShadowStyles(`
 .sheet-dark .pull-tab-handle{background:rgba(243,243,241,0.3)!important;}
 .sheet-dark .legend-content{background:#3b463d!important;}
 .sheet-dark .legend-content::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);}
+
+/* ★ REDUCED MOTION, OWNED BY THIS COMPONENT. A page-level rule cannot reach into a shadow root,
+   and no generated leaf ships one anyway (measured: 0 across the whole tree), so a component
+   that animates must carry its own. Additive only: it removes motion when the OS asks and
+   changes nothing otherwise. */
+@media (prefers-reduced-motion: reduce) {
+  .legend-sheet, .legend-content, .legend-handle, .legend-toggle,
+  .lm-img-enter-active, .lm-img-leave-active { transition: none !important; animation: none !important; }
+}
 `, 'legend-mobile-sheet')
 
 const props = defineProps({
@@ -323,9 +393,8 @@ const props = defineProps({
   /** Which tab the sheet OPENS on, 0-based. Forwarded to SemanticTreeLegend below.
    *
    * ★ WHY IT HAD TO BE ADDED. The desktop legend has taken :default-tab for a while, and
-   * my-upg-100-list passes 1 (the UPG-100 Lists tab) because the Driver asked for exactly
-   * that — "it shouldn't have me sitting there on Regions, I don't know what to do, it's
-   * confusing". The mobile sheet had no such prop, so a phone opened on Region no matter
+   * my-upg-100-list passes 1 (the UPG-100 Lists tab), because opening on Regions left the
+   * reader not knowing what to do. The mobile sheet had no such prop, so a phone opened on Region no matter
    * what the profile declared: the same complaint, unfixed, on the surface prayer
    * mobilisation most uses. Default 0 keeps every other consumer where it is. */
   defaultTab: {
@@ -386,7 +455,7 @@ const dataStore = inject('dataStore')
 
 // Provided by research-map app profile so the mobile SemanticTreeLegend
 // row-clicks fire the same dim/clear pipeline as the desktop instance
-// (qa: 2026-05-03 iter-18 — without this, deselecting a language-family
+// (without this, deselecting a language-family
 // row didn't restore the dimmed pins because mapStore.selectFamily was
 // never updated by the mobile flow).
 const onSemanticTreeSelect = inject('onSemanticTreeSelect', () => {})
@@ -396,8 +465,8 @@ const onSemanticTreeSelect = inject('onSemanticTreeSelect', () => {})
 // owns the Export menu — but passed neither :export-enabled nor @export. exportEnabled
 // defaults to FALSE, so the control's v-if was never satisfied and a phone reader could
 // browse the UPG-100 lists and not export a packet or a poster. The packet IS the product
-// for that profile; the Driver asked for "print options at the top right of the legend...
-// that's the only way that map would be usable".
+// for that profile, so the print options sit at the top right of the legend: without them
+// that map is not usable.
 //
 // ⚠ IT WAS NOT A DESIGN QUESTION, WHICH IS WHAT I FIRST RECORDED. The 0x0 elements that
 // measurement found belong to the OTHER, hidden SemanticTreeLegend instance — the desktop
@@ -411,6 +480,8 @@ const onSemanticTreeSelect = inject('onSemanticTreeSelect', () => {})
 // handler, so the three profiles that do not provide one are untouched.
 const onLegendExport = inject('onLegendExport', null)
 const mobileExportEnabled = computed(() => typeof onLegendExport === 'function')
+// The card deck is opt-in the same way: a profile that handles 'cards' provides legendExportCards = true.
+const mobileExportCards = inject('legendExportCards', false)
 
 // ── Data-driven legend (universal for all legend types) ─────────────────────
 const legendTypeRef = toRef(props, 'legendType')
@@ -531,7 +602,13 @@ const SNAP_MIN_PX = 24
 // the .dragging class flag).
 const sheetRef = ref(null)
 const isDragging = ref(false)
-const drag = { pending: null, active: false, startY: 0, startH: 0, startState: '', containerH: 0, maxH: 0, lastH: 0, contentEl: null }
+const drag = { pending: null, active: false, startY: 0, startH: 0, startState: '', containerH: 0, maxH: 0, lastH: 0, tapTarget: null }
+// One height write per frame while dragging (the latest finger position wins), never one per touchmove.
+let _dragRaf = 0
+function flushDragHeight() { _dragRaf = 0; uiStore.setLegendHeight(`${drag.lastH}px`) }
+// A control the reader may need the browser's own handling for (focus, a keyboard): never taken over.
+const NATIVE_TAP = /^(INPUT|SELECT|TEXTAREA)$/
+const DRAG_SLOP_PX = 6
 let lastDragEndAt = 0
 // A drag that starts on a button (caret / close X / strip) can still be followed
 // by a synthesized click on release in some browsers — ignore it.
@@ -552,6 +629,22 @@ const legendExpanded = computed(() => legendState.value !== 'collapsed')
 const legendHeight = computed(() => uiStore.legendHeight)
 const caretRotation = computed(() => uiStore.caretRotation)
 const showPullTab = computed(() => uiStore.showPullTab)
+// The content-fit open state (CSS .fit): open, at rest, with no height left behind by a drag.
+const fitOpen = computed(() => legendState.value === 'open' && !uiStore._customLegendHeight)
+// ★ ONE PHONE START STATE: COLLAPSED (mobile pass 2026-09-30). Every map's own mount code means
+// "collapsed on a phone" (if (uiStore.isMobile) collapseLegend()), but uiStore.init() measures the
+// breakpoint in a ResizeObserver whose first callback runs AFTER mount, so a map that asks right after
+// init() reads the 'desktop' default and opens the sheet: Simple Research started open on every load
+// at 390, while Prayer Progress, which measures synchronously, started collapsed. So the sheet applies
+// the phone start state itself, once, the first time it sees the phone breakpoint, unless a people
+// group is already selected. Collapsed because on a phone the map is the content: the collapsed strip
+// still names the map, and the caption and the credit stay on screen.
+let _phoneStartApplied = false
+watch(() => uiStore.isMobile, (mobile) => {
+  if (!mobile || _phoneStartApplied) return
+  _phoneStartApplied = true
+  if (!uiStore.selectedPeopleGroup) uiStore.collapseLegend()
+}, { immediate: true })
 const legendMode = computed(() => uiStore.legendMode)
 const selectedPeopleGroup = computed(() => uiStore.selectedPeopleGroup)
 // APPROXPIN: the other groups on the selected pin's coordinate, from the roster THIS map draws.
@@ -606,7 +699,7 @@ const miniImageUrl = computed(() => {
 })
 
 // ── Touch resize — handlers live on the SHEET, not the 12px strip ──────────
-// Driver bug 2026-09-16 ("moving the informational page up and down has bugs"),
+// The bug: dragging the information sheet up and down misbehaved,
 // reproduced by internal/mobile-sheet-probe.mjs. Three real causes, all fixed
 // here: (1) the only grab surface was the 12px strip, so a thumb on the title
 // row scrolled the content instead of resizing; (2) the 0.3s height transition
@@ -617,13 +710,10 @@ const miniImageUrl = computed(() => {
 // stale custom px height was left behind.
 //
 // Gesture model:
-//   touchstart  in the top GRAB_ZONE_PX of the sheet → this gesture is a resize.
-//               Below the zone, in DETAIL mode, the gesture is provisional: the
-//               FIRST touchmove decides (that is the only cancelable one once the
-//               browser starts a native scroll) — a pull UP while the sheet can
-//               still grow, or a pull DOWN with the content scrolled to its top,
-//               resizes the sheet; anything else is a normal content scroll.
-//               Non-detail tabs keep content scrolling untouched (qa 2026-05-03).
+//   touchstart  in the top GRAB_ZONE_PX of the sheet (the handle: drag strip + title row) → this
+//               gesture is a resize. Anywhere below the handle the content scrolls, in every mode
+//               (mobile pass 2026-09-30: the detail view's content used to resize the sheet when it
+//               could not scroll that way, so a thumb reading the list moved the sheet instead).
 //   touchmove   .dragging (transition:none) + an explicit px height every move,
 //               clamped to [COLLAPSED_PX, container - TOP_RESERVE_PX].
 //   touchend    snap. Detail mode = ladder open ↔ fullyOpen with hysteresis
@@ -632,14 +722,30 @@ const miniImageUrl = computed(() => {
 //               where released, collapse only below half the open height.
 // The collapsed footer is tap-only (its 48px height is a CSS !important rule).
 function onSheetTouchStart(event) {
-  if (legendState.value === 'collapsed') return
+  // Collapsed, the strip is tap-only, but the gesture is still ours: HOLD it so the page or a scrolling
+  // column behind the map never takes the pan (a backstop to touch-action:none).
+  if (legendState.value === 'collapsed') { drag.pending = 'hold'; drag.active = false; return }
   const t = event.touches[0]
   const sheet = sheetRef.value
   if (!t || !sheet) return
   const inGrabZone = (t.clientY - sheet.getBoundingClientRect().top) <= GRAB_ZONE_PX
-  const mode = inGrabZone ? 'grab' : (legendMode.value === 'detail' ? 'content' : null)
-  if (!mode) return
-  drag.pending = mode
+  if (!inGrabZone) return
+  // ★ THE HANDLE OWNS THE GESTURE FROM THE FIRST TOUCH (2026-10-02, reported from a phone: a resize drag scrolled
+  // the page). Only the strip and the title rows carry touch-action:none, so a drag that began anywhere else in the
+  // 44px grab zone let the browser start panning before our touchmove could cancel it, and from then on its
+  // touchmoves were not cancelable: the page scrolled while the sheet resized. preventDefault on touchstart
+  // claims the gesture for the whole grab zone, whatever touch-action says. It also swallows the browser's own
+  // click, so a touch that never becomes a drag is turned back into one on release (tapTarget.click()), and
+  // inputs keep their native tap.
+  // The element to click on release: the nearest HTML element (a tap on a button's SVG icon lands on a <path>,
+  // which has no click()), so the button's own @click runs.
+  let target = (event.composedPath && event.composedPath()[0]) || event.target
+  while (target && typeof target.click !== 'function') target = target.parentNode
+  if (!(target && NATIVE_TAP.test(target.tagName || '')) && event.cancelable) {
+    event.preventDefault()
+    drag.tapTarget = target
+  } else drag.tapTarget = null
+  drag.pending = 'grab'
   drag.active = false
   drag.startY = t.clientY
   // offsetHeight is the CURRENT visual height even mid-transition, so a drag
@@ -649,46 +755,57 @@ function onSheetTouchStart(event) {
   drag.startState = legendState.value
   drag.containerH = sheet.parentElement?.offsetHeight || window.innerHeight
   drag.maxH = drag.containerH - TOP_RESERVE_PX
-  drag.contentEl = sheet.querySelector('.legend-content')
 }
 
 function onSheetTouchMove(event) {
   if (!drag.pending && !drag.active) return
+  if (drag.pending === 'hold') { if (event.cancelable) event.preventDefault(); return }
   const t = event.touches[0]
   if (!t) return
   const dy = drag.startY - t.clientY   // + = finger moved up = sheet grows
   if (!drag.active) {
-    if (dy === 0) return
-    let take = drag.pending === 'grab'
-    if (drag.pending === 'content') {
-      const atTop = !drag.contentEl || drag.contentEl.scrollTop <= 0
-      take = dy > 0 ? drag.startH < drag.maxH - 1 : atTop
-    }
+    // TAP SLOP: a real thumb tap moves 1-3 px, and counted as a drag it lost its click (the caret, the ✕). A touch
+    // becomes a drag only past DRAG_SLOP_PX; the claimed touchstart already stops the page panning meanwhile.
+    if (Math.abs(dy) < (drag.tapTarget ? DRAG_SLOP_PX : 1)) return
     drag.pending = null
-    if (!take) return                  // native content scroll owns this gesture
     drag.active = true
     isDragging.value = true            // .dragging → transition:none, same flush as the height
   }
-  event.preventDefault()               // no page/content scroll while resizing
-  const h = Math.round(Math.min(drag.maxH, Math.max(COLLAPSED_PX, drag.startH + dy)))
-  drag.lastH = h
-  uiStore.setLegendHeight(`${h}px`)
+  if (event.cancelable) event.preventDefault()   // no page/content scroll while resizing
+  drag.lastH = Math.round(Math.min(drag.maxH, Math.max(COLLAPSED_PX, drag.startH + dy)))
+  if (!_dragRaf) {
+    if (typeof requestAnimationFrame === 'function') _dragRaf = requestAnimationFrame(flushDragHeight)
+    else flushDragHeight()
+  }
 }
 
-function onSheetTouchEnd() {
+function onSheetTouchEnd(event) {
   drag.pending = null
-  if (!drag.active) return             // a tap — the @click handlers own it
+  const tapTarget = drag.tapTarget
+  drag.tapTarget = null
+  if (!drag.active) {
+    // A tap. The @click handlers own it; if touchstart took the browser's click, hand it back (not on a cancel).
+    if (tapTarget && !(event && event.type === 'touchcancel') && typeof tapTarget.click === 'function') tapTarget.click()
+    return
+  }
+  // The last frame's height lands before the snap reads it.
+  if (_dragRaf) { if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(_dragRaf); flushDragHeight() }
   drag.active = false
   isDragging.value = false             // transition back on BEFORE the snap so it animates
-  lastDragEndAt = Date.now()
+  // The post-drag click guard (justDragged) exists for the browser's OWN click at the end of a drag. A drag that
+  // claimed its touchstart produces no such click, so arming the guard there only ate the reader's NEXT real tap
+  // (measured: a caret tap right after a drag did not collapse the sheet). Armed only for an unclaimed drag.
+  if (!tapTarget) lastDragEndAt = Date.now()
   const h = drag.lastH
   const travel = h - drag.startH
-  const openH = drag.containerH * 0.3  // the 'open' resting height (uiStore '30%')
+  const openH = drag.containerH * 0.3  // the collapse threshold's basis: half of this = 15% of the map
 
   if (legendMode.value !== 'detail') {
     // Free-drag tabs: leave the sheet where it was released (custom px stays,
     // state unchanged) — the user reads the legend and the map together.
     if (h < openH * 0.5) uiStore.collapseLegend()
+    // The height stops where the finger did, so the observer may never fire again: seat the image here.
+    else seatImage()
     return
   }
   if (Math.abs(travel) < SNAP_MIN_PX) { snapTo(drag.startState); return }   // hysteresis
@@ -704,6 +821,63 @@ function snapTo(state) {
   else uiStore.openLegend()
 }
 
+// ── The phone corner move follows this component's presence (see .lm-on in the CSS) ───
+// Counted on the host, because a map can hold two instances at once (the visible sheet and the desktop
+// legend's hidden twin): the class goes only when the last one unmounts.
+const LM_HOST_CLASS = 'lm-on'
+let _lmHost = null
+onMounted(() => {
+  const el = sheetRef.value
+  const root = el && el.getRootNode ? el.getRootNode() : null
+  _lmHost = root && root.host ? root.host : (typeof document !== 'undefined' ? document.documentElement : null)
+  if (!_lmHost) return
+  _lmHost.__lmCount = (_lmHost.__lmCount || 0) + 1
+  _lmHost.classList.add(LM_HOST_CLASS)
+})
+onBeforeUnmount(() => {
+  if (!_lmHost) return
+  _lmHost.__lmCount = Math.max(0, (_lmHost.__lmCount || 1) - 1)
+  if (!_lmHost.__lmCount) _lmHost.classList.remove(LM_HOST_CLASS)
+  _lmHost = null
+})
+
+// ── The sheet tells the layout where it is (the bottom-of-map standard) ───
+// CSS variables do not cross a shadow root upward, so the sheet announces itself to its host: 'dxmaps:legend-sheet'
+// from the sheet element, bubbling and composed (the layout's menu button no longer follows it: it sits fixed in
+// its corner, and the collapsed sheet pads around it). The layout keys on that element
+// (composedPath()[0]) and measures its box itself, since a map need not end at the viewport's bottom (Simple
+// Research's grid peeks out below its map). state 'gone' (no box: unmounting, or the desktop slot) drops it.
+const LEGEND_SHEET_EVENT = 'dxmaps:legend-sheet'
+let _sheetEventRaf = 0
+function emitSheetEvent(gone) {
+  const sheet = sheetRef.value
+  if (!sheet || !sheet.isConnected) return
+  const h = gone ? 0 : sheet.offsetHeight
+  const state = h > 0 ? (legendState.value === 'collapsed' ? 'collapsed' : 'open') : 'gone'
+  sheet.dispatchEvent(new CustomEvent(LEGEND_SHEET_EVENT, { bubbles: true, composed: true, detail: { height: h, collapsedHeight: COLLAPSED_PX, state } }))
+}
+// One event per frame, however many resizes a drag or the 0.3s height transition produces; the observer
+// below sees every frame of a height change, and transitionend covers a change that moves without resizing.
+function queueSheetEvent() {
+  if (_sheetEventRaf || typeof requestAnimationFrame === 'undefined') return
+  _sheetEventRaf = requestAnimationFrame(() => { _sheetEventRaf = 0; emitSheetEvent(false) })
+}
+watch(legendState, () => queueSheetEvent())
+onMounted(() => {
+  const sheet = sheetRef.value
+  if (!sheet) return
+  sheet.addEventListener('transitionend', queueSheetEvent)
+  window.addEventListener('resize', queueSheetEvent)
+  queueSheetEvent()
+})
+onBeforeUnmount(() => {
+  if (_sheetEventRaf) { cancelAnimationFrame(_sheetEventRaf); _sheetEventRaf = 0 }
+  const sheet = sheetRef.value
+  if (sheet) sheet.removeEventListener('transitionend', queueSheetEvent)
+  window.removeEventListener('resize', queueSheetEvent)
+  emitSheetEvent(true)   // still attached here, so the layout hears it
+})
+
 // ── Sheet height → host CSS var (keeps the engine's attribution visible) ───
 // Writes --legend-sheet-h on the custom-element host (the CSS rule near the top
 // of the stylesheet lifts the bottom control corners by it). Only a sheet with a
@@ -711,9 +885,18 @@ function snapTo(state) {
 // display:none desktop slot in detail mode (both profiles) observes 0 and must
 // never zero the var under the visible sheet. The owner clears it on unmount.
 const SHEET_H_VAR = '--legend-sheet-h'
+const IMG_SEAT_VAR = '--legend-img-seat'
 let _sheetResizeObserver = null
 let _sheetVarTarget = null
 let _observedSheet = null
+
+// The floating image's seat follows the sheet only while the image shows: open, and no finger on it. The credit
+// and the camera keep reading the live height (SHEET_H_VAR); a drag holds the seat, and so does the snap to full
+// open, where the sheet slides over the fading image instead of carrying it up.
+function seatImage(h = sheetRef.value ? sheetRef.value.offsetHeight : 0) {
+  if (!_sheetVarTarget || h <= 0 || isDragging.value || legendState.value !== 'open') return
+  _sheetVarTarget.style.setProperty(IMG_SEAT_VAR, `${h}px`)
+}
 
 onMounted(() => {
   const sheet = sheetRef.value
@@ -723,9 +906,11 @@ onMounted(() => {
   if (!_sheetVarTarget) return
   _observedSheet = sheet
   _sheetResizeObserver = new ResizeObserver(() => {
+    queueSheetEvent()
     const h = sheet.offsetHeight
     if (h <= 0) return
     _sheetVarTarget.style.setProperty(SHEET_H_VAR, `${h}px`)
+    seatImage(h)
     _sheetVarTarget.__legendSheetVarOwner = sheet
   })
   _sheetResizeObserver.observe(sheet)
@@ -735,38 +920,64 @@ onBeforeUnmount(() => {
   if (_sheetResizeObserver) { _sheetResizeObserver.disconnect(); _sheetResizeObserver = null }
   if (_sheetVarTarget && _sheetVarTarget.__legendSheetVarOwner === _observedSheet) {
     _sheetVarTarget.style.removeProperty(SHEET_H_VAR)
+    _sheetVarTarget.style.removeProperty(IMG_SEAT_VAR)
     _sheetVarTarget.__legendSheetVarOwner = null
   }
   _sheetVarTarget = null
   _observedSheet = null
 })
+// ── The credit shows, then folds to its (i) (the bottom-of-map standard) ───
+// On a narrow map both engines draw the licence credit compact: expanded at first, folded to an (i) at the
+// map's first drag. On a phone that drag may never come, and the expanded credit then runs across the top of
+// the map for good, under the map's own top overlays. So CREDIT_FOLD_MS after it first shows expanded, fold it the way the engine's drag does (drop the
+// -compact-show class); a tap on the (i) still expands it. The map may still be loading its style when the
+// sheet mounts, and an engine may mark it compact only after the map is ready, so look every half second, for
+// up to 30 s; stop once the credit is compact and folded (a drag or a tap got there first).
+const CREDIT_FOLD_MS = 3000
+let _creditTimer = 0
+function watchCredit(triesLeft) {
+  _creditTimer = 0
+  const sheet = sheetRef.value
+  const root = sheet && sheet.getRootNode ? sheet.getRootNode() : null
+  if (!root || !root.querySelector) return
+  const shown = root.querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show, .mapboxgl-ctrl-attrib.mapboxgl-compact-show')
+  if (shown) {
+    // The phone test is the breakpoint itself, the phone CSS block's own query: uiStore.isMobile is set only by
+    // uiStore.init(), which a host may never call (UPG-100's map does not), and then the fold never ran there.
+    const phone = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches
+    _creditTimer = setTimeout(() => { _creditTimer = 0; if (phone) shown.classList.remove('maplibregl-compact-show', 'mapboxgl-compact-show') }, CREDIT_FOLD_MS)
+    return
+  }
+  const credit = root.querySelector('.maplibregl-ctrl-attrib, .mapboxgl-ctrl-attrib')
+  if (credit && /(maplibregl|mapboxgl)-compact(\s|$)/.test(credit.className)) return
+  if (triesLeft > 0) _creditTimer = setTimeout(() => watchCredit(triesLeft - 1), 500)
+}
+onMounted(() => watchCredit(60))
+onBeforeUnmount(() => { if (_creditTimer) { clearTimeout(_creditTimer); _creditTimer = 0 } })
 </script>
 
 <template>
   <!-- Containment wrapper: ensures position:absolute children are clipped to the map area
        and never escape the shadow DOM host / staging frame. -->
   <div class="legend-sheet-root">
-    <!-- ★ THE NOTE FLOATS ABOVE THE SHEET, IT DOES NOT SIT INSIDE IT. It used to be the last child
-         of .legend-content, a natural-height sibling of a flex:1 options panel — so every pixel it
-         took was a pixel the options' inner scroller lost, and the reader scrolled further inside
-         the tree to reach the same rows. Moving it WITHIN the sheet would not have helped: the
-         sheet's height is fixed at 30%, so anything inside it costs the options the same either
-         way. Out here it costs them nothing and the options keep the full sheet.
-         Positioned off --legend-sheet-h, which a ResizeObserver already writes for the engine's
-         own bottom controls, so it tracks the sheet as it opens, drags and collapses rather than
-         assuming a height. -->
-    <ApproxPinNote
-      v-if="legendMode !== 'detail' && legendState !== 'collapsed'"
-      class="approx-pin-note--floating"
-      :class="{ 'approx-pin-note--floating-dark': isDark }"
-      :dark="isDark"
-    />
-    <!-- Floating mini-image: fixed 16px above the sheet's resting position (30%).
-         The sheet slides UP over it — the image never moves. -->
+    <!-- ★ NO APPROXIMATE-LOCATION CAPTION ON A PHONE (mobile pass 2026-09-30): there is no room for it
+         beside the legend, so it shows in no resting state (collapsed, or open with nothing selected). A
+         tapped dot's detail view keeps its note inside the sheet, where it explains shared dots; the tree's
+         own copy stays off (:pin-note="false" below). Desktop is unchanged. -->
+    <!-- Floating mini-image: 16px above the open sheet's SEAT (it shows only in that state; see .floating-mini-image).
+         ★ IT IS A HANDLE TOO (measured 2026-10-02: a drag up from the picture scrolled the PAGE, scrollY 0 → 135; it sits
+         outside the sheet and the lip, so it had none of their handlers). It takes the sheet's own capture handlers
+         and touch-action:none: a drag from it resizes the sheet (the grab-zone test holds above the sheet, as for the
+         lip), and a tap is handed back as a click, which reaches @click below as before. -->
+    <Transition name="lm-img">
     <div
       v-if="legendMode === 'detail' && selectedPeopleGroup && legendState === 'open' && miniImageUrl"
       class="floating-mini-image"
       @click="uiStore.fullyOpenLegend()"
+      @touchstart.capture="onSheetTouchStart"
+      @touchmove.capture="onSheetTouchMove"
+      @touchend.capture="onSheetTouchEnd"
+      @touchcancel.capture="onSheetTouchEnd"
     >
       <img
         :src="miniImageUrl"
@@ -774,19 +985,33 @@ onBeforeUnmount(() => {
         class="mini-image"
       />
     </div>
+    </Transition>
 
-    <!-- Touch resize handlers sit on the SHEET: a drag may start anywhere in the
+    <!-- The grab lip above the open sheet (see .sheet-grab-lip): the same handlers as the sheet. -->
+    <div
+      v-if="legendState !== 'collapsed'"
+      class="sheet-grab-lip"
+      aria-hidden="true"
+      @touchstart.capture="onSheetTouchStart"
+      @touchmove.capture="onSheetTouchMove"
+      @touchend.capture="onSheetTouchEnd"
+      @touchcancel.capture="onSheetTouchEnd"
+    ></div>
+    <!-- (.capture: the drag sees every touch FIRST, so no child's handler can stop one reaching it; and the sheet
+         contains overscroll, so a list inside it can never chain a scroll to the page: 2026-10-02, a phone shrinking the
+         detail sheet past its content scrolled the page.)
+         Touch resize handlers sit on the SHEET: a drag may start anywhere in the
          top GRAB_ZONE_PX (strip + title row) — and, in detail mode, on the content
          when it can't scroll that way. See onSheetTouchStart for the model. -->
     <div
       ref="sheetRef"
       class="legend-mobile-sheet"
-      :class="[legendState, { 'sheet-dark': isDark, dragging: isDragging }]"
-      :style="{ height: legendHeight, '--legend-sheet-top-reserve': TOP_RESERVE_PX + 'px' }"
-      @touchstart="onSheetTouchStart"
-      @touchmove="onSheetTouchMove"
-      @touchend="onSheetTouchEnd"
-      @touchcancel="onSheetTouchEnd"
+      :class="[legendState, { 'sheet-dark': isDark, dragging: isDragging, fit: fitOpen }]"
+      :style="{ height: fitOpen ? 'auto' : legendHeight, '--legend-sheet-top-reserve': TOP_RESERVE_PX + 'px' }"
+      @touchstart.capture="onSheetTouchStart"
+      @touchmove.capture="onSheetTouchMove"
+      @touchend.capture="onSheetTouchEnd"
+      @touchcancel.capture="onSheetTouchEnd"
     >
       <!-- Thin drag strip at the very top: pull-tab visual + tap-to-toggle. -->
       <div class="sheet-drag-strip" @click="handleCaretClick">
@@ -828,7 +1053,7 @@ onBeforeUnmount(() => {
            detail mode. PeopleGroupDetail isn't designed to render at 48px, so
            we render a footer-style title bar inline (caret + people-group
            name) that mimics the LegendRows / SemanticTreeLegend collapsed
-           footer pattern. (qa: 2026-05-03 user feedback iter-16) -->
+           footer pattern. -->
       <div
         v-if="legendState === 'collapsed' && legendMode === 'detail' && selectedPeopleGroup"
         class="collapsed-detail-footer"
@@ -869,9 +1094,15 @@ onBeforeUnmount(() => {
         <!-- Semantic-tree tabs (Languages, People Groups, WAGF Regions):
              SemanticTreeLegend (PPLR-ported, R4). Caret injected via
              #title-caret slot so it sits in column 1 of the .stl-titlebar,
-             vertically aligned with the title text. -->
+             vertically aligned with the title text.
+             ★ :pin-note="false": this sheet already shows the pin caption ONCE, floating above it
+             (the ApproxPinNote at the top of this template). The tree's own copy printed the same
+             sentence a second time inside the open sheet (measured on Prayer Progress at 390, en and
+             ar: 2 visible copies with the sheet open). The detail view keeps its own note, which
+             carries the shared-point wording. -->
         <SemanticTreeLegend
           v-else-if="legendType !== 'default'"
+          :pin-note="false"
           :nodes="treeForMobile"
           :tabs="tabsForMobile"
           :default-tab="defaultTab"
@@ -880,6 +1111,7 @@ onBeforeUnmount(() => {
           :columnLabel="treeColumnLabelForMobile"
           :columns="columns || ['count', 'pop']"
           :export-enabled="mobileExportEnabled"
+          :export-cards="mobileExportEnabled && mobileExportCards === true"
           @select="onSemanticTreeSelect"
           @export="(kind) => onLegendExport && onLegendExport(kind)"
         >

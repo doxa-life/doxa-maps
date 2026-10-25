@@ -23,7 +23,7 @@
  *                       mapboxToken, fed by profile-config.tk and window.MAP_TOKEN)
  *   TOK-LITERAL token   a `pk.ey…` token literal in code (comments excluded)
  *   LOC-ENUS    locale  toLocaleString('en-US') / Intl.NumberFormat('en-US') (use the active locale).
- *                       WARN only: whether numerals follow the locale is a Driver decision
+ *                       WARN only: whether numerals follow the locale is pending a product decision
  *   LIST-FETCH  list    a file that fetches the people-group list (/api/people-groups/list, a
  *                       source's endpoints.bulk, or the doxa-people-groups.json roster) without
  *                       applyPeopleGroupList: that map would show DOXA's list whatever list was asked
@@ -49,13 +49,25 @@ const argv = process.argv.slice(2)
 const ONLY = argv.includes('--only') ? argv[argv.indexOf('--only') + 1].split(',') : null
 const REPORT = argv.includes('--report')
 
-// The 7 production maps' bundles (PRODUCTION-MATRIX.md) and the Experimental shelf.
-const BUNDLES = [
-  'dashboard-plus-grid', 'research-dashboard', 'research-map-plus-grid', 'doxa-research-map', 'people-groups-grid',
-  'regions-dashboard', 'my-upg-100-list', 'doxa-simple-map', 'cities-internet', 'gospel-resources',
-  'all-people-groups', 'country-posters', 'doxa-vision-card', 'pplr-data-maps', 'prayer-walk-planner',
-  'upg-neighbor', 'wall-of-people-groups', 'key-cities', 'gospel-internet',
-]
+// ★ THE POPULATION IS DERIVED, NOT TYPED (2026-09-29). It used to be a hand list of 19 names, and it
+// drifted: the PRODUCTION country-map was never on it, so the LIST-FETCH it carried passed unseen, and
+// big-picture fetched the list correctly with nothing to catch a regression. Now every plugin-designs/<b>/
+// with an index.js is measured unless EXCLUDED names it with a reason, so a new bundle is covered the day
+// it lands, and leaving one out is a decision someone wrote down.
+const EXCLUDED = {}
+const BUNDLES = readdirSync(resolve(ROOT, 'plugin-designs'))
+  .filter((b) => existsSync(resolve(ROOT, 'plugin-designs', b, 'index.js')) && !(b in EXCLUDED)).sort()
+// Fail loud, never narrow silently: an --only name that is not a measured bundle measured NOTHING and
+// used to print "PASS: 0 bundles"; an exclusion naming no bundle is a stale decision.
+{
+  const unknown = (ONLY || []).filter((x) => !BUNDLES.includes(x))
+  const stale = Object.keys(EXCLUDED).filter((b) => !existsSync(resolve(ROOT, 'plugin-designs', b, 'index.js')))
+  if (unknown.length || stale.length) {
+    if (unknown.length) console.error(`UNIVERSAL-PROPS: --only names no measured bundle: ${unknown.join(', ')} (measured: ${BUNDLES.join(', ')})`)
+    if (stale.length) console.error(`UNIVERSAL-PROPS: EXCLUDED names no bundle: ${stale.join(', ')} (a stale exclusion)`)
+    process.exit(2)
+  }
+}
 const ALLOW = {
   '*:LOC-ENUS:library/utils/formatCount.js':
     'HELD DECISION, and this file IS the decision: formatCount() is the one place the count locale is '
@@ -66,17 +78,26 @@ const ALLOW = {
     + 'column warns every time a bundle adopts the shared helper -- punishing the fix and teaching '
     + 'people to stop reading the column. Restricted to library/ (see the lookup): no per-bundle source '
     + 'can be wildcarded, and a new toLocaleString(\'en-US\') inside research-dashboard or '
-    + 'people-groups-grid still warns. Revisit only if the Driver unholds numerals.',
+    + 'people-groups-grid still warns. Revisit only if the numerals decision changes.',
   'prayer-walk-planner:ENG-PIN': 'keyless by design: always MapLibre, needs no token (index.js header)',
-  'regions-dashboard:LOC-ENUS:plugin-designs/regions-dashboard/src/RegionCountryMap.vue':
+  'demo-map:LIST-DSM': 'scaffolding: demo-map demonstrates the raw DataSourceManager path itself, and it is off the '
+    + 'production and Experimental shelves (the gallery\'s NOT_EXPERIMENTAL, the 2026-09-24 roundup ruling). '
+    + 'Its other props are still measured. Revisit if it is ever shelved for readers.',
+  '*:LOC-ENUS:library/components/maps/RegionCountryMap.vue':
     'HELD DECISION, not an oversight: the map popup formats population as fixed en-US on purpose. '
     + 'Their own site renders en-US numerals, which is the evidence on the card '
     + 'NUMERALS-REVERTED-POPUP-TO-FIXED-EN-US-AND-THEIR-OWN-CONVENTION-IS-EVIDENCE, and '
     + '_chk-numerals-held-format-does-not-vary-by-locale ASSERTS it does not vary by locale -- so '
-    + 'making it locale-derived would break a gate that exists to keep it fixed. Scoped to this FILE: '
-    + 'the rest of regions-dashboard is still answerable for a new en-US. Revisit only if the Driver '
-    + 'rules the numerals policy.',
-  'all-people-groups:LIST-DSM': 'draws the IMB dataset (all 12,379 groups), not the DOXA list: a list there is Tier B (SPEC-PEOPLE-GROUP-LIST-PROP.md)',
+    + 'making it locale-derived would break a gate that exists to keep it fixed. Scoped to this FILE, for '
+    + 'every bundle that imports it (regions-dashboard, country-map): the rest of each bundle is still '
+    + 'answerable for a new en-US. Revisit only if the numerals policy changes.',
+  'all-people-groups:LIST-DSM': 'draws the IMB dataset (all 12,379 groups), not the DOXA list: a list there is Tier B (library/lists/README.md)',
+  'upg-neighbor:LIST-FETCH:plugin-designs/upg-neighbor/src/mobilize.vue':
+    'a PHOTO LOOKUP, not a list: the neighbours prayer packet (doxaPhotos) asks the doxa list for slug + image_url '
+    + 'only, and joins photos onto ITS OWN rows (near-neighbors.json, the IMB grain) by slug. No row from this fetch '
+    + 'is shown, counted or filtered, so the list prop does not apply; it is config-only and fail-closed (no API '
+    + 'configured = no photos) like upg100. Site-scoped to this one file, so a real list fetch anywhere else in '
+    + 'the bundle still fails.',
 }
 
 const stripComments = (src) => src
@@ -112,7 +133,7 @@ const RULES = [
       // MEASURED before changing the rule: of the NINE LOC-ENUS sites in the tree, exactly TWO are
       // such fallbacks (region-dashboards.vue, regions-list.vue). The other seven are genuinely
       // operative fixed en-US and are still flagged, including RegionCountryMap's popup, which is a
-      // HELD Driver decision with its own card rather than an oversight.
+      // HELD product decision with its own card rather than an oversight.
       const out = []
       const re = /(?:toLocaleString|NumberFormat|DateTimeFormat)\s*\(\s*['"]en(?:-US)?['"]/g
       let m
@@ -146,13 +167,18 @@ const run = (rule, src) => rule.test ? rule.test(src) : [...src.matchAll(rule.re
 const lineOf = (src, idx) => src.slice(0, idx).split('\n').length
 
 // ── self-test: every rule must see a planted violation ─────────────────────────────────────────
+// The TOK-LITERAL sample is ASSEMBLED HERE, never written as one literal: a committed string shaped like a
+// real Mapbox token is itself what that rule forbids, and reads as a leaked credential to any secret scan.
+// It is plainly fake ('example, not a token'), yet shaped like one: pk. + base64url JSON + . + a tail, which
+// is all the rule's regex looks for, so the self-test still proves the rule fires.
+const FAKE_TOKEN = 'pk.' + Buffer.from('{"u":"example","note":"not-a-token"}').toString('base64url') + '.' + 'x'.repeat(22)
 const PLANTED = `
   map.setStyle(isDark ? 'mapbox://styles/mapbox/dark-v11' : 'x')
   const m2 = new gl.Map({ container: el, style: 'mapbox://styles/mapbox/light-v11' })
   const p = new mapboxgl.Popup()
   useMapInstance({ container: el, provider: 'mapbox' })
   const tk = window.DOXA_TOKEN
-  const t = 'pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJjbGFudGVkIn0'
+  const t = '${FAKE_TOKEN}'
   n.toLocaleString('en-US')
   const r = await fetch(base + '/api/people-groups/list?fields=slug')
   const dsm = new DataSourceManager({ locale: 'en' })
@@ -252,8 +278,7 @@ const filesWithLibrary = (dir) => { const own = files(dir); return [...own, ...l
 const findings = []
 const matrix = {}
 for (const b of BUNDLES.filter((x) => !ONLY || ONLY.includes(x))) {
-  const dir = resolve(ROOT, 'plugin-designs', b)
-  if (!existsSync(dir)) continue
+  const dir = resolve(ROOT, 'plugin-designs', b)   // derived from the tree above, so it exists
   matrix[b] = { engine: 'ok', token: 'ok', locale: 'ok', list: 'ok' }
   for (const f of filesWithLibrary(dir)) {
     const src = stripComments(readFileSync(f, 'utf8'))
@@ -301,7 +326,7 @@ if (REPORT) {
 }
 for (const f of findings) console.log(`${f.warn ? 'WARN   ' : 'BYPASS '} ${f.b.padEnd(22)} ${f.rule.padEnd(11)} ${f.where}  ${f.text}`)
 const hard = findings.filter((f) => !f.warn)
-if (findings.length - hard.length) console.log(`UNIVERSAL-PROPS: ${findings.length - hard.length} WARN(s): LOC-ENUS fixes numerals to en-US whatever the locale. Warn-only until the Driver decides the numerals policy.`)
+if (findings.length - hard.length) console.log(`UNIVERSAL-PROPS: ${findings.length - hard.length} WARN(s): LOC-ENUS fixes numerals to en-US whatever the locale. Warn-only until the numerals policy is decided.`)
 if (hard.length) {
   console.log(`UNIVERSAL-PROPS: FAIL — ${hard.length} bypass(es) in ${new Set(hard.map((f) => f.b)).size} bundle(s). Read the prop through the library (documentation/reference-universal-props.md), or ALLOW it here with the reason it is by design.`)
   process.exit(1)

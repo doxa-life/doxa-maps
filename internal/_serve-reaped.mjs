@@ -34,7 +34,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 export function serveReaped(directory, port) {
   const child = spawn(
     process.execPath,
-    [resolve(HERE, 'serve-strict.mjs'), '--port', String(port), '--directory', directory],
+    [resolve(HERE, 'serve-strict.mjs'), '--port', String(port), '--directory', directory, '--exit-with-parent'],
     { stdio: 'ignore' },
   )
 
